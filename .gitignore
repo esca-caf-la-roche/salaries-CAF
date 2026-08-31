@@ -1,0 +1,13 @@
+node_modules/
+.pnpm-store/
+dist/
+.env
+.env.*
+!.env.example
+client_secret_2_467830268605-soer0e5gveaesbnmst58a0696hls02id.apps.googleusercontent.com.json
+Données_Calendar_coef - Données.csv
+# Generated locally from the ignored CSV; load it directly into Supabase.
+supabase/seed.sql
+supabase/.temp/
+*.local
+*.tsbuildinfo

@@ -1,0 +1,20 @@
+project_id = "ucopmjqryaktcafgczpp"
+
+[api]
+enabled = true
+schemas = ["public", "graphql_public", "private"]
+extra_search_path = ["public", "extensions"]
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173/**"]
+
+[functions.google-oauth-start]
+verify_jwt = true
+
+[functions.google-oauth-callback]
+verify_jwt = false
+
+[functions.google-calendar-sync]
+verify_jwt = true
