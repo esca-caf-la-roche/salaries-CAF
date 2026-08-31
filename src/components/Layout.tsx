@@ -12,12 +12,12 @@ export function Layout() {
         <Logo />
         <nav className="main-nav" aria-label="Navigation principale">
           <NavLink to="/" end><Gauge aria-hidden="true" /> <span>Vue d'ensemble</span></NavLink>
-          <NavLink to="/configuration"><Settings aria-hidden="true" /> <span>Configuration</span></NavLink>
+          {user?.role === 'admin' && <NavLink to="/configuration"><Settings aria-hidden="true" /> <span>Configuration</span></NavLink>}
         </nav>
         <div className="sidebar__foot">
           <div className="user-chip">
             <span className="user-chip__avatar">{user?.displayName.charAt(0)}</span>
-            <span><strong>{user?.displayName}</strong><small>Administrateur</small></span>
+            <span><strong>{user?.displayName}</strong><small>{user?.role === 'admin' ? 'Administrateur' : 'Salarié'}</small></span>
           </div>
           <button className="icon-button" type="button" onClick={() => void signOut()} aria-label="Se déconnecter">
             <LogOut aria-hidden="true" />
@@ -34,7 +34,7 @@ export function Layout() {
         <main id="main-content"><Outlet /></main>
         <nav className="mobile-nav" aria-label="Navigation mobile">
           <NavLink to="/" end><Gauge aria-hidden="true" /><span>Heures</span></NavLink>
-          <NavLink to="/configuration"><CalendarRange aria-hidden="true" /><span>Calendriers</span></NavLink>
+          {user?.role === 'admin' && <NavLink to="/configuration"><CalendarRange aria-hidden="true" /><span>Ressources</span></NavLink>}
         </nav>
       </div>
     </div>

@@ -16,17 +16,16 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-async function userFromSession(session: Session): Promise<AppUser> {
+async function userFromSession(session: Session): Promise<AppUser | null> {
   const metadata = session.user.user_metadata
   let role: AppUser['role'] = 'employee'
   let displayName = metadata.full_name ?? session.user.email?.split('@')[0] ?? 'Utilisateur'
 
   if (supabase) {
-    const { data } = await supabase.from('profiles').select('role, display_name').eq('id', session.user.id).maybeSingle()
-    if (data) {
-      role = data.role === 'employee' ? 'employee' : 'admin'
-      displayName = data.display_name ?? displayName
-    }
+    const { data } = await supabase.from('profiles').select('role, display_name, active').eq('id', session.user.id).maybeSingle()
+    if (!data?.active) return null
+    role = data.role === 'employee' ? 'employee' : 'admin'
+    displayName = data.display_name ?? displayName
   }
   return { id: session.user.id, email: session.user.email ?? '', displayName, role }
 }
@@ -68,9 +67,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) throw error
       if (!data.session) throw new Error('Le code n\'a pas créé de session.')
       const signedInUser = await userFromSession(data.session)
-      if (signedInUser.role !== 'admin') {
+      if (!signedInUser) {
         await supabase.auth.signOut()
-        throw new Error('Ce compte n\'a pas le rôle administrateur.')
+        throw new Error('Ce compte n\'est pas autorisé ou a été désactivé.')
       }
       setUser(signedInUser)
     },

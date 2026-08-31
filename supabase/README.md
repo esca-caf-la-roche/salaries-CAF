@@ -16,15 +16,15 @@ Ajoutez exactement `GOOGLE_REDIRECT_URI` aux URI autorisées du client OAuth Goo
 
 - `google-oauth-start`, `POST { "redirectTo": "..." }`, JWT admin requis, retourne `authorizationUrl`.
 - `google-oauth-callback`, cible OAuth Google publique protégée par un state aléatoire, expirant et à usage unique.
-- `google-calendar-sync`, JWT admin requis : `POST { "action": "discover" }` ou `POST { "action": "sync", "calendarIds": ["uuid interne"] }`.
+- `google-calendar-sync`, JWT admin requis : `POST { "action": "discover" }`, `POST { "action": "resources" }`, `POST { "action": "saveResources", "resources": [...] }` ou `POST { "action": "sync", "calendarIds": ["uuid interne"] }`.
 
-La découverte joint les règles sur l'identifiant Google exact. Une sync initiale paginée produit un `nextSyncToken`; les suivantes utilisent exclusivement ce token. Une réponse Google `410` invalide le token et déclenche un full resync sans effacer les anciennes données avant la réussite complète.
+La découverte conserve uniquement les calendriers ressources Google Workspace présents dans la liste du compte connecté. L'administrateur associe chaque ressource suivie à un e-mail de connexion ; la fonction crée si nécessaire le compte Auth salarié et le lie par `user_id`. Une sync initiale paginée produit un `nextSyncToken`; les suivantes utilisent exclusivement ce token. Chaque événement est pondé avec la règle correspondant à son `organizer.email`. Une réponse Google `410` invalide le token et déclenche un full resync sans effacer les anciennes données avant la réussite complète.
 
 ## Initialisation
 
 1. Relire puis appliquer les migrations et `seed.sql` sur un nouveau projet.
-2. Dans **Authentication > Users**, créer chaque compte autorisé et confirmer son adresse e-mail.
-3. Dans `public.profiles`, attribuer explicitement `role = admin` aux administrateurs. Tous les nouveaux profils commencent en `employee` ; aucune adresse ne reçoit automatiquement les droits administrateur.
+2. Dans **Authentication > Users**, créer les comptes administrateurs et confirmer leur adresse e-mail.
+3. Dans `public.profiles`, attribuer explicitement `role = admin` aux administrateurs. Tous les profils commencent en `employee` ; aucune adresse ne reçoit automatiquement les droits administrateur. Les comptes salariés sont ensuite provisionnés depuis Configuration.
 4. Dans **Authentication > Email Templates > Magic Link / OTP**, copier le contenu de `templates/otp.html`. Supabase partage cet emplacement entre les deux modes : `{{ .Token }}` active l'OTP à 6 chiffres, tandis que `{{ .ConfirmationURL }}` générerait un lien et ne doit pas être présent.
 5. Dans **Authentication > URL Configuration**, définir le Site URL à `https://esca-caf-la-roche.github.io/salaries-CAF/` et ajouter `https://esca-caf-la-roche.github.io/salaries-CAF/**` à la liste autorisée. Ces URL ne servent pas au parcours OTP, mais empêchent tout retour accidentel vers localhost pour les autres e-mails Auth.
 5. Déployer les trois fonctions, puis configurer les secrets.

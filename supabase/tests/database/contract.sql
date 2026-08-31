@@ -21,6 +21,30 @@ begin
   if exists (select 1 from public.coefficient_rules where coefficient not in (1, 1.25)) then
     raise exception 'Coefficient inattendu dans le seed';
   end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'calendars' and column_name = 'is_resource'
+  ) then
+    raise exception 'Le marqueur de calendrier ressource est absent';
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'employees' and column_name = 'resource_calendar_id'
+  ) then
+    raise exception 'La liaison salarié vers calendrier ressource est absente';
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'calendar_events' and column_name = 'source_google_calendar_id'
+  ) then
+    raise exception 'Le calendrier organisateur de l''événement est absent';
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'calendar_events' and column_name = 'coefficient_rule_id'
+  ) then
+    raise exception 'La règle de coefficient par événement est absente';
+  end if;
 end
 $$;
 

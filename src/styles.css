@@ -137,7 +137,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .search-field { display: flex; align-items: center; width: min(290px, 100%); padding: 0 12px; border: 1px solid var(--line); border-radius: 7px; background: white; }
 .search-field svg { width: 17px; color: var(--muted); }
 .search-field input { min-width: 0; width: 100%; padding: 11px 8px; border: 0; outline: 0; background: transparent; }
-.calendar-head, .calendar-row { display: grid; grid-template-columns: minmax(260px, 1fr) 140px 160px; align-items: center; gap: 18px; }
+.calendar-head, .calendar-row { display: grid; grid-template-columns: minmax(260px, 1fr) 140px minmax(230px, 320px); align-items: center; gap: 18px; }
 .calendar-head { padding: 10px 24px; color: var(--muted); border-block: 1px solid var(--line); background: #faf9f4; font-family: "DM Mono", monospace; font-size: .61rem; text-transform: uppercase; letter-spacing: .08em; }
 .calendar-row { position: relative; padding: 16px 24px; border-bottom: 1px solid #e9eae5; }
 .calendar-row--enabled::before { content: ''; position: absolute; left: 0; inset-block: 0; width: 3px; background: var(--rope); }
@@ -154,10 +154,10 @@ tbody tr:last-child td { border-bottom: 0; }
 .switch input:checked + span::after { transform: translateX(15px); }
 .switch input:focus-visible + span { outline: 3px solid var(--glacier); outline-offset: 3px; }
 .switch em { color: var(--muted); font-style: normal; font-size: .67rem; }
-.coefficient-input { position: relative; display: flex; align-items: center; width: 112px; }
-.coefficient-input svg { position: absolute; left: 10px; width: 15px; color: var(--muted); pointer-events: none; }
-.coefficient-input input { width: 100%; padding: 9px 25px 9px 32px; border: 1px solid var(--line); border-radius: 6px; font-family: "DM Mono", monospace; }
-.coefficient-input b { position: absolute; right: 9px; color: var(--muted); }
+.email-input { position: relative; display: flex; align-items: center; width: 100%; }
+.email-input svg { position: absolute; left: 10px; width: 15px; color: var(--muted); pointer-events: none; }
+.email-input input { width: 100%; min-width: 0; padding: 9px 10px 9px 32px; border: 1px solid var(--line); border-radius: 6px; }
+.email-input input:disabled { color: var(--muted); background: #f1f1ed; }
 .configuration-footer { position: sticky; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 17px 24px; background: rgba(255,254,250,.96); border-top: 1px solid var(--line); }
 .configuration-footer > span { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: .7rem; }
 .configuration-footer svg { width: 16px; color: var(--pine-2); }
@@ -189,7 +189,7 @@ tbody tr:last-child td { border-bottom: 0; }
   .login-story { min-height: 380px; padding: 28px 24px; }.login-story h1 { font-size: 2.65rem; }.route-line { opacity: .65; }
   .page-heading { align-items: stretch; flex-direction: column; }.page-heading .button { align-self: flex-start; }.filters, .metric-grid { grid-template-columns: 1fr; }.metric--lead { grid-column: auto; }.metric { min-height: 150px; }
   .panel-heading { align-items: flex-start; flex-direction: column; }.legend { align-self: flex-start; }.setup-note { grid-template-columns: auto 1fr; }.setup-note code { display: none; }
-  .configuration-toolbar { align-items: stretch; flex-direction: column; }.search-field { width: 100%; }.calendar-head { display: none; }.calendar-row { grid-template-columns: 1fr auto; padding: 18px; }.calendar-identity { grid-column: 1 / -1; }.coefficient-input { justify-self: end; }.configuration-footer { align-items: stretch; flex-direction: column; }.configuration-footer .button { width: 100%; }
+  .configuration-toolbar { align-items: stretch; flex-direction: column; }.search-field { width: 100%; }.calendar-head { display: none; }.calendar-row { grid-template-columns: 1fr auto; padding: 18px; }.calendar-identity { grid-column: 1 / -1; }.email-input { grid-column: 1 / -1; }.configuration-footer { align-items: stretch; flex-direction: column; }.configuration-footer .button { width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

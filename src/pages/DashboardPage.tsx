@@ -4,10 +4,12 @@ import { HoursChart } from '../components/HoursChart'
 import { formatHours, formatSyncDate, monthLabel } from '../lib/format'
 import { getEmployeeSummaries, runIncrementalSync } from '../services/api'
 import type { EmployeeSummary, SyncState } from '../types'
+import { useAuth } from '../context/AuthContext'
 
 const currentDate = new Date()
 
 export function DashboardPage() {
+  const { user } = useAuth()
   const [year, setYear] = useState(currentDate.getFullYear())
   const [selectedEmployee, setSelectedEmployee] = useState('all')
   const [selectedMonth, setSelectedMonth] = useState<number | 'all'>(currentDate.getMonth() + 1)
@@ -50,9 +52,9 @@ export function DashboardPage() {
     <div className="page">
       <header className="page-heading">
         <div><p className="eyebrow">Tableau de bord</p><h1>Heures de la cordée</h1><p>Suivi consolidé des calendriers actifs et des coefficients appliqués.</p></div>
-        <button className="button button--secondary" onClick={() => void synchronize()} disabled={sync.status === 'syncing'}>
+        {user?.role === 'admin' && <button className="button button--secondary" onClick={() => void synchronize()} disabled={sync.status === 'syncing'}>
           <RefreshCw className={sync.status === 'syncing' ? 'spin' : ''} aria-hidden="true" /> {sync.status === 'syncing' ? 'Synchronisation…' : 'Actualiser Google'}
-        </button>
+        </button>}
       </header>
       {sync.message && <div className={`alert ${sync.status === 'error' ? 'alert--error' : 'alert--success'}`} role="status">{sync.message} · {formatSyncDate(sync.lastSyncedAt)}</div>}
       {error && <div className="alert alert--error" role="alert">{error}</div>}

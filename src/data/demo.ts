@@ -1,4 +1,4 @@
-import type { AppUser, CalendarResource, EmployeeSummary, SyncState } from '../types'
+import type { AppUser, EmployeeResource, EmployeeSummary, SyncState } from '../types'
 
 export const demoUser: AppUser = {
   id: 'demo-admin',
@@ -7,10 +7,10 @@ export const demoUser: AppUser = {
   role: 'admin',
 }
 
-export const demoCalendars: CalendarResource[] = [
-  { id: 'cal-1', googleCalendarId: 'demo-beatrice', name: 'Béatrice · Coordination', color: '#e26d3f', enabled: true, coefficient: 1, eventCount: 42, lastSyncedAt: '2026-08-31T08:45:00Z' },
-  { id: 'cal-2', googleCalendarId: 'demo-paul', name: 'Paul · Encadrement', color: '#3f7f73', enabled: true, coefficient: 1.25, eventCount: 36, lastSyncedAt: '2026-08-31T08:45:00Z' },
-  { id: 'cal-3', googleCalendarId: 'demo-reunions', name: 'Équipe · Réunions', color: '#4d6f8a', enabled: false, coefficient: 0.5, eventCount: 18, lastSyncedAt: null },
+export const demoResources: EmployeeResource[] = [
+  { id: 'employee-1', calendarId: 'cal-1', googleCalendarId: 'demo-beatrice@resource.calendar.google.com', name: 'Béatrice Martin', color: '#e26d3f', enabled: true, loginEmail: 'beatrice@example.fr', eventCount: 42, lastSyncedAt: '2026-08-31T08:45:00Z' },
+  { id: 'employee-2', calendarId: 'cal-2', googleCalendarId: 'demo-paul@resource.calendar.google.com', name: 'Paul Renaud', color: '#3f7f73', enabled: true, loginEmail: 'paul@example.fr', eventCount: 36, lastSyncedAt: '2026-08-31T08:45:00Z' },
+  { id: 'employee-3', calendarId: 'cal-3', googleCalendarId: 'demo-remplacement@resource.calendar.google.com', name: 'Ressource remplacement', color: '#4d6f8a', enabled: false, loginEmail: '', eventCount: 18, lastSyncedAt: null },
 ]
 
 const seriesA = [62, 71, 68, 74, 79, 66, 42, 38, 72, 76, 69, 55]

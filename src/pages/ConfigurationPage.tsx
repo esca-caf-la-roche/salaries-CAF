@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, CircleAlert, RefreshCw, Search, SlidersHorizontal } from 'lucide-react'
-import { discoverCalendars, getCalendars, startGoogleConnection, updateCalendar } from '../services/api'
-import type { CalendarResource } from '../types'
+import { Check, CircleAlert, Mail, RefreshCw, Search } from 'lucide-react'
+import { discoverResources, getResources, saveResources, startGoogleConnection } from '../services/api'
+import type { EmployeeResource } from '../types'
 
 export function ConfigurationPage() {
-  const [calendars, setCalendars] = useState<CalendarResource[]>([])
+  const [resources, setResources] = useState<EmployeeResource[]>([])
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [discovering, setDiscovering] = useState(false)
@@ -13,19 +13,22 @@ export function ConfigurationPage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
 
-  useEffect(() => { void getCalendars().then(setCalendars).finally(() => setLoading(false)) }, [])
-  const filtered = useMemo(() => calendars.filter((calendar) => calendar.name.toLocaleLowerCase('fr').includes(query.toLocaleLowerCase('fr'))), [calendars, query])
-  const enabledCount = calendars.filter((calendar) => calendar.enabled).length
+  useEffect(() => { void getResources().then(setResources).catch(() => setMessage('Les ressources n\'ont pas pu être chargées.')).finally(() => setLoading(false)) }, [])
+  const filtered = useMemo(() => {
+    const normalizedQuery = query.toLocaleLowerCase('fr')
+    return resources.filter((resource) => `${resource.name} ${resource.googleCalendarId} ${resource.loginEmail}`.toLocaleLowerCase('fr').includes(normalizedQuery))
+  }, [resources, query])
+  const enabledCount = resources.filter((resource) => resource.enabled).length
 
-  const patchCalendar = (id: string, patch: Partial<CalendarResource>) => {
-    setCalendars((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item))
+  const patchResource = (id: string, patch: Partial<EmployeeResource>) => {
+    setResources((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item))
     setDirty((items) => new Set(items).add(id))
     setMessage('')
   }
   const detect = async () => {
     setDiscovering(true)
     setMessage('')
-    try { setCalendars(await discoverCalendars()); setMessage('Liste des calendriers actualisée.') }
+    try { setResources(await discoverResources()); setDirty(new Set()); setMessage('Liste des ressources salariées actualisée.') }
     catch { setMessage('La détection a échoué. Reconnectez le compte Google puis réessayez.') }
     finally { setDiscovering(false) }
   }
@@ -37,12 +40,15 @@ export function ConfigurationPage() {
     finally { setConnecting(false) }
   }
   const save = async () => {
+    const invalid = resources.find((resource) => resource.enabled && !/^\S+@\S+\.\S+$/.test(resource.loginEmail.trim()))
+    if (invalid) { setMessage(`Ajoutez un e-mail de connexion valide pour ${invalid.name}.`); return }
     setSaving(true)
     setMessage('')
     try {
-      await Promise.all(calendars.filter((calendar) => dirty.has(calendar.id)).map(updateCalendar))
+      const changed = resources.filter((resource) => dirty.has(resource.id))
+      setResources(await saveResources(changed))
       setDirty(new Set())
-      setMessage('Configuration enregistrée. La prochaine synchronisation appliquera ces coefficients.')
+      setMessage('Configuration enregistrée. Les salariés sélectionnés peuvent recevoir un code de connexion.')
     } catch { setMessage('Les modifications n\'ont pas pu être enregistrées.') }
     finally { setSaving(false) }
   }
@@ -50,36 +56,36 @@ export function ConfigurationPage() {
   return (
     <div className="page">
       <header className="page-heading">
-        <div><p className="eyebrow">Paramétrage</p><h1>Calendriers & coefficients</h1><p>Choisissez les ressources à suivre et la pondération appliquée à leurs événements.</p></div>
+        <div><p className="eyebrow">Paramétrage</p><h1>Ressources salariées</h1><p>Choisissez les calendriers ressources à suivre et associez chaque salarié à son e-mail de connexion.</p></div>
         <div className="page-actions">
           <button className="button button--secondary" type="button" onClick={() => void connectGoogle()} disabled={connecting}>
             {connecting ? 'Connexion…' : 'Connecter Google'}
           </button>
           <button className="button button--secondary" type="button" onClick={() => void detect()} disabled={discovering}>
-            <RefreshCw className={discovering ? 'spin' : ''} aria-hidden="true" /> {discovering ? 'Détection…' : 'Détecter les calendriers'}
+            <RefreshCw className={discovering ? 'spin' : ''} aria-hidden="true" /> {discovering ? 'Détection…' : 'Détecter les ressources'}
           </button>
         </div>
       </header>
       {message && <div className="alert alert--success" role="status">{message}</div>}
       <section className="setup-note">
         <span><CircleAlert aria-hidden="true" /></span>
-        <div><strong>Comment fonctionne le calcul ?</strong><p>Chaque durée d'événement est multipliée par le coefficient du calendrier. Seuls les calendriers activés sont synchronisés.</p></div>
-        <code>durée × coef.</code>
+        <div><strong>Comment fonctionne le calcul ?</strong><p>Chaque ressource regroupe ses événements. Le calendrier d'origine de chaque événement détermine ensuite le coefficient : sans préparation ×1, avec préparation ×1,25.</p></div>
+        <code>ressource → calendrier → coef.</code>
       </section>
       <section className="panel configuration-panel">
         <div className="configuration-toolbar">
-          <div><p className="eyebrow">Ressources Google</p><h2>{enabledCount} calendrier{enabledCount > 1 ? 's' : ''} suivi{enabledCount > 1 ? 's' : ''}</h2></div>
-          <label className="search-field"><Search aria-hidden="true" /><span className="sr-only">Rechercher un calendrier</span><input type="search" placeholder="Rechercher…" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+          <div><p className="eyebrow">Calendriers ressources Google</p><h2>{enabledCount} ressource{enabledCount > 1 ? 's' : ''} suivie{enabledCount > 1 ? 's' : ''}</h2></div>
+          <label className="search-field"><Search aria-hidden="true" /><span className="sr-only">Rechercher une ressource</span><input type="search" placeholder="Rechercher…" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
         </div>
-        <div className="calendar-head" aria-hidden="true"><span>Calendrier</span><span>Suivi</span><span>Coefficient</span></div>
-        {loading ? <div className="skeleton-list" aria-label="Chargement des calendriers"><i /><i /><i /></div> : (
+        <div className="calendar-head" aria-hidden="true"><span>Ressource</span><span>Suivi</span><span>E-mail de connexion</span></div>
+        {loading ? <div className="skeleton-list" aria-label="Chargement des ressources"><i /><i /><i /></div> : (
           <div className="calendar-list">
-            {filtered.map((calendar) => <article className={calendar.enabled ? 'calendar-row calendar-row--enabled' : 'calendar-row'} key={calendar.id}>
-              <div className="calendar-identity"><i style={{ background: calendar.color }} /><span><strong>{calendar.name}</strong><small>{calendar.eventCount ?? 0} événements détectés</small></span></div>
-              <label className="switch"><input type="checkbox" checked={calendar.enabled} onChange={(event) => patchCalendar(calendar.id, { enabled: event.target.checked })} /><span aria-hidden="true" /><em>{calendar.enabled ? 'Activé' : 'Ignoré'}</em></label>
-              <label className="coefficient-input"><span className="sr-only">Coefficient de {calendar.name}</span><SlidersHorizontal aria-hidden="true" /><input type="number" min="0" max="5" step="0.05" value={calendar.coefficient} disabled={!calendar.enabled} onChange={(event) => patchCalendar(calendar.id, { coefficient: Number(event.target.value) })} /><b>×</b></label>
+            {filtered.map((resource) => <article className={resource.enabled ? 'calendar-row calendar-row--enabled' : 'calendar-row'} key={resource.id}>
+              <div className="calendar-identity"><i style={{ background: resource.color }} /><span><strong>{resource.name}</strong><small>{resource.eventCount ?? 0} événements · {resource.googleCalendarId}</small></span></div>
+              <label className="switch"><input type="checkbox" checked={resource.enabled} onChange={(event) => patchResource(resource.id, { enabled: event.target.checked })} /><span aria-hidden="true" /><em>{resource.enabled ? 'Suivie' : 'Ignorée'}</em></label>
+              <label className="email-input"><span className="sr-only">E-mail de connexion de {resource.name}</span><Mail aria-hidden="true" /><input type="email" placeholder="prenom@exemple.fr" value={resource.loginEmail} disabled={!resource.enabled} required={resource.enabled} onChange={(event) => patchResource(resource.id, { loginEmail: event.target.value })} /></label>
             </article>)}
-            {!filtered.length && <div className="empty-state"><Search aria-hidden="true" /><strong>Aucun calendrier trouvé</strong><span>Modifiez votre recherche ou relancez la détection Google.</span></div>}
+            {!filtered.length && <div className="empty-state"><Search aria-hidden="true" /><strong>Aucune ressource trouvée</strong><span>Modifiez votre recherche ou relancez la détection Google.</span></div>}
           </div>
         )}
         <footer className="configuration-footer"><span>{dirty.size ? `${dirty.size} modification${dirty.size > 1 ? 's' : ''} non enregistrée${dirty.size > 1 ? 's' : ''}` : <><Check aria-hidden="true" /> Configuration à jour</>}</span><button className="button button--primary" type="button" onClick={() => void save()} disabled={!dirty.size || saving}>{saving ? 'Enregistrement…' : 'Enregistrer les modifications'}</button></footer>

@@ -1,59 +1,65 @@
-import { demoCalendars, demoEmployees, demoSyncState } from '../data/demo'
+import { demoEmployees, demoResources, demoSyncState } from '../data/demo'
 import { isDemoMode, supabase } from '../lib/supabase'
-import type { CalendarResource, EmployeeSummary, MonthlyHours, SyncState } from '../types'
+import type { EmployeeResource, EmployeeSummary, MonthlyHours, SyncState } from '../types'
 
 const pause = (milliseconds = 180) => new Promise((resolve) => window.setTimeout(resolve, milliseconds))
 
-export async function getCalendars(): Promise<CalendarResource[]> {
-  if (isDemoMode || !supabase) {
-    await pause()
-    return structuredClone(demoCalendars)
+function mapResource(resource: Record<string, unknown>): EmployeeResource {
+  return {
+    id: String(resource.id),
+    calendarId: String(resource.calendar_id),
+    googleCalendarId: String(resource.google_calendar_id),
+    name: String(resource.name),
+    color: String(resource.color ?? '#3f7f73'),
+    enabled: Boolean(resource.enabled),
+    loginEmail: String(resource.login_email ?? ''),
+    userId: resource.user_id ? String(resource.user_id) : null,
+    eventCount: Number(resource.event_count ?? 0),
+    lastSyncedAt: resource.last_synced_at ? String(resource.last_synced_at) : null,
   }
-  const { data, error } = await supabase.from('calendars').select('*').order('name')
-  if (error) throw error
-  return (data ?? []).map((calendar) => ({
-    id: calendar.id,
-    googleCalendarId: calendar.google_calendar_id,
-    name: calendar.name,
-    color: calendar.color ?? '#3f7f73',
-    enabled: calendar.enabled,
-    coefficient: Number(calendar.coefficient),
-    eventCount: calendar.event_count,
-    lastSyncedAt: calendar.last_synced_at,
-  }))
 }
 
-export async function updateCalendar(calendar: CalendarResource): Promise<void> {
+export async function getResources(): Promise<EmployeeResource[]> {
   if (isDemoMode || !supabase) {
     await pause()
-    return
+    return structuredClone(demoResources)
   }
-  const { error } = await supabase.from('calendars').update({
-    enabled: calendar.enabled,
-    coefficient: calendar.coefficient,
-  }).eq('id', calendar.id)
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: { action: 'resources' },
+  })
   if (error) throw error
+  return (data?.resources ?? []).map(mapResource)
 }
 
-export async function discoverCalendars(): Promise<CalendarResource[]> {
+export async function saveResources(resources: EmployeeResource[]): Promise<EmployeeResource[]> {
+  if (isDemoMode || !supabase) {
+    await pause()
+    return structuredClone(resources)
+  }
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: {
+      action: 'saveResources',
+      resources: resources.map((resource) => ({
+        id: resource.id,
+        enabled: resource.enabled,
+        loginEmail: resource.loginEmail,
+      })),
+    },
+  })
+  if (error) throw error
+  return (data?.resources ?? []).map(mapResource)
+}
+
+export async function discoverResources(): Promise<EmployeeResource[]> {
   if (isDemoMode || !supabase) {
     await pause(650)
-    return structuredClone(demoCalendars)
+    return structuredClone(demoResources)
   }
   const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
     body: { action: 'discover' },
   })
   if (error) throw error
-  return (data.calendars ?? []).map((calendar: Record<string, unknown>) => ({
-    id: String(calendar.id),
-    googleCalendarId: String(calendar.google_calendar_id),
-    name: String(calendar.name),
-    color: String(calendar.color ?? '#3f7f73'),
-    enabled: Boolean(calendar.enabled),
-    coefficient: Number(calendar.coefficient),
-    eventCount: Number(calendar.event_count ?? 0),
-    lastSyncedAt: calendar.last_synced_at ? String(calendar.last_synced_at) : null,
-  }))
+  return (data.resources ?? []).map(mapResource)
 }
 
 export async function startGoogleConnection(): Promise<void> {
@@ -81,12 +87,13 @@ export async function runIncrementalSync(): Promise<SyncState> {
   const results = Array.isArray(data?.results) ? data.results : []
   const failed = results.filter((result: { error?: string }) => result.error)
   const synced = results.length - failed.length
+  const unmapped = results.reduce((total: number, result: { unmappedEvents?: number }) => total + Number(result.unmappedEvents ?? 0), 0)
   return {
     status: failed.length ? 'error' : 'success',
     lastSyncedAt: new Date().toISOString(),
     message: failed.length
       ? `${synced} calendrier(s) synchronisé(s), ${failed.length} en erreur.`
-      : `${synced} calendrier(s) synchronisé(s).`,
+      : `${synced} ressource(s) synchronisée(s).${unmapped ? ` ${unmapped} événement(s) ignoré(s) car leur calendrier d'origine n'a pas de coefficient.` : ''}`,
   }
 }
 

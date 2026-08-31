@@ -12,7 +12,7 @@ export function LoginPage() {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  if (user?.role === 'admin') return <Navigate to="/" replace />
+  if (user) return <Navigate to="/" replace />
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -46,7 +46,7 @@ export function LoginPage() {
         <form className="login-card" onSubmit={submit}>
           <span className="login-card__icon"><LockKeyhole aria-hidden="true" /></span>
           <p className="eyebrow">Accès réservé</p>
-          <h2>{step === 'email' ? 'Connexion administrateur' : 'Saisissez le code'}</h2>
+          <h2>{step === 'email' ? 'Connexion' : 'Saisissez le code'}</h2>
           <p className="muted">{step === 'email' ? 'Un code à 6 chiffres sera envoyé aux comptes autorisés.' : `Code envoyé à ${email}`}</p>
           {error && <div className="alert alert--error" role="alert">{error}</div>}
           {!isDemo && <>

@@ -7,13 +7,15 @@ export interface AppUser {
   role: UserRole
 }
 
-export interface CalendarResource {
+export interface EmployeeResource {
   id: string
+  calendarId: string
   googleCalendarId: string
   name: string
   color: string
   enabled: boolean
-  coefficient: number
+  loginEmail: string
+  userId?: string | null
   eventCount?: number
   lastSyncedAt?: string | null
 }
