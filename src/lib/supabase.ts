@@ -8,6 +8,8 @@ export const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true' || !isSupaba
 
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl!, supabaseAnonKey!, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+      // L'authentification utilise exclusivement le code OTP saisi dans
+      // l'application. Aucun jeton provenant d'un Magic Link n'est accepté.
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
     })
   : null

@@ -7,12 +7,15 @@ extra_search_path = ["public", "extensions"]
 
 [auth]
 enabled = true
-site_url = "http://localhost:5173"
-additional_redirect_urls = ["http://localhost:5173/**"]
+site_url = "https://esca-caf-la-roche.github.io/salaries-CAF/"
+additional_redirect_urls = [
+  "https://esca-caf-la-roche.github.io/salaries-CAF/**",
+  "http://localhost:5173/**",
+]
 
 [auth.email.template.magic_link]
 subject = "Votre code de connexion La Cordée"
-content_path = "./supabase/templates/magic_link.html"
+content_path = "./supabase/templates/otp.html"
 
 [functions.google-oauth-start]
 verify_jwt = true

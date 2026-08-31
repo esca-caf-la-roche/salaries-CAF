@@ -2,7 +2,9 @@
 
 Application statique React pour suivre les heures issues de Google Calendar, avant et après application d'un coefficient par ressource. L'interface est déployable sur GitHub Pages ; Supabase gère l'authentification, les données et la synchronisation Google côté serveur.
 
-L'authentification utilise un OTP e-mail à 6 chiffres. L'application ne crée jamais de compte : ajoutez d'abord l'utilisateur dans **Supabase Auth > Users**, puis attribuez-lui le rôle `admin` dans `public.profiles`. Le modèle d'e-mail **Magic Link** doit contenir `{{ .Token }}` pour envoyer le code plutôt qu'un lien.
+L'authentification utilise exclusivement un OTP e-mail à 6 chiffres. L'application ne crée jamais de compte : ajoutez d'abord l'utilisateur dans **Supabase Auth > Users**, puis attribuez-lui le rôle `admin` dans `public.profiles`.
+
+Supabase range techniquement les e-mails OTP dans l'emplacement de configuration nommé `magic_link`, mais le modèle hébergé doit contenir uniquement `{{ .Token }}` et aucune variable `{{ .ConfirmationURL }}`. Le fichier local `supabase/templates/otp.html` sert de source à copier dans **Authentication > Email Templates > Magic Link / OTP** du projet hébergé.
 
 ## Démarrage
 
