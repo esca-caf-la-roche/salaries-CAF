@@ -8,7 +8,8 @@ interface AuthContextValue {
   user: AppUser | null
   loading: boolean
   isDemo: boolean
-  signIn: (email: string, password: string) => Promise<void>
+  requestOtp: (email: string) => Promise<void>
+  verifyOtp: (email: string, token: string) => Promise<void>
   signInDemo: () => void
   signOut: () => Promise<void>
 }
@@ -17,7 +18,7 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 async function userFromSession(session: Session): Promise<AppUser> {
   const metadata = session.user.user_metadata
-  let role: AppUser['role'] = metadata.role === 'employee' ? 'employee' : 'admin'
+  let role: AppUser['role'] = 'employee'
   let displayName = metadata.full_name ?? session.user.email?.split('@')[0] ?? 'Utilisateur'
 
   if (supabase) {
@@ -53,18 +54,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     loading,
     isDemo: isDemoMode,
-    signIn: async (email, password) => {
+    requestOtp: async (email) => {
       if (!supabase) throw new Error('Supabase n\'est pas configuré.')
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: { shouldCreateUser: false },
+      })
       if (error) throw error
-      if (data.session) {
-        const signedInUser = await userFromSession(data.session)
-        if (signedInUser.role !== 'admin') {
-          await supabase.auth.signOut()
-          throw new Error('L\'accès salarié sera disponible dans une prochaine version.')
-        }
-        setUser(signedInUser)
+    },
+    verifyOtp: async (email, token) => {
+      if (!supabase) throw new Error('Supabase n\'est pas configuré.')
+      const { data, error } = await supabase.auth.verifyOtp({ email, token, type: 'email' })
+      if (error) throw error
+      if (!data.session) throw new Error('Le code n\'a pas créé de session.')
+      const signedInUser = await userFromSession(data.session)
+      if (signedInUser.role !== 'admin') {
+        await supabase.auth.signOut()
+        throw new Error('Ce compte n\'a pas le rôle administrateur.')
       }
+      setUser(signedInUser)
     },
     signInDemo: () => setUser(demoUser),
     signOut: async () => {

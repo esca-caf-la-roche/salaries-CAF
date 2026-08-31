@@ -23,7 +23,9 @@ La découverte joint les règles sur l'identifiant Google exact. Une sync initia
 ## Initialisation
 
 1. Relire puis appliquer les migrations et `seed.sql` sur un nouveau projet.
-2. Créer l'utilisateur `escalade@caflarochebonnevile.fr`. Seule cette adresse exacte reçoit automatiquement `admin`; les autres profils sont `employee`.
-3. Déployer les trois fonctions, puis configurer les secrets.
+2. Dans **Authentication > Users**, créer chaque compte autorisé et confirmer son adresse e-mail.
+3. Dans `public.profiles`, attribuer `role = admin` aux administrateurs. L'adresse `escalade@caflarochebonnevile.fr` reçoit ce rôle automatiquement ; les autres profils commencent en `employee`.
+4. Dans **Authentication > Email Templates > Magic Link**, copier le contenu de `templates/magic_link.html`. La présence de `{{ .Token }}` active l'OTP à 6 chiffres.
+5. Déployer les trois fonctions, puis configurer les secrets.
 
 Les événements journée entière sont conservés mais exclus de `monthly_hours`. Les événements traversant un changement de mois sont ventilés à l'intersection exacte de chaque mois.

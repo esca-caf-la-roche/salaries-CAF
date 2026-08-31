@@ -5,9 +5,10 @@ import { Logo } from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
 
 export function LoginPage() {
-  const { user, signIn, signInDemo, isDemo } = useAuth()
+  const { user, requestOtp, verifyOtp, signInDemo, isDemo } = useAuth()
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [token, setToken] = useState('')
+  const [step, setStep] = useState<'email' | 'code'>('email')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -17,7 +18,14 @@ export function LoginPage() {
     event.preventDefault()
     setError('')
     setSubmitting(true)
-    try { await signIn(email, password) }
+    try {
+      if (step === 'email') {
+        await requestOtp(email)
+        setStep('code')
+      } else {
+        await verifyOtp(email, token)
+      }
+    }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Connexion impossible.') }
     finally { setSubmitting(false) }
   }
@@ -38,13 +46,19 @@ export function LoginPage() {
         <form className="login-card" onSubmit={submit}>
           <span className="login-card__icon"><LockKeyhole aria-hidden="true" /></span>
           <p className="eyebrow">Accès réservé</p>
-          <h2>Connexion administrateur</h2>
-          <p className="muted">Les comptes salariés seront ouverts dans une prochaine version.</p>
+          <h2>{step === 'email' ? 'Connexion administrateur' : 'Saisissez le code'}</h2>
+          <p className="muted">{step === 'email' ? 'Un code à 6 chiffres sera envoyé aux comptes autorisés.' : `Code envoyé à ${email}`}</p>
           {error && <div className="alert alert--error" role="alert">{error}</div>}
           {!isDemo && <>
-            <label>Adresse e-mail<input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-            <label>Mot de passe<input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-            <button className="button button--primary" disabled={submitting} type="submit">{submitting ? 'Connexion…' : 'Se connecter'} <ArrowRight aria-hidden="true" /></button>
+            {step === 'email' ? (
+              <label>Adresse e-mail<input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+            ) : (
+              <label>Code à 6 chiffres<input className="otp-input" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" minLength={6} maxLength={6} required autoFocus value={token} onChange={(e) => setToken(e.target.value.replace(/\D/g, '').slice(0, 6))} /></label>
+            )}
+            <button className="button button--primary" disabled={submitting} type="submit">
+              {submitting ? 'Vérification…' : step === 'email' ? 'Recevoir mon code' : 'Valider le code'} <ArrowRight aria-hidden="true" />
+            </button>
+            {step === 'code' && <button className="login-link" type="button" onClick={() => { setStep('email'); setToken(''); setError('') }}>Utiliser une autre adresse</button>}
           </>}
           {isDemo && <button className="button button--primary" type="button" onClick={signInDemo}>Ouvrir la démonstration <ArrowRight aria-hidden="true" /></button>}
           <p className="security-note"><ShieldCheck aria-hidden="true" /> Authentification sécurisée par Supabase</p>

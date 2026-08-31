@@ -57,6 +57,8 @@ h2 { margin-bottom: 4px; font-size: 1.25rem; letter-spacing: -.025em; }
 .login-card h2 { font-family: Unbounded, sans-serif; font-size: clamp(1.6rem, 3vw, 2.2rem); margin-bottom: 12px; }
 .login-card > label { display: grid; gap: 8px; margin: 24px 0; font-size: .82rem; font-weight: 700; }
 .login-card input { width: 100%; padding: 15px 16px; border: 1px solid var(--line); border-radius: 9px; background: white; }
+.login-card .otp-input { font-family: var(--mono); font-size: 1.55rem; font-weight: 700; letter-spacing: .45em; text-align: center; }
+.login-link { display: block; margin: 14px auto 0; border: 0; background: transparent; color: var(--green); font: 700 .8rem var(--body); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .security-note { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 24px; color: var(--muted); font-size: .72rem; }
 .security-note svg { width: 16px; }
 
