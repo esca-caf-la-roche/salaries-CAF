@@ -1,19 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, CircleAlert, Mail, RefreshCw, Search } from 'lucide-react'
-import { discoverResources, getResources, saveResources, startGoogleConnection } from '../services/api'
-import type { EmployeeResource } from '../types'
+import { discoverResources, getCoefficientCalendars, getResources, saveCoefficientCalendars, saveResources, startGoogleConnection } from '../services/api'
+import type { EmployeeResource, PreparationCoefficient, UsedCalendarCoefficient } from '../types'
 
 export function ConfigurationPage() {
   const [resources, setResources] = useState<EmployeeResource[]>([])
+  const [coefficientCalendars, setCoefficientCalendars] = useState<UsedCalendarCoefficient[]>([])
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
+  const [coefficientsLoading, setCoefficientsLoading] = useState(true)
+  const [coefficientsRefreshing, setCoefficientsRefreshing] = useState(false)
   const [discovering, setDiscovering] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [dirty, setDirty] = useState(new Set<string>())
+  const [coefficientDirty, setCoefficientDirty] = useState(new Set<string>())
   const [saving, setSaving] = useState(false)
+  const [coefficientsSaving, setCoefficientsSaving] = useState(false)
   const [message, setMessage] = useState('')
 
   useEffect(() => { void getResources().then(setResources).catch(() => setMessage('Les ressources n\'ont pas pu être chargées.')).finally(() => setLoading(false)) }, [])
+  useEffect(() => { void getCoefficientCalendars().then(setCoefficientCalendars).catch(() => setMessage('Les calendriers utilisés n\'ont pas pu être chargés.')).finally(() => setCoefficientsLoading(false)) }, [])
   const filtered = useMemo(() => {
     const normalizedQuery = query.toLocaleLowerCase('fr')
     return resources.filter((resource) => `${resource.name} ${resource.googleCalendarId} ${resource.loginEmail}`.toLocaleLowerCase('fr').includes(normalizedQuery))
@@ -32,12 +38,27 @@ export function ConfigurationPage() {
     catch { setMessage('La détection a échoué. Reconnectez le compte Google puis réessayez.') }
     finally { setDiscovering(false) }
   }
+  const patchCoefficient = (googleCalendarId: string, coefficient: PreparationCoefficient) => {
+    setCoefficientCalendars((items) => items.map((item) => item.googleCalendarId === googleCalendarId ? { ...item, coefficient } : item))
+    setCoefficientDirty((items) => new Set(items).add(googleCalendarId))
+    setMessage('')
+  }
   const connectGoogle = async () => {
     setConnecting(true)
     setMessage('')
     try { await startGoogleConnection() }
     catch { setMessage('La connexion Google n\'a pas pu démarrer.') }
     finally { setConnecting(false) }
+  }
+  const refreshCoefficients = async () => {
+    setCoefficientsRefreshing(true)
+    setMessage('')
+    try {
+      setCoefficientCalendars(await getCoefficientCalendars())
+      setCoefficientDirty(new Set())
+      setMessage('Calendriers utilisés actualisés.')
+    } catch { setMessage('La détection des calendriers utilisés a échoué.') }
+    finally { setCoefficientsRefreshing(false) }
   }
   const save = async () => {
     const invalid = resources.find((resource) => resource.enabled && !/^\S+@\S+\.\S+$/.test(resource.loginEmail.trim()))
@@ -52,11 +73,26 @@ export function ConfigurationPage() {
     } catch { setMessage('Les modifications n\'ont pas pu être enregistrées.') }
     finally { setSaving(false) }
   }
+  const saveCoefficients = async () => {
+    const changed = coefficientCalendars.filter((calendar) => coefficientDirty.has(calendar.googleCalendarId))
+    if (changed.some((calendar) => calendar.coefficient == null)) {
+      setMessage('Choisissez un coefficient pour chaque calendrier modifié.')
+      return
+    }
+    setCoefficientsSaving(true)
+    setMessage('')
+    try {
+      setCoefficientCalendars(await saveCoefficientCalendars(changed))
+      setCoefficientDirty(new Set())
+      setMessage('Coefficients enregistrés. Les heures pondérées sont à jour.')
+    } catch { setMessage('Les coefficients n\'ont pas pu être enregistrés.') }
+    finally { setCoefficientsSaving(false) }
+  }
 
   return (
     <div className="page">
       <header className="page-heading">
-        <div><p className="eyebrow">Paramétrage</p><h1>Ressources salariées</h1><p>Choisissez les calendriers ressources à suivre et associez chaque salarié à son e-mail de connexion.</p></div>
+        <div><p className="eyebrow">Paramétrage</p><h1>Ressources et coefficients</h1><p>Choisissez les ressources salariées, puis indiquez si chaque calendrier utilisé comprend du temps de préparation.</p></div>
         <div className="page-actions">
           <button className="button button--secondary" type="button" onClick={() => void connectGoogle()} disabled={connecting}>
             {connecting ? 'Connexion…' : 'Connecter Google'}
@@ -89,6 +125,32 @@ export function ConfigurationPage() {
           </div>
         )}
         <footer className="configuration-footer"><span>{dirty.size ? `${dirty.size} modification${dirty.size > 1 ? 's' : ''} non enregistrée${dirty.size > 1 ? 's' : ''}` : <><Check aria-hidden="true" /> Configuration à jour</>}</span><button className="button button--primary" type="button" onClick={() => void save()} disabled={!dirty.size || saving}>{saving ? 'Enregistrement…' : 'Enregistrer les modifications'}</button></footer>
+      </section>
+      <section className="panel configuration-panel coefficient-panel">
+        <div className="configuration-toolbar">
+          <div><p className="eyebrow">Calendriers utilisés</p><h2>{coefficientCalendars.length} calendrier{coefficientCalendars.length > 1 ? 's' : ''} détecté{coefficientCalendars.length > 1 ? 's' : ''}</h2></div>
+          <button className="button button--secondary" type="button" onClick={() => void refreshCoefficients()} disabled={coefficientsRefreshing}>
+            <RefreshCw className={coefficientsRefreshing ? 'spin' : ''} aria-hidden="true" /> {coefficientsRefreshing ? 'Actualisation…' : 'Actualiser les calendriers utilisés'}
+          </button>
+        </div>
+        <div className="coefficient-head" aria-hidden="true"><span>Calendrier d'origine</span><span>Coefficient</span></div>
+        {coefficientsLoading ? <div className="skeleton-list" aria-label="Chargement des calendriers utilisés"><i /><i /></div> : (
+          <div className="calendar-list">
+            {coefficientCalendars.map((calendar) => <article className="coefficient-row" key={calendar.googleCalendarId}>
+              <div className="calendar-identity"><i /><span><strong>{calendar.name}</strong><small>{calendar.eventCount} événement{calendar.eventCount > 1 ? 's' : ''} · {calendar.googleCalendarId}</small></span></div>
+              <label className="coefficient-select">
+                <span className="sr-only">Coefficient de {calendar.name}</span>
+                <select value={calendar.coefficient ?? ''} onChange={(event) => patchCoefficient(calendar.googleCalendarId, Number(event.target.value) as PreparationCoefficient)}>
+                  <option value="" disabled>Choisir…</option>
+                  <option value="1">Sans prépa · ×1</option>
+                  <option value="1.25">Avec prépa · ×1,25</option>
+                </select>
+              </label>
+            </article>)}
+            {!coefficientCalendars.length && <div className="empty-state"><Search aria-hidden="true" /><strong>Aucun calendrier utilisé détecté</strong><span>Activez une ressource puis lancez une synchronisation pour analyser ses événements.</span></div>}
+          </div>
+        )}
+        <footer className="configuration-footer"><span>{coefficientDirty.size ? `${coefficientDirty.size} coefficient${coefficientDirty.size > 1 ? 's' : ''} non enregistré${coefficientDirty.size > 1 ? 's' : ''}` : <><Check aria-hidden="true" /> Coefficients à jour</>}</span><button className="button button--primary" type="button" onClick={() => void saveCoefficients()} disabled={!coefficientDirty.size || coefficientsSaving}>{coefficientsSaving ? 'Enregistrement…' : 'Enregistrer les coefficients'}</button></footer>
       </section>
     </div>
   )

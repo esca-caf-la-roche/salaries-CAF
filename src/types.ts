@@ -20,6 +20,15 @@ export interface EmployeeResource {
   lastSyncedAt?: string | null
 }
 
+export type PreparationCoefficient = 1 | 1.25
+
+export interface UsedCalendarCoefficient {
+  googleCalendarId: string
+  name: string
+  coefficient: PreparationCoefficient | null
+  eventCount: number
+}
+
 export interface MonthlyHours {
   month: number
   rawHours: number

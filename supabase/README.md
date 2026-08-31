@@ -16,7 +16,7 @@ Ajoutez exactement `GOOGLE_REDIRECT_URI` aux URI autorisées du client OAuth Goo
 
 - `google-oauth-start`, `POST { "redirectTo": "..." }`, JWT admin requis, retourne `authorizationUrl`.
 - `google-oauth-callback`, cible OAuth Google publique protégée par un state aléatoire, expirant et à usage unique.
-- `google-calendar-sync`, JWT admin requis : `POST { "action": "discover" }`, `POST { "action": "resources" }`, `POST { "action": "saveResources", "resources": [...] }` ou `POST { "action": "sync", "calendarIds": ["uuid interne"] }`.
+- `google-calendar-sync`, JWT admin requis : détection et sauvegarde des ressources avec `discover`, `resources` et `saveResources`; lecture et sauvegarde des calendriers d'origine utilisés avec `coefficientCalendars` et `saveCoefficients`; synchronisation avec `sync`.
 
 La découverte conserve uniquement les calendriers ressources Google Workspace présents dans la liste du compte connecté. L'administrateur associe chaque ressource suivie à un e-mail de connexion ; la fonction crée si nécessaire le compte Auth salarié et le lie par `user_id`. Une sync initiale paginée produit un `nextSyncToken`; les suivantes utilisent exclusivement ce token. Chaque événement est pondé avec la règle correspondant à son `organizer.email`. Une réponse Google `410` invalide le token et déclenche un full resync sans effacer les anciennes données avant la réussite complète.
 

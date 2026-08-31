@@ -21,6 +21,12 @@ begin
   if exists (select 1 from public.coefficient_rules where coefficient not in (1, 1.25)) then
     raise exception 'Coefficient inattendu dans le seed';
   end if;
+  if not has_function_privilege('service_role', 'public.internal_used_coefficient_calendars(uuid)', 'execute') then
+    raise exception 'service_role doit pouvoir détecter les calendriers utilisés';
+  end if;
+  if has_function_privilege('authenticated', 'public.internal_configure_coefficients(uuid,jsonb)', 'execute') then
+    raise exception 'authenticated ne doit pas modifier directement les coefficients';
+  end if;
   if not exists (
     select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'calendars' and column_name = 'is_resource'

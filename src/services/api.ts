@@ -1,6 +1,6 @@
-import { demoEmployees, demoResources, demoSyncState } from '../data/demo'
+import { demoCoefficientCalendars, demoEmployees, demoResources, demoSyncState } from '../data/demo'
 import { isDemoMode, supabase } from '../lib/supabase'
-import type { EmployeeResource, EmployeeSummary, MonthlyHours, SyncState } from '../types'
+import type { EmployeeResource, EmployeeSummary, MonthlyHours, SyncState, UsedCalendarCoefficient } from '../types'
 
 const pause = (milliseconds = 180) => new Promise((resolve) => window.setTimeout(resolve, milliseconds))
 
@@ -16,6 +16,16 @@ function mapResource(resource: Record<string, unknown>): EmployeeResource {
     userId: resource.user_id ? String(resource.user_id) : null,
     eventCount: Number(resource.event_count ?? 0),
     lastSyncedAt: resource.last_synced_at ? String(resource.last_synced_at) : null,
+  }
+}
+
+function mapCoefficientCalendar(calendar: Record<string, unknown>): UsedCalendarCoefficient {
+  const coefficient = calendar.coefficient == null ? null : Number(calendar.coefficient)
+  return {
+    googleCalendarId: String(calendar.google_calendar_id),
+    name: String(calendar.label ?? calendar.google_calendar_id),
+    coefficient: coefficient === 1 || coefficient === 1.25 ? coefficient : null,
+    eventCount: Number(calendar.event_count ?? 0),
   }
 }
 
@@ -60,6 +70,36 @@ export async function discoverResources(): Promise<EmployeeResource[]> {
   })
   if (error) throw error
   return (data.resources ?? []).map(mapResource)
+}
+
+export async function getCoefficientCalendars(): Promise<UsedCalendarCoefficient[]> {
+  if (isDemoMode || !supabase) {
+    await pause()
+    return structuredClone(demoCoefficientCalendars)
+  }
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: { action: 'coefficientCalendars' },
+  })
+  if (error) throw error
+  return (data?.calendars ?? []).map(mapCoefficientCalendar)
+}
+
+export async function saveCoefficientCalendars(calendars: UsedCalendarCoefficient[]): Promise<UsedCalendarCoefficient[]> {
+  if (isDemoMode || !supabase) {
+    await pause()
+    return structuredClone(calendars)
+  }
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: {
+      action: 'saveCoefficients',
+      calendars: calendars.map((calendar) => ({
+        googleCalendarId: calendar.googleCalendarId,
+        coefficient: calendar.coefficient,
+      })),
+    },
+  })
+  if (error) throw error
+  return (data?.calendars ?? []).map(mapCoefficientCalendar)
 }
 
 export async function startGoogleConnection(): Promise<void> {

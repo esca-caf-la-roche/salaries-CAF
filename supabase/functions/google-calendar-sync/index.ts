@@ -17,6 +17,7 @@ type GoogleEvent = {
 };
 
 type ResourceUpdate = { id?: string; enabled?: boolean; loginEmail?: string };
+type CoefficientUpdate = { googleCalendarId?: string; coefficient?: number };
 
 async function connectionFor(admin: SupabaseClient, ownerId: string) {
   const { data, error } = await admin.from("google_connections")
@@ -112,6 +113,14 @@ async function resourcePayload(admin: SupabaseClient, connectionId: string) {
   });
 }
 
+async function coefficientPayload(admin: SupabaseClient, connectionId: string) {
+  const { data, error } = await admin.rpc("internal_used_coefficient_calendars", {
+    p_connection_id: connectionId,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
+
 function normalizeEmail(value: unknown): string {
   return String(value ?? "").trim().toLowerCase();
 }
@@ -193,6 +202,33 @@ async function saveResources(admin: SupabaseClient, ownerId: string, updates: Re
     throw configureError;
   }
   return { resources: await resourcePayload(admin, connection.id) };
+}
+
+async function saveCoefficients(admin: SupabaseClient, ownerId: string, updates: CoefficientUpdate[]) {
+  const connection = await connectionFor(admin, ownerId);
+  if (!Array.isArray(updates) || !updates.length) {
+    return { calendars: await coefficientPayload(admin, connection.id) };
+  }
+
+  const normalizedUpdates = updates.map((update) => ({
+    googleCalendarId: normalizeEmail(update.googleCalendarId),
+    coefficient: Number(update.coefficient),
+  }));
+  if (normalizedUpdates.some((update) =>
+    !update.googleCalendarId || (update.coefficient !== 1 && update.coefficient !== 1.25)
+  )) {
+    throw new HttpError(400, "Coefficient invalide : choisissez 1 ou 1,25");
+  }
+  if (new Set(normalizedUpdates.map((update) => update.googleCalendarId)).size !== normalizedUpdates.length) {
+    throw new HttpError(400, "Un calendrier ne peut être configuré qu'une seule fois");
+  }
+
+  const { error } = await admin.rpc("internal_configure_coefficients", {
+    p_connection_id: connection.id,
+    p_updates: normalizedUpdates,
+  });
+  if (error) throw error;
+  return { calendars: await coefficientPayload(admin, connection.id) };
 }
 
 function eventRow(calendarId: string, event: GoogleEvent, runId: string, ruleByGoogleId: Map<string, { id: string }>) {
@@ -338,9 +374,14 @@ Deno.serve(async (req) => {
       const connection = await connectionFor(admin, user.id);
       return json({ resources: await resourcePayload(admin, connection.id) });
     }
+    if (body.action === "coefficientCalendars") {
+      const connection = await connectionFor(admin, user.id);
+      return json({ calendars: await coefficientPayload(admin, connection.id) });
+    }
     if (body.action === "saveResources") return json(await saveResources(admin, user.id, body.resources));
+    if (body.action === "saveCoefficients") return json(await saveCoefficients(admin, user.id, body.calendars));
     if (body.action === "sync") return json(await sync(admin, user.id, body.calendarIds));
-    throw new HttpError(400, "Action attendue: discover, resources, saveResources ou sync");
+    throw new HttpError(400, "Action attendue: discover, resources, coefficientCalendars, saveResources, saveCoefficients ou sync");
   } catch (error) {
     return errorResponse(error);
   }
