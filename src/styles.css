@@ -304,19 +304,26 @@ tbody tr:last-child td { border-bottom: 0; }
 .event-month__heading::before { content: ''; position: absolute; left: -24px; top: 7px; width: 9px; height: 9px; border: 3px solid var(--chalk); border-radius: 50%; background: var(--rope); box-shadow: 0 0 0 1px var(--rope); }
 .event-month__heading h2 { font-family: Unbounded, sans-serif; font-size: 1rem; text-transform: capitalize; }
 .event-month__heading > span { color: var(--muted); font: 400 .61rem "DM Mono", monospace; }
-.event-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.event-card { position: relative; min-width: 0; overflow: hidden; padding: 20px 20px 19px 25px; border: 1px solid #dce0dc; border-radius: 9px; background: var(--paper); box-shadow: 0 3px 9px rgba(27,45,39,.055); }
-.event-card__calendar-line { position: absolute; inset: 14px auto 14px 8px; width: 6px; border-radius: 99px; }
-.event-card__date { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--pine-2); font: 500 .59rem "DM Mono", monospace; text-transform: capitalize; }
-.event-card__date > svg { width: 14px; }
-.event-card__date em { padding: 3px 6px; color: #674c20; border-radius: 99px; background: #f7e8c7; font-style: normal; font-size: .52rem; }
-.event-card h3 { margin: 13px 0 10px; font-size: .9rem; line-height: 1.35; letter-spacing: -.015em; }
-.event-card__meta { display: grid; gap: 6px; margin-bottom: 13px; padding-bottom: 13px; border-bottom: 1px solid #e9ebe8; }
-.event-card__meta > span { display: flex; align-items: center; gap: 7px; min-width: 0; color: var(--muted); font-size: .63rem; }
-.event-card__meta > span > i { flex: 0 0 auto; width: 7px; height: 17px; border-radius: 99px; }
-.event-card__meta svg { flex: 0 0 auto; width: 13px; }
-.event-card p { margin: 0; color: #4d5a55; font-size: .69rem; line-height: 1.6; white-space: pre-wrap; }
-.event-card .event-card__description--empty { color: #8a928e; font-style: italic; }
+.day-card-grid { display: grid; gap: 14px; }
+.day-card { min-width: 0; overflow: hidden; border: 1px solid #d7dcd8; border-radius: 10px; background: var(--paper); box-shadow: 0 3px 9px rgba(27,45,39,.055); }
+.day-card__heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 20px; color: var(--pine); border-bottom: 1px solid #dfe3df; background: #f6f7f3; }
+.day-card__heading > div { display: flex; align-items: center; gap: 9px; }
+.day-card__heading svg { width: 17px; color: var(--rope); }
+.day-card__heading time { text-decoration: none; }
+.day-card__heading h3 { margin: 0; font-family: Unbounded, sans-serif; font-size: .8rem; text-transform: capitalize; }
+.day-card__heading > span { flex: 0 0 auto; color: var(--muted); font: 500 .58rem "DM Mono", monospace; }
+.day-card__events { display: grid; }
+.day-event { position: relative; display: grid; grid-template-columns: 92px minmax(0, 1fr); column-gap: 18px; min-width: 0; padding: 18px 22px 18px 27px; }
+.day-event + .day-event { border-top: 1px solid #e6e9e5; }
+.day-event__calendar-line { position: absolute; inset: 17px auto 17px 9px; width: 6px; border-radius: 99px; }
+.day-event__time { grid-row: 1 / 4; align-self: start; padding-top: 2px; color: var(--pine-2); font: 500 .61rem "DM Mono", monospace; white-space: nowrap; }
+.day-event h4 { grid-column: 2; margin: 0 0 8px; font-size: .88rem; line-height: 1.35; letter-spacing: -.015em; overflow-wrap: anywhere; }
+.day-event__meta { grid-column: 2; display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 10px; }
+.day-event__meta > span { display: flex; align-items: center; gap: 7px; min-width: 0; color: var(--muted); font-size: .63rem; overflow-wrap: anywhere; }
+.day-event__meta > span > i { flex: 0 0 auto; width: 7px; height: 17px; border-radius: 99px; }
+.day-event__meta svg { flex: 0 0 auto; width: 13px; }
+.day-event p { grid-column: 2; margin: 0; color: #4d5a55; font-size: .69rem; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.day-event .day-event__description--empty { color: #8a928e; font-style: italic; }
 .unassigned-empty { min-height: 280px; border: 1px dashed #cbd2cd; border-radius: 10px; background: rgba(255,254,250,.55); text-align: center; }
 .unassigned-empty strong { color: var(--ink); }
 .unassigned-skeleton { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
@@ -337,12 +344,12 @@ tbody tr:last-child td { border-bottom: 0; }
   .mobile-nav { position: fixed; z-index: 20; inset: auto 0 0; display: grid; grid-template-columns: repeat(3, 1fr); padding: 6px 12px max(6px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: rgba(255,254,250,.96); backdrop-filter: blur(10px); }
   .mobile-nav a { display: grid; justify-items: center; gap: 2px; padding: 5px; color: var(--muted); text-decoration: none; font-size: .63rem; }.mobile-nav a.active { color: var(--pine); }.mobile-nav svg { width: 19px; }
   .page { padding: 35px 24px 100px; }.metric-grid { grid-template-columns: 1fr 1fr; }.metric--lead { grid-column: 1 / -1; }
-  .calendar-head { display: none; }.calendar-row { grid-template-columns: 1fr 1fr; padding: 18px; }.calendar-identity, .email-input { grid-column: 1 / -1; }.resource-groups, .unused-resources__cards { grid-template-columns: 1fr; }.kanban-instructions { grid-template-columns: auto 32px auto; }.kanban-instructions p { grid-column: 1 / -1; justify-self: start; }.kanban-stage__grid--categories { grid-template-columns: repeat(2, minmax(0, 1fr)); }.configuration-warning, .unassigned-warning { align-items: flex-start; flex-wrap: wrap; }.configuration-warning > span, .unassigned-warning > span { min-width: calc(100% - 40px); }.configuration-warning .button, .unassigned-warning .button { width: 100%; }.event-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .calendar-head { display: none; }.calendar-row { grid-template-columns: 1fr 1fr; padding: 18px; }.calendar-identity, .email-input { grid-column: 1 / -1; }.resource-groups, .unused-resources__cards { grid-template-columns: 1fr; }.kanban-instructions { grid-template-columns: auto 32px auto; }.kanban-instructions p { grid-column: 1 / -1; justify-self: start; }.kanban-stage__grid--categories { grid-template-columns: repeat(2, minmax(0, 1fr)); }.configuration-warning, .unassigned-warning { align-items: flex-start; flex-wrap: wrap; }.configuration-warning > span, .unassigned-warning > span { min-width: calc(100% - 40px); }.configuration-warning .button, .unassigned-warning .button { width: 100%; }
 }
 
 @media (max-width: 640px) {
   .login-story { min-height: 380px; padding: 28px 24px; }.login-story h1 { font-size: 2.65rem; }.route-line { opacity: .65; }
-  .page-heading { align-items: stretch; flex-direction: column; }.page-heading .button { align-self: flex-start; }.filters, .metric-grid { grid-template-columns: 1fr; }.metric--lead { grid-column: auto; }.metric { min-height: 150px; }.unassigned-total { align-self: flex-start; }.calendar-filter__heading { align-items: flex-start; flex-direction: column; }.calendar-filter__actions { width: 100%; justify-content: space-between; }.event-card-grid, .unassigned-skeleton { grid-template-columns: 1fr; }.event-month { padding-left: 18px; }.event-month__heading::before { left: -18px; }.event-month::before { left: 4px; }
+  .page-heading { align-items: stretch; flex-direction: column; }.page-heading .button { align-self: flex-start; }.filters, .metric-grid { grid-template-columns: 1fr; }.metric--lead { grid-column: auto; }.metric { min-height: 150px; }.unassigned-total { align-self: flex-start; }.calendar-filter__heading { align-items: flex-start; flex-direction: column; }.calendar-filter__actions { width: 100%; justify-content: space-between; }.unassigned-skeleton { grid-template-columns: 1fr; }.event-month { padding-left: 18px; }.event-month__heading::before { left: -18px; }.event-month::before { left: 4px; }.day-card__heading { align-items: flex-start; padding: 14px 16px; }.day-card__heading h3 { line-height: 1.4; }.day-event { grid-template-columns: 1fr; padding: 17px 17px 17px 25px; }.day-event__time { grid-row: auto; margin-bottom: 8px; }.day-event h4, .day-event__meta, .day-event p { grid-column: 1; }
   .panel-heading { align-items: flex-start; flex-direction: column; }.legend { align-self: flex-start; }.setup-note { grid-template-columns: auto 1fr; }.setup-note code { display: none; }
   .configuration-toolbar { align-items: stretch; flex-direction: column; }.search-field { width: 100%; }.resource-shelf { padding: 12px; }.resource-card__heading { align-items: flex-start; }.resource-card__fields { grid-template-columns: 1fr; }.unused-resources summary small { display: none; }.configuration-footer { align-items: stretch; flex-direction: column; }.configuration-footer .button { width: 100%; }
   .kanban-shell { padding: 12px; }.kanban-instructions { grid-template-columns: 1fr; }.kanban-instructions > i { display: none; }.kanban-stage { padding: 43px 0 0; }.kanban-stage + .kanban-stage::before { display: none; }.kanban-stage__label { top: 0; width: auto; }.kanban-stage__label span { font-size: .6rem; }.kanban-stage__grid--preparation, .kanban-stage__grid--categories { grid-template-columns: 1fr; }.kanban-lane__heading strong { font-size: .74rem; }.kanban-card__content strong { font-size: .72rem; }

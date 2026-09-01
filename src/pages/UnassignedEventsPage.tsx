@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CalendarClock, CheckCheck, MapPin, SlidersHorizontal, X } from 'lucide-react'
-import { eventMonthKey, eventMonthLabel, eventStart, formatEventDate } from '../lib/unassignedEvents'
+import { eventDayKey, eventDayLabel, eventMonthKey, eventMonthLabel, eventStart, formatEventTime } from '../lib/unassignedEvents'
 import { getUnassignedEvents } from '../services/api'
 import type { UnassignedEvent } from '../types'
 
@@ -39,12 +39,23 @@ export function UnassignedEventsPage() {
 
   const groupedEvents = useMemo(() => {
     const visible = events
-      .filter((event) => selectedCalendars.has(calendarKey(event)))
-      .sort((a, b) => eventStart(a).getTime() - eventStart(b).getTime())
-    const groups = new Map<string, UnassignedEvent[]>()
+      .map((event, index) => ({ event, index }))
+      .filter(({ event }) => selectedCalendars.has(calendarKey(event)))
+      .sort((a, b) => {
+        const dayOrder = eventDayKey(a.event).localeCompare(eventDayKey(b.event))
+        if (dayOrder !== 0) return dayOrder
+        if (a.event.allDay !== b.event.allDay) return a.event.allDay ? -1 : 1
+        const timeOrder = eventStart(a.event).getTime() - eventStart(b.event).getTime()
+        return timeOrder || a.index - b.index
+      })
+      .map(({ event }) => event)
+    const groups = new Map<string, Map<string, UnassignedEvent[]>>()
     for (const event of visible) {
-      const key = eventMonthKey(event)
-      groups.set(key, [...(groups.get(key) ?? []), event])
+      const monthKey = eventMonthKey(event)
+      const month = groups.get(monthKey) ?? new Map<string, UnassignedEvent[]>()
+      const dayKey = eventDayKey(event)
+      month.set(dayKey, [...(month.get(dayKey) ?? []), event])
+      groups.set(monthKey, month)
     }
     return [...groups.entries()]
   }, [events, selectedCalendars])
@@ -64,7 +75,7 @@ export function UnassignedEventsPage() {
         <div>
           <p className="eyebrow">Affectations en attente</p>
           <h1>À déterminer</h1>
-          <p>Tous les événements encore associés à la ressource « À déterminer », organisés par mois et par calendrier d’origine.</p>
+          <p>Tous les événements encore associés à la ressource « À déterminer », organisés par mois et regroupés par journée.</p>
         </div>
         {!loading && <div className="unassigned-total"><strong>{events.length}</strong><span>événement{events.length > 1 ? 's' : ''} au total</span></div>}
       </header>
@@ -99,28 +110,42 @@ export function UnassignedEventsPage() {
           <strong>{events.length ? 'Aucun événement avec ces calendriers' : 'Aucun événement à déterminer'}</strong>
           <span>{events.length ? 'Sélectionnez au moins un calendrier pour afficher ses événements.' : 'Les prochains événements non attribués apparaîtront ici après synchronisation.'}</span>
         </div>
-      ) : groupedEvents.map(([key, monthEvents]) => (
+      ) : groupedEvents.map(([key, monthDays]) => {
+        const monthEvents = [...monthDays.values()].flat()
+        return (
         <section className="event-month" key={key} aria-labelledby={`month-${key}`}>
           <header className="event-month__heading">
             <h2 id={`month-${key}`}>{eventMonthLabel(monthEvents[0])}</h2>
-            <span>{monthEvents.length} événement{monthEvents.length > 1 ? 's' : ''}</span>
+            <span>{monthDays.size} jour{monthDays.size > 1 ? 's' : ''} · {monthEvents.length} événement{monthEvents.length > 1 ? 's' : ''}</span>
           </header>
-          <div className="event-card-grid">
-            {monthEvents.map((event) => (
-              <article className="event-card" key={event.id}>
-                <i className="event-card__calendar-line" style={{ backgroundColor: event.sourceCalendarColor ?? '#83918c' }} />
-                <div className="event-card__date"><CalendarClock aria-hidden="true" /><span>{formatEventDate(event)}</span>{event.allDay && <em>Toute la journée</em>}</div>
-                <h3>{event.title}</h3>
-                <div className="event-card__meta">
-                  <span><i style={{ backgroundColor: event.sourceCalendarColor ?? '#83918c' }} />{event.sourceCalendarName}</span>
-                  {event.location && <span><MapPin aria-hidden="true" />{event.location}</span>}
+          <div className="day-card-grid">
+            {[...monthDays.entries()].map(([dayKey, dayEvents]) => {
+              const headingId = `day-${dayKey}`
+              return <article className="day-card" key={dayKey} aria-labelledby={headingId}>
+                <header className="day-card__heading">
+                  <div><CalendarClock aria-hidden="true" /><h3 id={headingId}><time dateTime={dayKey}>{eventDayLabel(dayEvents[0])}</time></h3></div>
+                  <span>{dayEvents.length} événement{dayEvents.length > 1 ? 's' : ''}</span>
+                </header>
+                <div className="day-card__events">
+                  {dayEvents.map((event) => (
+                    <section className="day-event" key={event.id}>
+                      <i className="day-event__calendar-line" style={{ backgroundColor: event.sourceCalendarColor ?? '#83918c' }} />
+                      <time className="day-event__time" dateTime={event.startsAt}>{formatEventTime(event)}</time>
+                      <h4>{event.title}</h4>
+                      <div className="day-event__meta">
+                        <span><i style={{ backgroundColor: event.sourceCalendarColor ?? '#83918c' }} />{event.sourceCalendarName}</span>
+                        {event.location && <span><MapPin aria-hidden="true" />{event.location}</span>}
+                      </div>
+                      <p className={event.description ? '' : 'day-event__description--empty'}>{event.description || 'Aucune description renseignée.'}</p>
+                    </section>
+                  ))}
                 </div>
-                <p className={event.description ? '' : 'event-card__description--empty'}>{event.description || 'Aucune description renseignée.'}</p>
               </article>
-            ))}
+            })}
           </div>
         </section>
-      ))}
+        )
+      })}
     </div>
   )
 }

@@ -35,7 +35,7 @@ export const demoUnassignedEvents: UnassignedEvent[] = [
   {
     id: 'event-unassigned-2', googleEventId: 'google-event-unassigned-2', title: 'Encadrement compétition départementale',
     description: 'Déplacement et encadrement de l’équipe jeunes.', location: 'Gymnase municipal',
-    startsAt: demoEventDate(12, 8), endsAt: demoEventDate(12, 18), allDay: false,
+    startsAt: demoEventDate(3, 17), endsAt: demoEventDate(3, 19), allDay: false,
     sourceCalendarId: 'demo-sans-prepa@group.calendar.google.com', sourceCalendarName: 'Absences', sourceCalendarColor: '#f6bf26',
   },
   {
