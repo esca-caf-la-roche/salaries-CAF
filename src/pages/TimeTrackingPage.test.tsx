@@ -31,9 +31,9 @@ const employee: EmployeeSummary = {
     rawHours: 887 + 56 / 60,
     weightedHours: 887 + 56 / 60,
     contractHours: 887 + 56 / 60,
-    absenceHours: 0,
-    replacementHours: 0,
-    publicHolidayHours: 0,
+    absenceHours: 2,
+    replacementHours: 3,
+    publicHolidayHours: 4,
     contractWithPrepHours: 400,
     contractWithoutPrepHours: 487 + 56 / 60,
     absenceWithPrepHours: 0,
@@ -70,15 +70,31 @@ describe('TimeTrackingPage', () => {
     expect(getMonthlyEventHours).toHaveBeenCalledWith('employee-1', expect.any(Number), 9)
   })
 
+  it('shows every hour-type total in the monthly summary', async () => {
+    render(<TimeTrackingPage />)
+
+    const totals = await screen.findByRole('region', { name: 'Totaux du mois' })
+    expect(totals).toHaveTextContent('Contrat887:56')
+    expect(totals).toHaveTextContent('Absences2:00')
+    expect(totals).toHaveTextContent('Remplacements3:00')
+    expect(totals).toHaveTextContent('Fériés4:00')
+  })
+
   it('switches to the annual sheet, calculates the contract remainder and saves payslips', async () => {
     render(<TimeTrackingPage />)
     await screen.findByRole('option', { name: 'Jérôme Test · CDI' })
 
     fireEvent.click(screen.getByRole('tab', { name: 'Synthèse annuelle' }))
 
-    expect(screen.getByText('37:04')).toBeInTheDocument()
+    expect(screen.getByText('35:04')).toBeInTheDocument()
     expect(screen.getByText('Référence temps plein')).toBeInTheDocument()
     expect(screen.getByText('Règle appliquée pour CDI')).toBeInTheDocument()
+    expect(screen.getByRole('rowheader', { name: 'Heures du contrat' })).toBeInTheDocument()
+    expect(screen.getByRole('rowheader', { name: 'Heures d’absences' })).toBeInTheDocument()
+    expect(screen.getByRole('rowheader', { name: 'Heures de remplacements' })).toBeInTheDocument()
+    expect(screen.getByRole('rowheader', { name: 'Heures fériées' })).toBeInTheDocument()
+    expect(screen.getByRole('rowheader', { name: 'Total du mois' }).closest('tr')).toHaveTextContent('892:56')
+    expect(screen.queryByRole('rowheader', { name: /prépa/i })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer la saison' }))
 
     await waitFor(() => expect(saveAnnualTracking).toHaveBeenCalledWith(

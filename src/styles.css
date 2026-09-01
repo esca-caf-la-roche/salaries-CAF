@@ -136,7 +136,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .view-tabs button { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 8px 14px; color: var(--muted); border: 0; border-radius: 6px; background: transparent; font-size: .76rem; font-weight: 700; }
 .view-tabs button svg { width: 16px; }
 .view-tabs button[aria-selected="true"] { color: white; background: var(--pine); box-shadow: 0 2px 5px rgba(23,63,53,.18); }
-.tracking-metrics { grid-template-columns: 1.15fr 1fr 1fr; }
+.tracking-metrics { grid-template-columns: 1.15fr repeat(4, minmax(0, 1fr)); }
 .tracking-metrics .metric { min-height: 150px; }
 .tracking-empty { display: grid; justify-items: center; gap: 8px; padding: 54px 24px; text-align: center; }
 .tracking-empty svg { width: 34px; color: var(--glacier); }

@@ -15,7 +15,7 @@ Les synthèses annuelles suivent la saison scolaire : du **1er septembre** d'une
 La page **Suivi des heures** propose désormais deux lectures complémentaires :
 
 - le détail mensuel événement par événement, avec durée brute, coefficient de préparation, durée retenue et rubrique ;
-- la synthèse annuelle septembre–août, avec séparation avec/sans préparation, absences, remplacements, fériés, semaines CDII et saisie des heures des bulletins.
+- la synthèse annuelle septembre–août, avec les totaux mensuels du contrat, des absences, des remplacements et des fériés, sans séparation par préparation, ainsi qu’un solde mensuel `contrat - absences + remplacements + fériés`, les semaines CDII et la saisie des heures des bulletins.
 
 Les saisies contractuelles et de bulletin sont conservées par salarié et par saison, en minutes entières. Le calcul garantit au minimum le volume annuel du contrat et ajoute toujours les remplacements. Pour un CDI, il ajoute 10 % de la base garantie au titre des congés et calcule les fériés ouvrés à partir du ratio exact `heures du contrat / référence temps plein × 7 h`. Pour un CDII, les fériés configurés dans Google Calendar sont inclus dans les heures réalisées et aucun congé supplémentaire n'est ajouté. La formule active est rappelée directement sous la synthèse pour rester contrôlable.
 
