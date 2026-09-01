@@ -146,4 +146,39 @@ begin
 end
 $$;
 
+do $$
+declare
+  target_calendar public.calendars%rowtype;
+  target_employee public.employees%rowtype;
+begin
+  select * into target_calendar
+  from public.calendars
+  where lower(trim(google_calendar_id)) = 'c_1885o4bj2rlv4gijgd278pfg9rub0@resource.calendar.google.com'
+  limit 1;
+
+  if target_calendar.id is null then
+    return;
+  end if;
+
+  if not target_calendar.is_resource or not target_calendar.enabled then
+    raise exception 'La ressource A DETERMINER doit être une ressource Google activée';
+  end if;
+
+  select * into target_employee
+  from public.employees
+  where resource_calendar_id = target_calendar.id
+  limit 1;
+
+  if target_employee.id is null
+    or not target_employee.is_unassigned_resource
+    or not target_employee.active
+    or target_employee.email is not null
+    or target_employee.user_id is not null
+    or target_employee.contract_type is not null
+    or target_employee.annual_contract_hours is not null then
+    raise exception 'La ressource A DETERMINER est mal configurée';
+  end if;
+end
+$$;
+
 rollback;

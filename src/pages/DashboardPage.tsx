@@ -65,9 +65,12 @@ export function DashboardPage() {
   const synchronize = async () => {
     setSync((state) => ({ ...state, status: 'syncing' }))
     try {
-      setSync(await runIncrementalSync())
+      const result = await runIncrementalSync()
+      setSync(result)
       try { setUsedCalendars(await getCoefficientCalendars()) }
       catch { /* The synchronization result remains valid if the status refresh fails. */ }
+      try { setUnassignedEvents(await getUnassignedEvents()) }
+      catch { /* The synchronization result remains valid if the unassigned-event refresh fails. */ }
     }
     catch { setSync((state) => ({ ...state, status: 'error', message: 'La synchronisation a échoué. Vérifiez la connexion Google.' })) }
   }

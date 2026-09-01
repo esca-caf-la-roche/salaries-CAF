@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DashboardPage } from './DashboardPage'
@@ -26,6 +26,7 @@ describe('DashboardPage', () => {
     vi.clearAllMocks()
     getEmployeeSummaries.mockResolvedValue([])
     getUnassignedEvents.mockResolvedValue([])
+    runIncrementalSync.mockResolvedValue({ status: 'success', lastSyncedAt: '2026-09-01T08:00:00Z' })
     getCoefficientCalendars.mockResolvedValue([
       { googleCalendarId: 'unknown@group.calendar.google.com', name: 'Nouveau calendrier', coefficient: null, hourCategory: null, eventCount: 3 },
     ])
@@ -57,5 +58,15 @@ describe('DashboardPage', () => {
 
     expect(await screen.findByText('1 événement à attribuer dans moins de 7 jours.', { exact: false })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Voir les événements' })).toHaveAttribute('href', '/a-determiner')
+  })
+
+  it('refreshes unassigned events after a manual Google synchronization', async () => {
+    render(<MemoryRouter><DashboardPage /></MemoryRouter>)
+    await waitFor(() => expect(getUnassignedEvents).toHaveBeenCalledTimes(1))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actualiser Google' }))
+
+    await waitFor(() => expect(runIncrementalSync).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(getUnassignedEvents).toHaveBeenCalledTimes(2))
   })
 })

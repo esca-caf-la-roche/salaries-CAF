@@ -23,10 +23,10 @@ type ResourceUpdate = {
 };
 type CoefficientUpdate = { googleCalendarId?: string; coefficient?: number; hourCategory?: string | null };
 
-const UNASSIGNED_RESOURCE_NAME = "(CDII)-A DETERMINER";
+const UNASSIGNED_RESOURCE_GOOGLE_ID = "c_1885o4bj2rlv4gijgd278pfg9rub0@resource.calendar.google.com";
 
-function isUnassignedResourceName(value: unknown): boolean {
-  return String(value ?? "").trim().toLocaleUpperCase("fr") === UNASSIGNED_RESOURCE_NAME;
+function isUnassignedResource(calendar: { google_calendar_id?: unknown; name?: unknown }): boolean {
+  return normalizeEmail(calendar.google_calendar_id) === UNASSIGNED_RESOURCE_GOOGLE_ID;
 }
 
 async function connectionFor(admin: SupabaseClient, ownerId: string) {
@@ -107,7 +107,7 @@ async function discover(admin: SupabaseClient, ownerId: string) {
     if (error) throw error;
   }
   const { data: storedResources, error: resourceError } = await admin.from("calendars")
-    .select("id,name").eq("connection_id", connection.id).eq("is_resource", true);
+    .select("id,google_calendar_id,name").eq("connection_id", connection.id).eq("is_resource", true);
   if (resourceError) throw resourceError;
   const { data: assigned, error: assignedError } = await admin.from("employees")
     .select("resource_calendar_id").not("resource_calendar_id", "is", null);
@@ -118,23 +118,23 @@ async function discover(admin: SupabaseClient, ownerId: string) {
     .map((calendar) => ({
       resource_calendar_id: calendar.id,
       display_name: calendar.name,
-      active: isUnassignedResourceName(calendar.name),
-      is_unassigned_resource: isUnassignedResourceName(calendar.name),
-      contract_type: isUnassignedResourceName(calendar.name) ? null : detectContractType(calendar.name),
+      active: isUnassignedResource(calendar),
+      is_unassigned_resource: isUnassignedResource(calendar),
+      contract_type: isUnassignedResource(calendar) ? null : detectContractType(calendar.name),
     }));
   if (newEmployees.length) {
     const { error: employeeError } = await admin.from("employees").insert(newEmployees);
     if (employeeError) throw employeeError;
   }
   for (const calendar of storedResources ?? []) {
-    if (isUnassignedResourceName(calendar.name)) continue;
+    if (isUnassignedResource(calendar)) continue;
     const { error: contractError } = await admin.from("employees").update({
       contract_type: detectContractType(calendar.name),
     }).eq("resource_calendar_id", calendar.id);
     if (contractError) throw contractError;
   }
   const specialCalendarIds = (storedResources ?? [])
-    .filter((calendar) => isUnassignedResourceName(calendar.name))
+    .filter((calendar) => isUnassignedResource(calendar))
     .map((calendar) => calendar.id);
   if (specialCalendarIds.length) {
     const { error: specialEmployeeError } = await admin.from("employees").update({
@@ -468,23 +468,26 @@ async function sync(admin: SupabaseClient, ownerId: string, calendarIds?: string
 
 async function unassignedEvents(admin: SupabaseClient, ownerId: string) {
   const connection = await connectionFor(admin, ownerId);
-  const { data: employees, error: employeesError } = await admin.from("employees")
-    .select("resource_calendar_id")
-    .eq("is_unassigned_resource", true)
-    .eq("active", true)
-    .not("resource_calendar_id", "is", null);
-  if (employeesError) throw employeesError;
-  const candidateIds = [...new Set((employees ?? []).map((employee) => String(employee.resource_calendar_id)))];
-  if (!candidateIds.length) return { events: [] };
   const { data: calendars, error: calendarsError } = await admin.from("calendars")
-    .select("id")
+    .select("id,last_synced_at")
     .eq("connection_id", connection.id)
     .eq("is_resource", true)
     .eq("enabled", true)
-    .in("id", candidateIds);
+    .eq("google_calendar_id", UNASSIGNED_RESOURCE_GOOGLE_ID);
   if (calendarsError) throw calendarsError;
   const calendarIds = (calendars ?? []).map((calendar) => String(calendar.id));
   if (!calendarIds.length) return { events: [] };
+
+  const neverSyncedIds = (calendars ?? [])
+    .filter((calendar) => !calendar.last_synced_at)
+    .map((calendar) => String(calendar.id));
+  if (neverSyncedIds.length) {
+    const synchronization = await sync(admin, ownerId, neverSyncedIds);
+    const failed = synchronization.results.find((result) => "error" in result && result.error);
+    if (failed && "error" in failed) {
+      throw new HttpError(502, `Synchronisation de la ressource À déterminer impossible : ${failed.error}`);
+    }
+  }
 
   const events: Record<string, unknown>[] = [];
   const pageSize = 1000;
@@ -528,8 +531,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
   try {
     if (req.method !== "POST") throw new HttpError(405, "Méthode non autorisée");
-    const { user, admin } = await requireAdmin(req);
     const body = await req.json().catch(() => ({}));
+    const { user, admin } = await requireAdmin(req);
     if (body.action === "discover") return json(await discover(admin, user.id));
     if (body.action === "resources") {
       const connection = await connectionFor(admin, user.id);

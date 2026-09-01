@@ -4,7 +4,7 @@ Application statique React pour suivre les heures issues de Google Calendar, ava
 
 L'authentification utilise exclusivement un OTP e-mail à 6 chiffres. Les administrateurs sont créés manuellement dans **Supabase Auth > Users**, puis reçoivent explicitement le rôle `admin` dans `public.profiles`. Pour les salariés, la page **Configuration** affiche uniquement les calendriers ressources Google : le type de contrat est détecté depuis le préfixe `(CDI)-`, `(CDII)-` ou `(CDD)-` du nom de la ressource ; l'administrateur renseigne ensuite le volume annuel et l'e-mail de connexion, puis le compte Auth correspondant est provisionné côté serveur.
 
-La ressource Google nommée exactement **`(CDII)-A DETERMINER`** représente les cours sans moniteur attribué. Elle est toujours suivie, ne crée aucun compte salarié et n'exige ni e-mail ni informations contractuelles. Ses données restent visibles par les administrateurs uniquement.
+La ressource Google nommée exactement **`(CDII)-A DETERMINER`** (`c_1885o4bj2rlv4gijgd278pfg9rub0@resource.calendar.google.com`) représente les cours sans moniteur attribué. Elle est toujours suivie, sa première lecture déclenche automatiquement sa synchronisation, ne crée aucun compte salarié et n'exige ni e-mail ni informations contractuelles. Ses données restent visibles par les administrateurs uniquement.
 
 La page admin **À déterminer** rassemble tous les événements de cette ressource sous forme de cards classées par mois. Les calendriers d'origine rencontrés alimentent automatiquement un filtre à sélection multiple. Sur la vue d'ensemble, un bandeau rouge signale les événements à attribuer dont le début est prévu dans moins de sept jours.
 
