@@ -383,7 +383,7 @@ tbody tr:last-child td { border-bottom: 0; }
   .event-month__heading > span { font-size: 5.8pt; }
   .day-card-grid, .day-card__events { display: block; }
   .day-card-grid .day-card + .day-card { margin-top: 1.5mm; }
-  .day-card { overflow: visible; break-inside: auto; border-radius: 1.5mm; box-shadow: none; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  .day-card { overflow: visible; page-break-inside: avoid; break-inside: avoid; break-inside: avoid-page; border-radius: 1.5mm; box-shadow: none; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
   .day-card__heading { break-after: avoid; break-after: avoid-page; padding: 1.8mm 2.5mm; }
   .day-card__heading svg { width: 3.5mm; }
   .day-card__heading h3 { font-size: 6.8pt; }
