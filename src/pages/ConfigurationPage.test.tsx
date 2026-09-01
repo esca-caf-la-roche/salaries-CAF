@@ -27,6 +27,10 @@ const usedCalendar: UsedCalendarCoefficient = {
   eventCount: 12,
 }
 
+function resourceWith(overrides: Partial<EmployeeResource>): EmployeeResource {
+  return { ...structuredClone(resource), ...overrides }
+}
+
 const getResources = vi.fn()
 const getCoefficientCalendars = vi.fn()
 const discoverResources = vi.fn()
@@ -75,6 +79,47 @@ describe('ConfigurationPage', () => {
     expect(screen.getByRole('spinbutton', { name: 'Heures annuelles de (CDII)-Alice Martin' })).toHaveValue(820)
     const calendarCard = screen.getByText('Cours du mardi').closest('.kanban-card')
     expect(calendarCard?.querySelector('.calendar-color')).toHaveStyle({ background: '#7986cb' })
+  })
+
+  it('groups followed resources by contract and keeps unused resources collapsed', async () => {
+    getResources.mockResolvedValue([
+      resourceWith({ id: 'cdi', name: '(CDI)-Camille', googleCalendarId: 'cdi@resource.google.com', contractType: 'CDI', enabled: true }),
+      resourceWith({ id: 'cdii', name: '(CDII)-Alice', googleCalendarId: 'cdii@resource.google.com', contractType: 'CDII', enabled: true }),
+      resourceWith({ id: 'cdd', name: '(CDD)-Chloé', googleCalendarId: 'cdd@resource.google.com', contractType: 'CDD', enabled: true }),
+      resourceWith({ id: 'automatic', name: '(CDII)-A DETERMINER', googleCalendarId: 'auto@resource.google.com', contractType: null, enabled: true, isUnassignedResource: true }),
+      resourceWith({ id: 'unknown', name: 'Nom sans préfixe', googleCalendarId: 'unknown@resource.google.com', contractType: null, enabled: true }),
+      resourceWith({ id: 'unused', name: '(CDI)-Ignorée', googleCalendarId: 'unused@resource.google.com', contractType: 'CDI', enabled: false }),
+    ])
+
+    render(<ConfigurationPage />)
+
+    expect(await screen.findByRole('region', { name: 'CDI' })).toHaveTextContent('(CDI)-Camille')
+    expect(screen.getByRole('region', { name: 'CDII' })).toHaveTextContent('(CDII)-Alice')
+    expect(screen.getByRole('region', { name: 'CDD' })).toHaveTextContent('(CDD)-Chloé')
+    expect(screen.getByRole('region', { name: 'Sans contrat' })).toHaveTextContent('(CDII)-A DETERMINER')
+    expect(screen.getByRole('region', { name: 'À vérifier' })).toHaveTextContent('Nom sans préfixe')
+
+    const unusedDetails = screen.getByText('Ressources non suivies').closest('details')
+    expect(unusedDetails).not.toHaveAttribute('open')
+    fireEvent.click(screen.getByText('Ressources non suivies').closest('summary')!)
+    expect(unusedDetails).toHaveAttribute('open')
+    expect(unusedDetails).toHaveTextContent('(CDI)-Ignorée')
+  })
+
+  it('reveals a matching unused resource while searching', async () => {
+    getResources.mockResolvedValue([
+      resourceWith({ id: 'unused', name: '(CDD)-Zoé Martin', googleCalendarId: 'zoe@resource.google.com', contractType: 'CDD', enabled: false }),
+    ])
+
+    render(<ConfigurationPage />)
+    await screen.findByText('(CDD)-Zoé Martin')
+    const unusedDetails = screen.getByText('Ressources non suivies').closest('details')
+    expect(unusedDetails).not.toHaveAttribute('open')
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Rechercher une ressource' }), { target: { value: 'Zoé' } })
+
+    expect(unusedDetails).toHaveAttribute('open')
+    expect(screen.getByRole('textbox', { name: 'E-mail de connexion de (CDD)-Zoé Martin' })).toBeDisabled()
   })
 
   it('places complete cards in their hour category with a preparation badge', async () => {

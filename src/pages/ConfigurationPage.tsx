@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, CircleAlert, GripVertical, Mail, RefreshCw, Search } from 'lucide-react'
+import { Check, ChevronDown, CircleAlert, GripVertical, Mail, RefreshCw, Search } from 'lucide-react'
 import { discoverResources, getCoefficientCalendars, getResources, saveCoefficientCalendars, saveResources, startGoogleConnection } from '../services/api'
-import type { EmployeeResource, HourCategory, PreparationCoefficient, UsedCalendarCoefficient } from '../types'
+import type { ContractType, EmployeeResource, HourCategory, PreparationCoefficient, UsedCalendarCoefficient } from '../types'
 
 const configuredHourCategories: Array<{ value: HourCategory; label: string }> = [
   { value: 'contract', label: 'Heures du contrat' },
@@ -14,6 +14,63 @@ const preparationGroups: Array<{ value: PreparationCoefficient; label: string; c
   { value: 1.25, label: 'Avec prépa', coefficientLabel: '× 1,25' },
   { value: 1, label: 'Sans prépa', coefficientLabel: '× 1' },
 ]
+
+type ResourceGroupKey = ContractType | 'unassigned' | 'unknown'
+
+const resourceGroups: Array<{ value: ResourceGroupKey; label: string; caption: string }> = [
+  { value: 'CDI', label: 'CDI', caption: 'Contrats à durée indéterminée' },
+  { value: 'CDII', label: 'CDII', caption: 'Contrats intermittents' },
+  { value: 'CDD', label: 'CDD', caption: 'Contrats à durée déterminée' },
+  { value: 'unassigned', label: 'Sans contrat', caption: 'Cours sans moniteur attribué' },
+  { value: 'unknown', label: 'À vérifier', caption: 'Type de contrat non détecté' },
+]
+
+function getResourceGroup(resource: EmployeeResource): ResourceGroupKey {
+  if (resource.isUnassignedResource) return 'unassigned'
+  return resource.contractType ?? 'unknown'
+}
+
+interface ResourceCardProps {
+  resource: EmployeeResource
+  onPatch: (id: string, patch: Partial<EmployeeResource>) => void
+}
+
+function ResourceCard({ resource, onPatch }: ResourceCardProps) {
+  return (
+    <article className={`resource-card${resource.enabled ? ' resource-card--enabled' : ' resource-card--disabled'}`}>
+      <header className="resource-card__heading">
+        <div className="resource-card__identity">
+          <i style={{ background: resource.color }} aria-hidden="true" />
+          <span>
+            <strong>{resource.name}</strong>
+            <small>{resource.eventCount ?? 0} événement{resource.eventCount !== 1 ? 's' : ''}</small>
+          </span>
+        </div>
+        {resource.isUnassignedResource
+          ? <span className="automatic-tracking"><Check aria-hidden="true" /> Suivi automatique</span>
+          : <label className="switch"><input type="checkbox" checked={resource.enabled} onChange={(event) => onPatch(resource.id, { enabled: event.target.checked })} /><span aria-hidden="true" /><em>{resource.enabled ? 'Suivie' : 'Ignorée'}</em></label>}
+      </header>
+      <div className="resource-card__meta">
+        <span className="resource-contract" aria-label={`Type de contrat de ${resource.name}`}>{resource.isUnassignedResource ? 'Sans contrat' : resource.contractType ?? 'Non détecté'}</span>
+        <code title={resource.googleCalendarId}>{resource.googleCalendarId}</code>
+      </div>
+      {resource.isUnassignedResource ? (
+        <p className="resource-card__automatic">Cette ressource reste suivie sans compte salarié, volume annuel ni e-mail.</p>
+      ) : (
+        <div className="resource-card__fields">
+          <label className="resource-field">
+            <span>Heures annuelles</span>
+            <span className="hours-input"><input aria-label={`Heures annuelles de ${resource.name}`} type="number" min="0.01" step="0.01" placeholder="Ex. 1607" value={resource.annualContractHours ?? ''} onChange={(event) => onPatch(resource.id, { annualContractHours: event.target.value === '' ? null : Number(event.target.value) })} /><span>h</span></span>
+          </label>
+          <label className="resource-field">
+            <span>E-mail de connexion</span>
+            <span className="email-input"><Mail aria-hidden="true" /><input type="email" aria-label={`E-mail de connexion de ${resource.name}`} placeholder="prenom@exemple.fr" value={resource.loginEmail} disabled={!resource.enabled} required={resource.enabled} onChange={(event) => onPatch(resource.id, { loginEmail: event.target.value })} /></span>
+          </label>
+        </div>
+      )}
+    </article>
+  )
+}
 
 type KanbanDestination =
   | { kind: 'undefined' }
@@ -147,6 +204,13 @@ export function ConfigurationPage() {
     return resources.filter((resource) => `${resource.name} ${resource.googleCalendarId} ${resource.loginEmail} ${resource.contractType ?? ''}`.toLocaleLowerCase('fr').includes(normalizedQuery))
   }, [resources, query])
   const enabledCount = resources.filter((resource) => resource.enabled).length
+  const groupedResources = useMemo(() => ({
+    enabled: resourceGroups.map((group) => ({
+      ...group,
+      resources: filtered.filter((resource) => resource.enabled && getResourceGroup(resource) === group.value),
+    })).filter((group) => group.resources.length > 0),
+    disabled: filtered.filter((resource) => !resource.enabled),
+  }), [filtered])
   const kanbanCalendars = useMemo(() => {
     return {
       undefinedCalendars: coefficientCalendars.filter((calendar) => calendar.coefficient == null),
@@ -292,24 +356,30 @@ export function ConfigurationPage() {
           <div><p className="eyebrow">Calendriers ressources Google</p><h2>{enabledCount} ressource{enabledCount > 1 ? 's' : ''} suivie{enabledCount > 1 ? 's' : ''}</h2></div>
           <label className="search-field"><Search aria-hidden="true" /><span className="sr-only">Rechercher une ressource</span><input type="search" placeholder="Rechercher…" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
         </div>
-        <div className="calendar-head" aria-hidden="true"><span>Ressource</span><span>Suivi</span><span>Contrat</span><span>Heures annuelles</span><span>E-mail de connexion</span></div>
         {loading ? <div className="skeleton-list" aria-label="Chargement des ressources"><i /><i /><i /></div> : (
-          <div className="calendar-list">
-            {filtered.map((resource) => <article className={resource.enabled ? 'calendar-row calendar-row--enabled' : 'calendar-row'} key={resource.id}>
-              <div className="calendar-identity"><i style={{ background: resource.color }} /><span><strong>{resource.name}</strong><small>{resource.eventCount ?? 0} événements · {resource.googleCalendarId}</small></span></div>
-              {resource.isUnassignedResource
-                ? <span className="automatic-tracking"><Check aria-hidden="true" /> Suivi automatique</span>
-                : <label className="switch"><input type="checkbox" checked={resource.enabled} onChange={(event) => patchResource(resource.id, { enabled: event.target.checked })} /><span aria-hidden="true" /><em>{resource.enabled ? 'Suivie' : 'Ignorée'}</em></label>}
-              {resource.isUnassignedResource
-                ? <span className="not-applicable">Sans contrat</span>
-                : <span className="not-applicable" aria-label={`Type de contrat de ${resource.name}`}>{resource.contractType ?? 'Non détecté'}</span>}
-              {resource.isUnassignedResource
-                ? <span className="not-applicable">—</span>
-                : <label className="hours-input"><span className="sr-only">Heures annuelles de {resource.name}</span><input aria-label={`Heures annuelles de ${resource.name}`} type="number" min="0.01" step="0.01" placeholder="Ex. 1607" value={resource.annualContractHours ?? ''} onChange={(event) => patchResource(resource.id, { annualContractHours: event.target.value === '' ? null : Number(event.target.value) })} /><span>h</span></label>}
-              {resource.isUnassignedResource
-                ? <span className="not-applicable">Aucun e-mail requis</span>
-                : <label className="email-input"><span className="sr-only">E-mail de connexion de {resource.name}</span><Mail aria-hidden="true" /><input type="email" placeholder="prenom@exemple.fr" value={resource.loginEmail} disabled={!resource.enabled} required={resource.enabled} onChange={(event) => patchResource(resource.id, { loginEmail: event.target.value })} /></label>}
-            </article>)}
+          <div className="resource-shelf">
+            <div className="resource-groups">
+              {groupedResources.enabled.map((group) => <section className="resource-group" aria-labelledby={`resource-group-${group.value}`} key={group.value}>
+                <header className="resource-group__heading">
+                  <span><strong id={`resource-group-${group.value}`}>{group.label}</strong><small>{group.caption}</small></span>
+                  <b aria-label={`${group.resources.length} ressource${group.resources.length !== 1 ? 's' : ''}`}>{group.resources.length}</b>
+                </header>
+                <div className="resource-group__cards">
+                  {group.resources.map((resource) => <ResourceCard resource={resource} onPatch={patchResource} key={resource.id} />)}
+                </div>
+              </section>)}
+            </div>
+            {!groupedResources.enabled.length && filtered.length > 0 && <div className="resource-empty"><strong>Aucune ressource suivie dans cette sélection</strong><span>Les ressources correspondantes sont rangées dans le volet ci-dessous.</span></div>}
+            <details className="unused-resources" open={query.trim().length > 0 || undefined}>
+              <summary>
+                <span><ChevronDown aria-hidden="true" /><span><strong>Ressources non suivies</strong><small>Repliées pour garder la configuration lisible</small></span></span>
+                <b aria-label={`${groupedResources.disabled.length} ressource${groupedResources.disabled.length !== 1 ? 's' : ''} non suivie${groupedResources.disabled.length !== 1 ? 's' : ''}`}>{groupedResources.disabled.length}</b>
+              </summary>
+              <div className="unused-resources__cards">
+                {groupedResources.disabled.map((resource) => <ResourceCard resource={resource} onPatch={patchResource} key={resource.id} />)}
+                {!groupedResources.disabled.length && <p>Aucune ressource non suivie ne correspond à la recherche.</p>}
+              </div>
+            </details>
             {!filtered.length && <div className="empty-state"><Search aria-hidden="true" /><strong>Aucune ressource trouvée</strong><span>Modifiez votre recherche ou relancez la détection Google.</span></div>}
           </div>
         )}
