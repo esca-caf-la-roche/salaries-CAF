@@ -58,14 +58,55 @@ export interface MonthlyHours {
   absenceHours: number
   replacementHours: number
   publicHolidayHours: number
+  contractWithPrepHours: number
+  contractWithoutPrepHours: number
+  absenceWithPrepHours: number
+  absenceWithoutPrepHours: number
+  replacementWithPrepHours: number
+  replacementWithoutPrepHours: number
+  publicHolidayWithPrepHours: number
+  publicHolidayWithoutPrepHours: number
+  workedWeeks: number
   eventCount: number
+}
+
+export interface MonthlyPayrollEntry {
+  month: number
+  paidMinutes: number
+  paidLeaveMinutes: number
+}
+
+export interface SchoolYearSettings {
+  contractType: ContractType
+  annualContractMinutes: number
+  fullTimeAnnualMinutes: number
+  paidMonths: number
+}
+
+export interface MonthlyEventHour {
+  id: string
+  title: string
+  calendarName: string
+  calendarColor: string | null
+  startsAt: string
+  endsAt: string
+  rawHours: number
+  weightedHours: number
+  coefficient: PreparationCoefficient
+  hourCategory: HourCategory
+  hasPreparation: boolean
 }
 
 export interface EmployeeSummary {
   id: string
   name: string
   calendarName: string
+  contractType: ContractType
+  annualContractHours: number
+  annualWorkedWeeks: number
   monthlyHours: MonthlyHours[]
+  payroll: MonthlyPayrollEntry[]
+  settings: SchoolYearSettings
 }
 
 export interface SyncState {

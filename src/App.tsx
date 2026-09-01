@@ -6,6 +6,7 @@ import { ConfigurationPage } from './pages/ConfigurationPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
 import { UnassignedEventsPage } from './pages/UnassignedEventsPage'
+import { TimeTrackingPage } from './pages/TimeTrackingPage'
 
 function ProtectedLayout() {
   const { user, loading } = useAuth()
@@ -24,7 +25,8 @@ export default function App() {
     <Routes>
       <Route path="/connexion" element={<LoginPage />} />
       <Route element={<ProtectedLayout />}>
-        <Route index element={<DashboardPage />} />
+        <Route index element={<TimeTrackingPage />} />
+        <Route path="vue-ensemble" element={<DashboardPage />} />
         <Route path="a-determiner" element={<AdminRoute><UnassignedEventsPage /></AdminRoute>} />
         <Route path="configuration" element={<AdminRoute><ConfigurationPage /></AdminRoute>} />
       </Route>

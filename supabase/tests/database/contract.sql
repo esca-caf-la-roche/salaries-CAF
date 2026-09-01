@@ -132,6 +132,38 @@ begin
     raise exception 'La répartition entre les quatre catégories d''heures est incomplète';
   end if;
   if not exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'employee_school_year_settings'
+  ) or not exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'employee_monthly_payroll'
+  ) then
+    raise exception 'Le suivi annuel des contrats et bulletins est absent';
+  end if;
+  if not exists (
+    select 1 from pg_class
+    where oid = 'public.monthly_event_hours'::regclass
+      and reloptions @> array['security_invoker=true']
+  ) then
+    raise exception 'monthly_event_hours doit respecter les politiques RLS de l''appelant';
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'monthly_hours' and column_name = 'worked_weeks'
+  ) or not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'monthly_hours' and column_name = 'contract_with_prep_hours'
+  ) or not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'monthly_hours' and column_name = 'replacement_without_prep_hours'
+  ) then
+    raise exception 'Le détail mensuel par préparation et semaines est incomplet';
+  end if;
+  if has_table_privilege('anon', 'public.employee_monthly_payroll', 'select')
+    or not has_table_privilege('authenticated', 'public.employee_monthly_payroll', 'select') then
+    raise exception 'Les droits du suivi des bulletins sont invalides';
+  end if;
+  if not exists (
     select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'calendar_events' and column_name = 'source_google_calendar_id'
   ) then

@@ -12,6 +12,13 @@ La page **Configuration** affiche aussi les calendriers d'origine effectivement 
 
 Les synthèses annuelles suivent la saison scolaire : du **1er septembre** d'une année au **31 août** de l'année suivante. Les mois sont affichés dans cet ordre et chacune des quatre catégories d'heures est totalisée séparément. Le volume annuel contractuel de la ressource reste une propriété distincte de ces heures comptabilisées.
 
+La page **Suivi des heures** propose désormais deux lectures complémentaires :
+
+- le détail mensuel événement par événement, avec durée brute, coefficient de préparation, durée retenue et rubrique ;
+- la synthèse annuelle septembre–août, avec séparation avec/sans préparation, absences, remplacements, fériés, semaines CDII et saisie des heures des bulletins.
+
+Les saisies contractuelles et de bulletin sont conservées par salarié et par saison, en minutes entières. Le calcul garantit au minimum le volume annuel du contrat et ajoute toujours les remplacements. Pour un CDI, il ajoute 10 % de la base garantie au titre des congés et calcule les fériés ouvrés à partir du ratio exact `heures du contrat / référence temps plein × 7 h`. Pour un CDII, les fériés configurés dans Google Calendar sont inclus dans les heures réalisées et aucun congé supplémentaire n'est ajouté. La formule active est rappelée directement sous la synthèse pour rester contrôlable.
+
 Supabase range techniquement les e-mails OTP dans l'emplacement de configuration nommé `magic_link`, mais le modèle hébergé doit contenir uniquement `{{ .Token }}` et aucune variable `{{ .ConfirmationURL }}`. Le fichier local `supabase/templates/otp.html` sert de source à copier dans **Authentication > Email Templates > Magic Link / OTP** du projet hébergé.
 
 ## Démarrage
@@ -27,6 +34,8 @@ Sans configuration Supabase, l'application s'ouvre volontairement en mode démon
 - `pnpm build` : vérification TypeScript et build de production.
 - `pnpm lint` : contrôle ESLint.
 - `pnpm test` : tests unitaires.
+
+La CI GitHub Pages exécute le lint, les tests et le build avant toute publication. Les migrations Supabase restent déployées séparément avec `supabase db push`, puis leur présence est contrôlée avec `supabase migration list`.
 
 ## Déploiement GitHub Pages
 

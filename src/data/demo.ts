@@ -53,15 +53,52 @@ export const demoEmployees: EmployeeSummary[] = [
     id: 'employee-1',
     name: 'Béatrice Martin',
     calendarName: 'Béatrice · Coordination',
-    monthlyHours: seriesA.map((hours, index) => ({ month: index + 1, rawHours: hours, weightedHours: hours, contractHours: hours, absenceHours: 0, replacementHours: 0, publicHolidayHours: 0, eventCount: Math.round(hours / 2.4) })),
+    contractType: 'CDI',
+    annualContractHours: 925,
+    annualWorkedWeeks: 36,
+    settings: { contractType: 'CDI', annualContractMinutes: 925 * 60, fullTimeAnnualMinutes: 1582 * 60, paidMonths: 12 },
+    payroll: schoolPayroll(85 * 60),
+    monthlyHours: seriesA.map((hours, index) => monthlyDemoHours(hours, index)),
   },
   {
     id: 'employee-2',
     name: 'Paul Renaud',
     calendarName: 'Paul · Encadrement',
-    monthlyHours: seriesB.map((hours, index) => ({ month: index + 1, rawHours: hours, weightedHours: hours * 1.25, contractHours: hours * 1.25, absenceHours: 0, replacementHours: 0, publicHolidayHours: 0, eventCount: Math.round(hours / 2.2) })),
+    contractType: 'CDII',
+    annualContractHours: 820,
+    annualWorkedWeeks: 33,
+    settings: { contractType: 'CDII', annualContractMinutes: 820 * 60, fullTimeAnnualMinutes: 1582 * 60, paidMonths: 12 },
+    payroll: schoolPayroll(Math.round(820 * 60 / 12)),
+    monthlyHours: seriesB.map((hours, index) => monthlyDemoHours(hours, index, 1.25)),
   },
 ]
+
+function schoolPayroll(paidMinutes: number) {
+  return [9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8].map((month) => ({ month, paidMinutes, paidLeaveMinutes: 0 }))
+}
+
+function monthlyDemoHours(hours: number, index: number, coefficient = 1) {
+  const weighted = hours * coefficient
+  return {
+    month: index + 1,
+    rawHours: hours,
+    weightedHours: weighted,
+    contractHours: weighted,
+    absenceHours: 0,
+    replacementHours: 0,
+    publicHolidayHours: 0,
+    contractWithPrepHours: coefficient === 1.25 ? weighted : 0,
+    contractWithoutPrepHours: coefficient === 1 ? weighted : 0,
+    absenceWithPrepHours: 0,
+    absenceWithoutPrepHours: 0,
+    replacementWithPrepHours: 0,
+    replacementWithoutPrepHours: 0,
+    publicHolidayWithPrepHours: 0,
+    publicHolidayWithoutPrepHours: 0,
+    workedWeeks: Math.max(1, Math.round(hours / 18)),
+    eventCount: Math.round(hours / 2.4),
+  }
+}
 
 export const demoSyncState: SyncState = {
   status: 'success',

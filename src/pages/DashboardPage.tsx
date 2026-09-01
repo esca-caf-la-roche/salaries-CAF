@@ -49,9 +49,24 @@ export function DashboardPage() {
       absenceHours: total.absenceHours + (month?.absenceHours ?? 0),
       replacementHours: total.replacementHours + (month?.replacementHours ?? 0),
       publicHolidayHours: total.publicHolidayHours + (month?.publicHolidayHours ?? 0),
+      contractWithPrepHours: total.contractWithPrepHours + (month?.contractWithPrepHours ?? 0),
+      contractWithoutPrepHours: total.contractWithoutPrepHours + (month?.contractWithoutPrepHours ?? 0),
+      absenceWithPrepHours: total.absenceWithPrepHours + (month?.absenceWithPrepHours ?? 0),
+      absenceWithoutPrepHours: total.absenceWithoutPrepHours + (month?.absenceWithoutPrepHours ?? 0),
+      replacementWithPrepHours: total.replacementWithPrepHours + (month?.replacementWithPrepHours ?? 0),
+      replacementWithoutPrepHours: total.replacementWithoutPrepHours + (month?.replacementWithoutPrepHours ?? 0),
+      publicHolidayWithPrepHours: total.publicHolidayWithPrepHours + (month?.publicHolidayWithPrepHours ?? 0),
+      publicHolidayWithoutPrepHours: total.publicHolidayWithoutPrepHours + (month?.publicHolidayWithoutPrepHours ?? 0),
+      workedWeeks: total.workedWeeks + (month?.workedWeeks ?? 0),
       eventCount: total.eventCount + (month?.eventCount ?? 0),
     }
-  }, { month: monthNumber, rawHours: 0, weightedHours: 0, contractHours: 0, absenceHours: 0, replacementHours: 0, publicHolidayHours: 0, eventCount: 0 })), [visible])
+  }, {
+    month: monthNumber, rawHours: 0, weightedHours: 0, contractHours: 0, absenceHours: 0,
+    replacementHours: 0, publicHolidayHours: 0, contractWithPrepHours: 0,
+    contractWithoutPrepHours: 0, absenceWithPrepHours: 0, absenceWithoutPrepHours: 0,
+    replacementWithPrepHours: 0, replacementWithoutPrepHours: 0, publicHolidayWithPrepHours: 0,
+    publicHolidayWithoutPrepHours: 0, workedWeeks: 0, eventCount: 0,
+  })), [visible])
   const periodData = selectedMonth === 'all' ? combined : combined.filter((item) => item.month === selectedMonth)
   const rawTotal = periodData.reduce((sum, item) => sum + item.rawHours, 0)
   const weightedTotal = periodData.reduce((sum, item) => sum + item.weightedHours, 0)
