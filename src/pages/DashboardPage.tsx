@@ -3,9 +3,10 @@ import { CalendarDays, ChevronDown, CircleAlert, Clock3, RefreshCw, TrendingUp }
 import { Link } from 'react-router-dom'
 import { HoursChart } from '../components/HoursChart'
 import { formatHours, formatSyncDate, monthLabel, schoolMonths, schoolYearForDate } from '../lib/format'
-import { getCoefficientCalendars, getEmployeeSummaries, runIncrementalSync } from '../services/api'
-import type { EmployeeSummary, SyncState, UsedCalendarCoefficient } from '../types'
+import { getCoefficientCalendars, getEmployeeSummaries, getUnassignedEvents, runIncrementalSync } from '../services/api'
+import type { EmployeeSummary, SyncState, UnassignedEvent, UsedCalendarCoefficient } from '../types'
 import { useAuth } from '../context/AuthContext'
+import { eventStart, formatEventDate, isEventWithinNextDays } from '../lib/unassignedEvents'
 
 const currentDate = new Date()
 const currentSchoolYear = schoolYearForDate(currentDate)
@@ -20,6 +21,7 @@ export function DashboardPage() {
   const [error, setError] = useState('')
   const [sync, setSync] = useState<SyncState>({ status: 'idle', lastSyncedAt: null })
   const [usedCalendars, setUsedCalendars] = useState<UsedCalendarCoefficient[]>([])
+  const [unassignedEvents, setUnassignedEvents] = useState<UnassignedEvent[]>([])
 
   useEffect(() => {
     setLoading(true)
@@ -33,6 +35,7 @@ export function DashboardPage() {
   useEffect(() => {
     if (user?.role !== 'admin') return
     void getCoefficientCalendars().then(setUsedCalendars).catch(() => setUsedCalendars([]))
+    void getUnassignedEvents().then(setUnassignedEvents).catch(() => setUnassignedEvents([]))
   }, [user?.role])
 
   const visible = useMemo(() => selectedEmployee === 'all' ? employees : employees.filter((item) => item.id === selectedEmployee), [employees, selectedEmployee])
@@ -55,6 +58,9 @@ export function DashboardPage() {
   const eventTotal = periodData.reduce((sum, item) => sum + item.eventCount, 0)
   const calendarsWithoutType = usedCalendars.filter((calendar) => calendar.hourCategory == null).length
   const calendarsWithoutCoefficient = usedCalendars.filter((calendar) => calendar.coefficient == null).length
+  const urgentUnassignedEvents = unassignedEvents
+    .filter((event) => isEventWithinNextDays(event, new Date(), 7))
+    .sort((a, b) => eventStart(a).getTime() - eventStart(b).getTime())
 
   const synchronize = async () => {
     setSync((state) => ({ ...state, status: 'syncing' }))
@@ -76,6 +82,11 @@ export function DashboardPage() {
       </header>
       {sync.message && <div className={`alert ${sync.status === 'error' ? 'alert--error' : 'alert--success'}`} role="status">{sync.message} · {formatSyncDate(sync.lastSyncedAt)}</div>}
       {error && <div className="alert alert--error" role="alert">{error}</div>}
+      {user?.role === 'admin' && urgentUnassignedEvents.length > 0 && <div className="alert alert--urgent unassigned-warning" role="alert">
+        <CircleAlert aria-hidden="true" />
+        <span><strong>{urgentUnassignedEvents.length} événement{urgentUnassignedEvents.length > 1 ? 's' : ''} à attribuer dans moins de 7 jours.</strong><small>Le prochain : {urgentUnassignedEvents[0].title} · {formatEventDate(urgentUnassignedEvents[0])}</small></span>
+        <Link className="button button--secondary" to="/a-determiner">Voir les événements</Link>
+      </div>}
       {user?.role === 'admin' && (calendarsWithoutType > 0 || calendarsWithoutCoefficient > 0) && <div className="alert alert--warning configuration-warning" role="alert">
         <CircleAlert aria-hidden="true" />
         <span><strong>Configuration incomplète.</strong> {calendarsWithoutType > 0 ? `${calendarsWithoutType} type${calendarsWithoutType > 1 ? 's' : ''} d'heures à définir` : ''}{calendarsWithoutType > 0 && calendarsWithoutCoefficient > 0 ? ' et ' : ''}{calendarsWithoutCoefficient > 0 ? `${calendarsWithoutCoefficient} coefficient${calendarsWithoutCoefficient > 1 ? 's' : ''} à définir` : ''}.</span>

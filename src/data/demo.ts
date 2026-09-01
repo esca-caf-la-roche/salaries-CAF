@@ -1,4 +1,4 @@
-import type { AppUser, EmployeeResource, EmployeeSummary, SyncState, UsedCalendarCoefficient } from '../types'
+import type { AppUser, EmployeeResource, EmployeeSummary, SyncState, UnassignedEvent, UsedCalendarCoefficient } from '../types'
 
 export const demoUser: AppUser = {
   id: 'demo-admin',
@@ -16,6 +16,33 @@ export const demoResources: EmployeeResource[] = [
 export const demoCoefficientCalendars: UsedCalendarCoefficient[] = [
   { googleCalendarId: 'demo-avec-prepa@group.calendar.google.com', name: 'Cours avec prépa', color: '#7986cb', coefficient: 1.25, hourCategory: 'contract', eventCount: 54 },
   { googleCalendarId: 'demo-sans-prepa@group.calendar.google.com', name: 'Absences', color: '#f6bf26', coefficient: 1, hourCategory: 'absence', eventCount: 17 },
+]
+
+const demoEventDate = (daysFromToday: number, hour = 9) => {
+  const date = new Date()
+  date.setHours(hour, 0, 0, 0)
+  date.setDate(date.getDate() + daysFromToday)
+  return date.toISOString()
+}
+
+export const demoUnassignedEvents: UnassignedEvent[] = [
+  {
+    id: 'event-unassigned-1', googleEventId: 'google-event-unassigned-1', title: 'Cours jeunes — groupe découverte',
+    description: 'Séance à attribuer. Le matériel pédagogique est déjà préparé.', location: 'Salle de bloc',
+    startsAt: demoEventDate(3, 14), endsAt: demoEventDate(3, 16), allDay: false,
+    sourceCalendarId: 'demo-avec-prepa@group.calendar.google.com', sourceCalendarName: 'Cours avec prépa', sourceCalendarColor: '#7986cb',
+  },
+  {
+    id: 'event-unassigned-2', googleEventId: 'google-event-unassigned-2', title: 'Encadrement compétition départementale',
+    description: 'Déplacement et encadrement de l’équipe jeunes.', location: 'Gymnase municipal',
+    startsAt: demoEventDate(12, 8), endsAt: demoEventDate(12, 18), allDay: false,
+    sourceCalendarId: 'demo-sans-prepa@group.calendar.google.com', sourceCalendarName: 'Absences', sourceCalendarColor: '#f6bf26',
+  },
+  {
+    id: 'event-unassigned-3', googleEventId: 'google-event-unassigned-3', title: 'Stage vacances scolaires',
+    description: '', location: 'La Cordée', startsAt: demoEventDate(35, 10), endsAt: demoEventDate(35, 17), allDay: false,
+    sourceCalendarId: 'demo-avec-prepa@group.calendar.google.com', sourceCalendarName: 'Cours avec prépa', sourceCalendarColor: '#7986cb',
+  },
 ]
 
 const seriesA = [62, 71, 68, 74, 79, 66, 42, 38, 72, 76, 69, 55]

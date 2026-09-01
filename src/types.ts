@@ -36,6 +36,20 @@ export interface UsedCalendarCoefficient {
   eventCount: number
 }
 
+export interface UnassignedEvent {
+  id: string
+  googleEventId: string
+  title: string
+  description: string
+  location: string
+  startsAt: string
+  endsAt: string
+  allDay: boolean
+  sourceCalendarId: string
+  sourceCalendarName: string
+  sourceCalendarColor: string | null
+}
+
 export interface MonthlyHours {
   month: number
   rawHours: number

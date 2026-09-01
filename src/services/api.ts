@@ -1,7 +1,7 @@
-import { demoCoefficientCalendars, demoEmployees, demoResources, demoSyncState } from '../data/demo'
+import { demoCoefficientCalendars, demoEmployees, demoResources, demoSyncState, demoUnassignedEvents } from '../data/demo'
 import { isDemoMode, supabase } from '../lib/supabase'
 import { detectContractType } from '../lib/contracts'
-import type { EmployeeResource, EmployeeSummary, MonthlyHours, SyncState, UsedCalendarCoefficient } from '../types'
+import type { EmployeeResource, EmployeeSummary, MonthlyHours, SyncState, UnassignedEvent, UsedCalendarCoefficient } from '../types'
 
 const pause = (milliseconds = 180) => new Promise((resolve) => window.setTimeout(resolve, milliseconds))
 
@@ -97,6 +97,18 @@ export async function getCoefficientCalendars(): Promise<UsedCalendarCoefficient
   })
   if (error) throw error
   return (data?.calendars ?? []).map(mapCoefficientCalendar)
+}
+
+export async function getUnassignedEvents(): Promise<UnassignedEvent[]> {
+  if (isDemoMode || !supabase) {
+    await pause()
+    return structuredClone(demoUnassignedEvents)
+  }
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: { action: 'unassignedEvents' },
+  })
+  if (error) throw error
+  return (data?.events ?? []) as UnassignedEvent[]
 }
 
 export async function saveCoefficientCalendars(calendars: UsedCalendarCoefficient[]): Promise<UsedCalendarCoefficient[]> {

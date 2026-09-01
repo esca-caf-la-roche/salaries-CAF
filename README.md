@@ -6,6 +6,8 @@ L'authentification utilise exclusivement un OTP e-mail à 6 chiffres. Les admini
 
 La ressource Google nommée exactement **`(CDII)-A DETERMINER`** représente les cours sans moniteur attribué. Elle est toujours suivie, ne crée aucun compte salarié et n'exige ni e-mail ni informations contractuelles. Ses données restent visibles par les administrateurs uniquement.
 
+La page admin **À déterminer** rassemble tous les événements de cette ressource sous forme de cards classées par mois. Les calendriers d'origine rencontrés alimentent automatiquement un filtre à sélection multiple. Sur la vue d'ensemble, un bandeau rouge signale les événements à attribuer dont le début est prévu dans moins de sept jours.
+
 La page **Configuration** affiche aussi les calendriers d'origine effectivement rencontrés dans les événements synchronisés. Un Kanban les fait passer de **À définir** vers **Avec prépa** (coefficient 1,25) ou **Sans prépa** (coefficient 1), puis vers l'une des quatre catégories de comptage : Heures du contrat, Heures d'absences, Heures de remplacements ou Heures fériées. Les cartes se déplacent par glisser-déposer ou par sélection puis clic, et conservent la couleur du calendrier Google comme repère visuel. Une règle intermédiaire ne peut pas être enregistrée et reste exclue des totaux afin d'éviter un calcul silencieusement faux.
 
 Les synthèses annuelles suivent la saison scolaire : du **1er septembre** d'une année au **31 août** de l'année suivante. Les mois sont affichés dans cet ordre et chacune des quatre catégories d'heures est totalisée séparément. Le volume annuel contractuel de la ressource reste une propriété distincte de ces heures comptabilisées.

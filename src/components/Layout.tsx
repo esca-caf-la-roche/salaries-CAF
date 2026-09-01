@@ -1,4 +1,4 @@
-import { CalendarRange, Gauge, LogOut, Settings } from 'lucide-react'
+import { CalendarClock, CalendarRange, Gauge, LogOut, Settings } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { Logo } from './Logo'
@@ -12,6 +12,7 @@ export function Layout() {
         <Logo />
         <nav className="main-nav" aria-label="Navigation principale">
           <NavLink to="/" end><Gauge aria-hidden="true" /> <span>Vue d'ensemble</span></NavLink>
+          {user?.role === 'admin' && <NavLink to="/a-determiner"><CalendarClock aria-hidden="true" /> <span>À déterminer</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/configuration"><Settings aria-hidden="true" /> <span>Configuration</span></NavLink>}
         </nav>
         <div className="sidebar__foot">
@@ -34,6 +35,7 @@ export function Layout() {
         <main id="main-content"><Outlet /></main>
         <nav className="mobile-nav" aria-label="Navigation mobile">
           <NavLink to="/" end><Gauge aria-hidden="true" /><span>Heures</span></NavLink>
+          {user?.role === 'admin' && <NavLink to="/a-determiner"><CalendarClock aria-hidden="true" /><span>À déterminer</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/configuration"><CalendarRange aria-hidden="true" /><span>Ressources</span></NavLink>}
         </nav>
       </div>

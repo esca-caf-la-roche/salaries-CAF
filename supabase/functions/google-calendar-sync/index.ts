@@ -466,6 +466,64 @@ async function sync(admin: SupabaseClient, ownerId: string, calendarIds?: string
   return { results };
 }
 
+async function unassignedEvents(admin: SupabaseClient, ownerId: string) {
+  const connection = await connectionFor(admin, ownerId);
+  const { data: employees, error: employeesError } = await admin.from("employees")
+    .select("resource_calendar_id")
+    .eq("is_unassigned_resource", true)
+    .eq("active", true)
+    .not("resource_calendar_id", "is", null);
+  if (employeesError) throw employeesError;
+  const candidateIds = [...new Set((employees ?? []).map((employee) => String(employee.resource_calendar_id)))];
+  if (!candidateIds.length) return { events: [] };
+  const { data: calendars, error: calendarsError } = await admin.from("calendars")
+    .select("id")
+    .eq("connection_id", connection.id)
+    .eq("is_resource", true)
+    .eq("enabled", true)
+    .in("id", candidateIds);
+  if (calendarsError) throw calendarsError;
+  const calendarIds = (calendars ?? []).map((calendar) => String(calendar.id));
+  if (!calendarIds.length) return { events: [] };
+
+  const events: Record<string, unknown>[] = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await admin.from("calendar_events")
+      .select("id,google_event_id,summary,description,location,starts_at,ends_at,start_date,end_date,all_day,source_google_calendar_id,raw,coefficient_rules(label,color)")
+      .in("calendar_id", calendarIds)
+      .neq("status", "cancelled")
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    events.push(...(data ?? []));
+    if ((data ?? []).length < pageSize) break;
+  }
+
+  return {
+    events: events.map((event) => {
+      const raw = (event.raw ?? {}) as Record<string, unknown>;
+      const organizer = (raw.organizer ?? {}) as Record<string, unknown>;
+      const rule = Array.isArray(event.coefficient_rules)
+        ? event.coefficient_rules[0] as Record<string, unknown> | undefined
+        : event.coefficient_rules as Record<string, unknown> | null;
+      const sourceCalendarId = String(event.source_google_calendar_id ?? "");
+      return {
+        id: String(event.id),
+        googleEventId: String(event.google_event_id),
+        title: String(event.summary ?? "Événement sans titre"),
+        description: String(event.description ?? ""),
+        location: String(event.location ?? ""),
+        startsAt: String(event.starts_at ?? event.start_date ?? ""),
+        endsAt: String(event.ends_at ?? event.end_date ?? ""),
+        allDay: Boolean(event.all_day),
+        sourceCalendarId,
+        sourceCalendarName: String(rule?.label ?? organizer.displayName ?? sourceCalendarId ?? "Calendrier inconnu") || "Calendrier inconnu",
+        sourceCalendarColor: typeof rule?.color === "string" ? rule.color : null,
+      };
+    }),
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
   try {
@@ -483,10 +541,11 @@ Deno.serve(async (req) => {
       await refreshCoefficientCalendarMetadata(admin, connection.id, await listGoogleCalendars(token));
       return json({ calendars: await coefficientPayload(admin, connection.id) });
     }
+    if (body.action === "unassignedEvents") return json(await unassignedEvents(admin, user.id));
     if (body.action === "saveResources") return json(await saveResources(admin, user.id, body.resources));
     if (body.action === "saveCoefficients") return json(await saveCoefficients(admin, user.id, body.calendars));
     if (body.action === "sync") return json(await sync(admin, user.id, body.calendarIds));
-    throw new HttpError(400, "Action attendue: discover, resources, coefficientCalendars, saveResources, saveCoefficients ou sync");
+    throw new HttpError(400, "Action attendue: discover, resources, coefficientCalendars, unassignedEvents, saveResources, saveCoefficients ou sync");
   } catch (error) {
     return errorResponse(error);
   }
