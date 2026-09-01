@@ -3,6 +3,7 @@ import { CalendarDays, ChevronDown, CircleAlert, Clock3, RefreshCw, TrendingUp }
 import { Link } from 'react-router-dom'
 import { HoursChart } from '../components/HoursChart'
 import { formatHours, formatSyncDate, monthLabel, schoolMonths, schoolYearForDate } from '../lib/format'
+import { calculateRetainedHours } from '../lib/hourTotals'
 import { getCoefficientCalendars, getEmployeeSummaries, getUnassignedEvents, runIncrementalSync } from '../services/api'
 import type { EmployeeSummary, SyncState, UnassignedEvent, UsedCalendarCoefficient } from '../types'
 import { useAuth } from '../context/AuthContext'
@@ -133,12 +134,12 @@ export function DashboardPage() {
         <div className="table-scroll"><table><thead><tr><th>Salarié</th><th>Calendrier</th><th>Heures calendrier</th><th>Heures du contrat</th><th>Heures d'absences</th><th>Heures de remplacements</th><th>Heures fériées</th><th>Heures retenues</th></tr></thead><tbody>{visible.map((employee) => {
           const rows = selectedMonth === 'all' ? employee.monthlyHours : employee.monthlyHours.filter((item) => item.month === selectedMonth)
           const raw = rows.reduce((sum, item) => sum + item.rawHours, 0)
-          const weighted = rows.reduce((sum, item) => sum + item.weightedHours, 0)
           const contract = rows.reduce((sum, item) => sum + item.contractHours, 0)
           const absence = rows.reduce((sum, item) => sum + item.absenceHours, 0)
           const replacement = rows.reduce((sum, item) => sum + item.replacementHours, 0)
           const publicHoliday = rows.reduce((sum, item) => sum + item.publicHolidayHours, 0)
-          return <tr key={employee.id}><td><strong>{employee.name}</strong></td><td>{employee.calendarName}</td><td>{formatHours(raw)} h</td><td>{formatHours(contract)} h</td><td>{formatHours(absence)} h</td><td>{formatHours(replacement)} h</td><td>{formatHours(publicHoliday)} h</td><td><strong>{formatHours(weighted)} h</strong></td></tr>
+          const retained = calculateRetainedHours({ contractHours: contract, absenceHours: absence, replacementHours: replacement, publicHolidayHours: publicHoliday })
+          return <tr key={employee.id}><td><strong>{employee.name}</strong></td><td>{employee.calendarName}</td><td>{formatHours(raw)} h</td><td>{formatHours(contract)} h</td><td>{formatHours(absence)} h</td><td>{formatHours(replacement)} h</td><td>{formatHours(publicHoliday)} h</td><td><strong>{formatHours(retained)} h</strong></td></tr>
         })}</tbody></table></div>
       </section>
     </div>

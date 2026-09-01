@@ -6,6 +6,7 @@ import {
   formatHoursMinutes,
 } from '../lib/annualSummary'
 import { monthLabel, schoolMonths, schoolYearForDate } from '../lib/format'
+import { calculateRetainedHours } from '../lib/hourTotals'
 import { getEmployeeSummaries, getMonthlyEventHours, saveAnnualTracking } from '../services/api'
 import type { EmployeeSummary, MonthlyEventHour, MonthlyHours, MonthlyPayrollEntry, SchoolYearSettings } from '../types'
 import { useAuth } from '../context/AuthContext'
@@ -166,7 +167,7 @@ export function TimeTrackingPage() {
   }
 
   const monthData = months.find((item) => item.month === selectedMonth) ?? emptyMonth(selectedMonth)
-  const monthlyRetained = monthData.contractHours + monthData.absenceHours + monthData.replacementHours + monthData.publicHolidayHours
+  const monthlyRetained = calculateRetainedHours(monthData)
 
   return (
     <div className="page tracking-page">
@@ -200,7 +201,7 @@ export function TimeTrackingPage() {
           <article className="metric"><p>Fériés</p><strong>{formatHoursMinutes(monthData.publicHolidayHours)} <small>h</small></strong><span>Total des heures fériées</span></article>
         </section>
         <section className="panel monthly-ledger">
-          <div className="panel-heading"><div><p className="eyebrow">{monthLabel(selectedMonth)} · {employee.name}</p><h2>Détail des événements</h2></div><span className="ledger-total">Total pondéré <strong>{formatHoursMinutes(monthlyRetained)}</strong></span></div>
+          <div className="panel-heading"><div><p className="eyebrow">{monthLabel(selectedMonth)} · {employee.name}</p><h2>Détail des événements</h2></div><span className="ledger-total">Total pondéré <strong>{formatHoursMinutes(monthData.weightedHours)}</strong></span></div>
           <div className="table-scroll"><table><thead><tr><th>Calendrier</th><th>Objet</th><th>Date</th><th>Début</th><th>Fin</th><th>Durée</th><th>Préparation</th><th>Rubrique</th></tr></thead><tbody>
             {events.map((event) => <tr key={event.id}><td><span className="calendar-cell"><i style={{ background: event.calendarColor ?? '#91b7bd' }} />{event.calendarName}</span></td><td><strong>{event.title}</strong></td><td>{eventDate(event.startsAt)}</td><td>{eventTime(event.startsAt)}</td><td>{eventTime(event.endsAt)}</td><td>{formatHoursMinutes(event.weightedHours)}</td><td><span className="coefficient">× {event.coefficient.toLocaleString('fr-FR')}</span></td><td>{categoryLabels[event.hourCategory]}</td></tr>)}
             {!eventsLoading && events.length === 0 && <tr><td colSpan={8} className="table-empty">Aucun événement configuré pour ce mois.</td></tr>}
@@ -231,7 +232,7 @@ export function TimeTrackingPage() {
             <AnnualRow label="Heures d’absences" months={months} value={(month) => month.absenceHours} tone="absence" />
             <AnnualRow label="Heures de remplacements" months={months} value={(month) => month.replacementHours} tone="replacement" />
             <AnnualRow label="Heures fériées" months={months} value={(month) => month.publicHolidayHours} />
-            <AnnualRow label="Total du mois" months={months} value={(month) => month.contractHours - month.absenceHours + month.replacementHours + month.publicHolidayHours} strong />
+            <AnnualRow label="Total du mois" months={months} value={calculateRetainedHours} strong />
             {employee.contractType === 'CDII' && <tr className="annual-row annual-row--weeks"><th scope="row">Semaines travaillées</th>{months.map((month) => <td key={month.month}>{month.workedWeeks || '—'}</td>)}<td><strong>{employee.annualWorkedWeeks}</strong></td></tr>}
             <tr className="annual-row annual-row--input"><th scope="row">Bulletin</th>{schoolMonths.map((month) => <td key={month}><input value={payrollDraft[month]?.paid ?? ''} onChange={(event) => setPayrollDraft((state) => ({ ...state, [month]: { ...state[month], paid: event.target.value } }))} disabled={!canEdit} aria-label={`Heures du bulletin de ${monthLabel(month)}`} /></td>)}<td><strong>{formatHoursMinutes(payslipHours)}</strong></td></tr>
             {employee.contractType === 'CDI' && <tr className="annual-row annual-row--input"><th scope="row">Congés payés au bulletin</th>{schoolMonths.map((month) => <td key={month}><input value={payrollDraft[month]?.leave ?? ''} onChange={(event) => setPayrollDraft((state) => ({ ...state, [month]: { ...state[month], leave: event.target.value } }))} disabled={!canEdit} aria-label={`Congés payés de ${monthLabel(month)}`} /></td>)}<td><strong>{formatHoursMinutes(payslipLeaveHours)}</strong></td></tr>}

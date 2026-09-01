@@ -1,12 +1,43 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DashboardPage } from './DashboardPage'
+import type { EmployeeSummary } from '../types'
 
 const getEmployeeSummaries = vi.fn()
 const getCoefficientCalendars = vi.fn()
 const getUnassignedEvents = vi.fn()
 const runIncrementalSync = vi.fn()
+
+const trackedEmployee: EmployeeSummary = {
+  id: 'employee-1',
+  name: 'Salarié Test',
+  calendarName: 'Calendrier Test',
+  contractType: 'CDI',
+  annualContractHours: 925,
+  annualWorkedWeeks: 1,
+  settings: { contractType: 'CDI', annualContractMinutes: 925 * 60, fullTimeAnnualMinutes: 1582 * 60, paidMonths: 12 },
+  payroll: [],
+  monthlyHours: [{
+    month: 9,
+    rawHours: 54 + 23 / 60,
+    weightedHours: 54 + 23 / 60,
+    contractHours: 48 + 8 / 60,
+    absenceHours: 6 + 15 / 60,
+    replacementHours: 0,
+    publicHolidayHours: 0,
+    contractWithPrepHours: 48 + 8 / 60,
+    contractWithoutPrepHours: 0,
+    absenceWithPrepHours: 6 + 15 / 60,
+    absenceWithoutPrepHours: 0,
+    replacementWithPrepHours: 0,
+    replacementWithoutPrepHours: 0,
+    publicHolidayWithPrepHours: 0,
+    publicHolidayWithoutPrepHours: 0,
+    workedWeeks: 1,
+    eventCount: 22,
+  }],
+}
 
 vi.mock('../services/api', () => ({
   getEmployeeSummaries: (...args: unknown[]) => getEmployeeSummaries(...args),
@@ -43,6 +74,16 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('columnheader', { name: "Heures d'absences" })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: 'Heures de remplacements' })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: 'Heures fériées' })).toBeInTheDocument()
+  })
+
+  it('uses the net business formula for retained hours', async () => {
+    getEmployeeSummaries.mockResolvedValue([structuredClone(trackedEmployee)])
+    render(<MemoryRouter><DashboardPage /></MemoryRouter>)
+
+    await screen.findByRole('option', { name: 'Salarié Test' })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Période' }), { target: { value: '9' } })
+    const employeeRow = await screen.findByRole('row', { name: /Salarié Test/ })
+    expect(within(employeeRow).getByText('41,9 h')).toBeInTheDocument()
   })
 
   it('shows a red warning when an unassigned event starts in less than seven days', async () => {

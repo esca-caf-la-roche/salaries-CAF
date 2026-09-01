@@ -29,7 +29,7 @@ const employee: EmployeeSummary = {
   monthlyHours: [{
     month: 9,
     rawHours: 887 + 56 / 60,
-    weightedHours: 887 + 56 / 60,
+    weightedHours: 896 + 56 / 60,
     contractHours: 887 + 56 / 60,
     absenceHours: 2,
     replacementHours: 3,
@@ -78,6 +78,8 @@ describe('TimeTrackingPage', () => {
     expect(totals).toHaveTextContent('Absences2:00')
     expect(totals).toHaveTextContent('Remplacements3:00')
     expect(totals).toHaveTextContent('Fériés4:00')
+    expect(screen.getByText('Heures retenues').closest('article')).toHaveTextContent('892:56')
+    expect(screen.getByText('Total pondéré').closest('span')).toHaveTextContent('896:56')
   })
 
   it('switches to the annual sheet, calculates the contract remainder and saves payslips', async () => {
