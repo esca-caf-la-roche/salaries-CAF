@@ -27,10 +27,14 @@ function mapResource(resource: Record<string, unknown>): EmployeeResource {
 
 function mapCoefficientCalendar(calendar: Record<string, unknown>): UsedCalendarCoefficient {
   const coefficient = calendar.coefficient == null ? null : Number(calendar.coefficient)
+  const color = typeof calendar.color === 'string' && /^#[0-9a-f]{6}$/i.test(calendar.color.trim())
+    ? calendar.color.trim()
+    : null
   const supportedHourCategories = ['contract', 'absence', 'replacement', 'public_holiday']
   return {
     googleCalendarId: String(calendar.google_calendar_id),
     name: String(calendar.label ?? calendar.google_calendar_id),
+    color,
     coefficient: coefficient === 1 || coefficient === 1.25 ? coefficient : null,
     hourCategory: supportedHourCategories.includes(String(calendar.hour_category))
       ? calendar.hour_category as UsedCalendarCoefficient['hourCategory']

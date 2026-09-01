@@ -30,6 +30,7 @@ export type PreparationCoefficient = 1 | 1.25
 export interface UsedCalendarCoefficient {
   googleCalendarId: string
   name: string
+  color: string | null
   coefficient: PreparationCoefficient | null
   hourCategory: HourCategory | null
   eventCount: number

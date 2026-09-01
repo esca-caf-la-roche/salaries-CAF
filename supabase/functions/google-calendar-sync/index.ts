@@ -36,9 +36,7 @@ async function connectionFor(admin: SupabaseClient, ownerId: string) {
   return data as { id: string };
 }
 
-async function discover(admin: SupabaseClient, ownerId: string) {
-  const connection = await connectionFor(admin, ownerId);
-  const token = await getAccessToken(admin, connection.id);
+async function listGoogleCalendars(token: string): Promise<GoogleCalendar[]> {
   const calendars: GoogleCalendar[] = [];
   let pageToken: string | undefined;
   do {
@@ -53,6 +51,31 @@ async function discover(admin: SupabaseClient, ownerId: string) {
     calendars.push(...(payload.items ?? []));
     pageToken = payload.nextPageToken;
   } while (pageToken);
+  return calendars;
+}
+
+async function refreshCoefficientCalendarMetadata(
+  admin: SupabaseClient,
+  connectionId: string,
+  calendars: GoogleCalendar[],
+) {
+  const metadata = calendars.map((calendar) => ({
+    googleCalendarId: calendar.id,
+    label: calendar.summary ?? calendar.id,
+    color: calendar.backgroundColor ?? null,
+  }));
+  const { error } = await admin.rpc("internal_sync_coefficient_calendar_metadata", {
+    p_connection_id: connectionId,
+    p_calendars: metadata,
+  });
+  if (error) throw error;
+}
+
+async function discover(admin: SupabaseClient, ownerId: string) {
+  const connection = await connectionFor(admin, ownerId);
+  const token = await getAccessToken(admin, connection.id);
+  const calendars = await listGoogleCalendars(token);
+  await refreshCoefficientCalendarMetadata(admin, connection.id, calendars);
 
   const resourceCalendars = calendars.filter((calendar) =>
     typeof calendar.autoAcceptInvitations === "boolean" || calendar.id.endsWith("@resource.calendar.google.com")
@@ -456,6 +479,8 @@ Deno.serve(async (req) => {
     }
     if (body.action === "coefficientCalendars") {
       const connection = await connectionFor(admin, user.id);
+      const token = await getAccessToken(admin, connection.id);
+      await refreshCoefficientCalendarMetadata(admin, connection.id, await listGoogleCalendars(token));
       return json({ calendars: await coefficientPayload(admin, connection.id) });
     }
     if (body.action === "saveResources") return json(await saveResources(admin, user.id, body.resources));

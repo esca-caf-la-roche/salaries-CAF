@@ -21,6 +21,7 @@ const resource: EmployeeResource = {
 const usedCalendar: UsedCalendarCoefficient = {
   googleCalendarId: 'course-1@group.calendar.google.com',
   name: 'Cours du mardi',
+  color: '#7986cb',
   coefficient: null,
   hourCategory: null,
   eventCount: 12,
@@ -67,6 +68,26 @@ describe('ConfigurationPage', () => {
     expect(screen.getAllByText('À définir').length).toBeGreaterThan(0)
     expect(screen.getByLabelText('Type de contrat de (CDII)-Alice Martin')).toHaveTextContent('CDII')
     expect(screen.getByRole('spinbutton', { name: 'Heures annuelles de (CDII)-Alice Martin' })).toHaveValue(820)
+    const calendarRow = screen.getByText('Cours du mardi').closest('.coefficient-row')
+    expect(calendarRow?.querySelector('.calendar-color')).toHaveStyle({ background: '#7986cb' })
+  })
+
+  it('groups configured calendars by hour category, then preparation level', async () => {
+    getCoefficientCalendars.mockResolvedValue([
+      { ...usedCalendar, googleCalendarId: 'contract-prep', name: 'Cours préparé', coefficient: 1.25, hourCategory: 'contract' },
+      { ...usedCalendar, googleCalendarId: 'contract-direct', name: 'Cours direct', coefficient: 1, hourCategory: 'contract' },
+      { ...usedCalendar, googleCalendarId: 'absence-prep', name: 'Absence préparée', coefficient: 1.25, hourCategory: 'absence' },
+      { ...usedCalendar, googleCalendarId: 'missing-coef', name: 'Coefficient manquant', coefficient: null, hourCategory: 'replacement' },
+    ])
+
+    render(<ConfigurationPage />)
+
+    expect(await screen.findByRole('heading', { name: 'Heures du contrat' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: "Heures d'absences" })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'À définir' })).toBeInTheDocument()
+    expect(screen.getAllByText('Avec prépa')).toHaveLength(2)
+    expect(screen.getByText('Sans prépa')).toBeInTheDocument()
+    expect(screen.getByText('Coefficient manquant').closest('.hour-type-group')).toHaveClass('hour-type-group--undefined')
   })
 
   it('requires a valid login email before enabling a resource', async () => {

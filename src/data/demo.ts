@@ -14,8 +14,8 @@ export const demoResources: EmployeeResource[] = [
 ]
 
 export const demoCoefficientCalendars: UsedCalendarCoefficient[] = [
-  { googleCalendarId: 'demo-avec-prepa@group.calendar.google.com', name: 'Cours avec prépa', coefficient: 1.25, hourCategory: 'contract', eventCount: 54 },
-  { googleCalendarId: 'demo-sans-prepa@group.calendar.google.com', name: 'Absences', coefficient: 1, hourCategory: 'absence', eventCount: 17 },
+  { googleCalendarId: 'demo-avec-prepa@group.calendar.google.com', name: 'Cours avec prépa', color: '#7986cb', coefficient: 1.25, hourCategory: 'contract', eventCount: 54 },
+  { googleCalendarId: 'demo-sans-prepa@group.calendar.google.com', name: 'Absences', color: '#f6bf26', coefficient: 1, hourCategory: 'absence', eventCount: 17 },
 ]
 
 const seriesA = [62, 71, 68, 74, 79, 66, 42, 38, 72, 76, 69, 55]

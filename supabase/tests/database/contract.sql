@@ -21,6 +21,12 @@ begin
   if not has_function_privilege('service_role', 'public.internal_used_coefficient_calendars(uuid)', 'execute') then
     raise exception 'service_role doit pouvoir détecter les calendriers utilisés';
   end if;
+  if not has_function_privilege('service_role', 'public.internal_sync_coefficient_calendar_metadata(uuid,jsonb)', 'execute') then
+    raise exception 'service_role doit pouvoir actualiser les couleurs Google';
+  end if;
+  if has_function_privilege('authenticated', 'public.internal_sync_coefficient_calendar_metadata(uuid,jsonb)', 'execute') then
+    raise exception 'authenticated ne doit pas modifier directement les couleurs Google';
+  end if;
   if not has_function_privilege('service_role', 'public.internal_configure_coefficients(uuid,jsonb)', 'execute') then
     raise exception 'service_role doit pouvoir configurer les calendriers utilisés';
   end if;
@@ -57,6 +63,13 @@ begin
       and column_name = 'hour_category' and is_nullable = 'YES'
   ) then
     raise exception 'La catégorie d''heures nullable est absente';
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'coefficient_rules'
+      and column_name = 'color' and is_nullable = 'YES'
+  ) then
+    raise exception 'La couleur Google nullable est absente des règles';
   end if;
   if exists (
     select 1 from information_schema.columns
