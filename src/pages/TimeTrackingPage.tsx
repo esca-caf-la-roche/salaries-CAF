@@ -324,7 +324,18 @@ export function TimeTrackingPage() {
         <section className="calculation-note">
           <ClipboardCheck aria-hidden="true" />
           <div><strong>Règle appliquée pour {employee.contractType}</strong>{employee.contractType === 'CDI'
-            ? <p>Heures réelles : contrat + fériés + remplacements − absences. Fériés : 7 h × coefficient {cdiHolidayCalculation?.coefficient.toLocaleString('fr-FR', { maximumFractionDigits: 4 })} ({cdiHolidayCalculation?.basis === 'realized' ? 'heures réelles' : 'contrat annuel'} / {formatHoursMinutes(fullTimeMinutes! / 60)}), uniquement du lundi au vendredi. Base garantie : maximum entre le contrat annuel et {formatHoursMinutes(cdiHolidayCalculation?.realizedHours ?? 0)} h réelles. Congés : 10 % de cette base.</p>
+            ? <>
+              <div className="calculation-breakdown" role="region" aria-label="Comparaison entre les heures réelles et le contrat annuel">
+                <span><small>Heures réelles</small><b>{formatHoursMinutes(cdiHolidayCalculation?.realizedHours ?? 0)}</b></span>
+                <i>{cdiHolidayCalculation?.basis === 'realized' ? '≥' : '<'}</i>
+                <span><small>Contrat annuel</small><b>{formatHoursMinutes(annualMinutes! / 60)}</b></span>
+                <i>→</i>
+                <span className="calculation-breakdown__result"><small>Coefficient retenu</small><b>{cdiHolidayCalculation?.basis === 'realized' ? 'heures réelles' : 'contrat annuel'} / 1582 = {cdiHolidayCalculation?.coefficient.toLocaleString('fr-FR', { maximumFractionDigits: 4 })}</b></span>
+              </div>
+              <p>Heures réelles = contrat + fériés + remplacements − absences. Ici, {cdiHolidayCalculation?.basis === 'realized'
+                ? `les heures réelles atteignent ou dépassent le contrat : le coefficient évolue donc avec le réel (${formatHoursMinutes(cdiHolidayCalculation?.realizedHours ?? 0)} / 1582).`
+                : `les heures réelles restent sous le contrat : le coefficient est donc garanti sur le contrat annuel (${formatHoursMinutes(annualMinutes! / 60)} / 1582).`} Chaque férié du lundi au vendredi vaut 7 h × ce coefficient. Les congés représentent 10 % de la base garantie.</p>
+            </>
             : <p>Base garantie : maximum entre le contrat et les heures réalisées, absences et fériés du calendrier. Aucun congé supplémentaire. Les remplacements s’ajoutent toujours.</p>}
           </div>
         </section>

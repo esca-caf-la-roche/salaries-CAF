@@ -112,6 +112,8 @@ describe('TimeTrackingPage', () => {
     expect(screen.getByRole('rowheader', { name: 'Total du mois' }).closest('tr')).toHaveTextContent('893:02')
     expect(screen.getByRole('region', { name: 'Jours fériés de la saison' })).toHaveTextContent('lundi')
     expect(screen.getByRole('region', { name: 'Jours fériés de la saison' })).toHaveTextContent('dimanche')
+    expect(screen.getByRole('region', { name: 'Comparaison entre les heures réelles et le contrat annuel' }))
+      .toHaveTextContent('Heures réelles893:02<Contrat annuel925:00→Coefficient retenucontrat annuel / 1582 = 0,5847')
     expect(screen.queryByRole('rowheader', { name: /prépa/i })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer la saison' }))
 
