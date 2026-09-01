@@ -36,7 +36,15 @@ export interface FrenchPublicHoliday {
   date: Date
 }
 
-const DEFAULT_FULL_TIME_ANNUAL_HOURS = 1582
+export interface CdiPublicHolidayCalculation {
+  coefficient: number
+  hoursPerHoliday: number
+  totalHours: number
+  realizedHours: number
+  basis: 'contract' | 'realized'
+}
+
+export const CDI_FULL_TIME_ANNUAL_HOURS = 1582
 const MINUTES_PER_HOUR = 60
 
 export function roundHoursToMinute(hours: number): number {
@@ -95,6 +103,12 @@ export function getFrenchMetropolitanPublicHolidays(year: number): FrenchPublicH
 }
 
 export function countWeekdayFrenchPublicHolidaysForSchoolSeason(season: SchoolSeason): number {
+  return getFrenchPublicHolidaysForSchoolSeason(season)
+    .filter(({ date }) => isWeekday(date))
+    .length
+}
+
+export function getFrenchPublicHolidaysForSchoolSeason(season: SchoolSeason): FrenchPublicHoliday[] {
   assertYear(season.startYear, 'schoolSeason.startYear')
 
   const seasonStart = utcDate(season.startYear, 9, 1).getTime()
@@ -104,32 +118,88 @@ export function countWeekdayFrenchPublicHolidaysForSchoolSeason(season: SchoolSe
     .flatMap(getFrenchMetropolitanPublicHolidays)
     .filter(({ date }) => {
       const timestamp = date.getTime()
-      const day = date.getUTCDay()
-      return timestamp >= seasonStart && timestamp <= seasonEnd && day >= 1 && day <= 5
-    }).length
+      return timestamp >= seasonStart && timestamp <= seasonEnd
+    })
+    .sort((left, right) => left.date.getTime() - right.date.getTime())
+}
+
+export function isWeekday(date: Date): boolean {
+  const day = date.getUTCDay()
+  return day >= 1 && day <= 5
+}
+
+export function calculateCdiPublicHolidayHours({
+  annualContractHours,
+  fullTimeAnnualHours = CDI_FULL_TIME_ANNUAL_HOURS,
+  realizedHoursExcludingHolidays,
+  weekdayHolidayCount,
+}: {
+  annualContractHours: number
+  fullTimeAnnualHours?: number
+  realizedHoursExcludingHolidays: number
+  weekdayHolidayCount: number
+}): CdiPublicHolidayCalculation {
+  for (const [name, value] of [
+    ['annualContractHours', annualContractHours],
+    ['fullTimeAnnualHours', fullTimeAnnualHours],
+    ['weekdayHolidayCount', weekdayHolidayCount],
+  ] as Array<[string, number]>) {
+    if (!Number.isFinite(value) || value < 0) throw new RangeError(`${name} must be a finite, non-negative number`)
+  }
+  if (fullTimeAnnualHours <= 0) throw new RangeError('fullTimeAnnualHours must be greater than zero')
+  if (!Number.isFinite(realizedHoursExcludingHolidays)) {
+    throw new RangeError('realizedHoursExcludingHolidays must be finite')
+  }
+
+  const holidayFullTimeHours = weekdayHolidayCount * 7
+  if (holidayFullTimeHours >= fullTimeAnnualHours) {
+    throw new RangeError('weekdayHolidayCount produces an invalid full-time reference')
+  }
+
+  const contractCoefficient = annualContractHours / fullTimeAnnualHours
+  const contractHolidayHours = holidayFullTimeHours * contractCoefficient
+  const realizedWithContractCoefficient = realizedHoursExcludingHolidays + contractHolidayHours
+
+  if (realizedWithContractCoefficient < annualContractHours) {
+    return {
+      coefficient: contractCoefficient,
+      hoursPerHoliday: 7 * contractCoefficient,
+      totalHours: contractHolidayHours,
+      realizedHours: realizedWithContractCoefficient,
+      basis: 'contract',
+    }
+  }
+
+  // Once the annual contract is reached, the coefficient is based on the real total.
+  // As that total includes the holidays themselves, solve R = base + 7n × R / full-time.
+  const realizedHours = realizedHoursExcludingHolidays / (1 - holidayFullTimeHours / fullTimeAnnualHours)
+  const coefficient = realizedHours / fullTimeAnnualHours
+  const totalHours = holidayFullTimeHours * coefficient
+
+  return {
+    coefficient,
+    hoursPerHoliday: 7 * coefficient,
+    totalHours,
+    realizedHours,
+    basis: 'realized',
+  }
 }
 
 export function calculateAnnualSummary(input: AnnualSummaryInput): AnnualSummary {
   validateInput(input)
 
-  const fullTimeAnnualHours = input.fullTimeAnnualHours ?? DEFAULT_FULL_TIME_ANNUAL_HOURS
+  const isCdi = input.contractType === 'CDI'
   const ordinaryRealizedHours = input.calendarContractHours + input.calendarAbsenceHours
-  const calendarHolidayHours = input.contractType === 'CDI' ? 0 : input.calendarPublicHolidayHours
-  const contractualRealizedHours = ordinaryRealizedHours + calendarHolidayHours
-  const guaranteedBaseHours = Math.max(input.annualContractHours, ordinaryRealizedHours)
+  const contractualRealizedHours = isCdi
+    ? input.calendarContractHours + input.calendarPublicHolidayHours + input.calendarReplacementHours - input.calendarAbsenceHours
+    : ordinaryRealizedHours + input.calendarPublicHolidayHours
+  const guaranteedBaseHours = Math.max(input.annualContractHours, isCdi ? contractualRealizedHours : ordinaryRealizedHours)
   const overtimeHours = Math.max(0, contractualRealizedHours - input.annualContractHours)
-  const paidLeaveDueHours = input.contractType === 'CDI' ? guaranteedBaseHours * 0.1 : 0
-  const weekdayPublicHolidayCount = input.contractType === 'CDI'
-    ? countWeekdayFrenchPublicHolidaysForSchoolSeason(input.schoolSeason)
-    : 0
-  const publicHolidayDueHours = input.contractType === 'CDI'
-    ? (input.annualContractHours / fullTimeAnnualHours) * 7 * weekdayPublicHolidayCount
-    : 0
-  const dueContractualBaseHours = Math.max(guaranteedBaseHours, contractualRealizedHours)
-  const totalDueHours = dueContractualBaseHours
-    + input.calendarReplacementHours
-    + paidLeaveDueHours
-    + publicHolidayDueHours
+  const paidLeaveDueHours = isCdi ? guaranteedBaseHours * 0.1 : 0
+  const publicHolidayDueHours = isCdi ? input.calendarPublicHolidayHours : 0
+  const totalDueHours = isCdi
+    ? guaranteedBaseHours + paidLeaveDueHours
+    : Math.max(guaranteedBaseHours, contractualRealizedHours) + input.calendarReplacementHours
   const payslipTotalHours = input.payslipHours + input.payslipPaidLeaveHours
 
   return mapValuesToRoundedMinutes({
@@ -178,7 +248,7 @@ function validateInput(input: AnnualSummaryInput): void {
     }
   }
 
-  const fullTimeAnnualHours = input.fullTimeAnnualHours ?? DEFAULT_FULL_TIME_ANNUAL_HOURS
+  const fullTimeAnnualHours = input.fullTimeAnnualHours ?? CDI_FULL_TIME_ANNUAL_HOURS
   if (!Number.isFinite(fullTimeAnnualHours) || fullTimeAnnualHours <= 0) {
     throw new RangeError('fullTimeAnnualHours must be a finite number greater than zero')
   }

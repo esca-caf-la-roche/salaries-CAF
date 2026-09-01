@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   calculateAnnualSummary,
+  calculateCdiPublicHolidayHours,
   countWeekdayFrenchPublicHolidaysForSchoolSeason,
   formatHoursMinutes,
   getEasterSunday,
@@ -40,52 +41,37 @@ describe('French metropolitan public holidays', () => {
 })
 
 describe('calculateAnnualSummary', () => {
-  it('guarantees the CDI contract and adds paid leave plus the calculated holiday allowance', () => {
+  it('uses contract + holidays + replacements - absences as CDI realized hours', () => {
     const result = calculateAnnualSummary(baseInput)
 
     expect(result).toEqual({
-      contractualRealizedHours: 887 + 56 / 60,
+      contractualRealizedHours: 901 + 56 / 60,
       guaranteedBaseHours: 925,
       overtimeHours: 0,
       paidLeaveDueHours: 92.5,
-      publicHolidayDueHours: 45 + 1 / 60,
-      totalDueHours: 1062 + 31 / 60,
+      publicHolidayDueHours: 14,
+      totalDueHours: 1017.5,
       payslipTotalHours: 1020,
-      remainingToWorkHours: 37 + 4 / 60,
-      payBalanceHours: 42 + 31 / 60,
+      remainingToWorkHours: 23 + 4 / 60,
+      payBalanceHours: -2.5,
     })
   })
 
-  it('ignores CDI calendar holiday events and always adds replacements on top', () => {
-    const withoutCalendarHoliday = calculateAnnualSummary({
-      ...baseInput,
-      calendarReplacementHours: 12.5,
-      calendarPublicHolidayHours: 0,
-    })
-    const withCalendarHoliday = calculateAnnualSummary({
-      ...baseInput,
-      calendarReplacementHours: 12.5,
-      calendarPublicHolidayHours: 70,
-    })
-
-    expect(withCalendarHoliday).toEqual(withoutCalendarHoliday)
-    expect(withCalendarHoliday.totalDueHours).toBe(1075 + 1 / 60)
-  })
-
-  it('uses hours above the CDI contract as the guaranteed base and exposes them as overtime', () => {
+  it('includes automatic holidays and replacements and subtracts absences for a CDI', () => {
     const result = calculateAnnualSummary({
       ...baseInput,
       annualContractHours: 100,
       calendarContractHours: 110,
       calendarAbsenceHours: 5,
       calendarReplacementHours: 3,
+      calendarPublicHolidayHours: 7,
       payslipHours: 0,
     })
 
     expect(result.guaranteedBaseHours).toBe(115)
     expect(result.overtimeHours).toBe(15)
     expect(result.paidLeaveDueHours).toBe(11.5)
-    expect(result.totalDueHours).toBeGreaterThan(129.5)
+    expect(result.totalDueHours).toBe(126.5)
     expect(result.remainingToWorkHours).toBe(0)
   })
 
@@ -136,6 +122,36 @@ describe('calculateAnnualSummary', () => {
   it('rejects invalid hour totals and full-time references', () => {
     expect(() => calculateAnnualSummary({ ...baseInput, calendarAbsenceHours: -1 })).toThrow(RangeError)
     expect(() => calculateAnnualSummary({ ...baseInput, fullTimeAnnualHours: 0 })).toThrow(RangeError)
+  })
+})
+
+describe('calculateCdiPublicHolidayHours', () => {
+  it('uses the annual contract coefficient while realized hours stay below the contract', () => {
+    const result = calculateCdiPublicHolidayHours({
+      annualContractHours: 925,
+      fullTimeAnnualHours: 1582,
+      realizedHoursExcludingHolidays: 800,
+      weekdayHolidayCount: 9,
+    })
+
+    expect(result.basis).toBe('contract')
+    expect(result.coefficient).toBeCloseTo(925 / 1582)
+    expect(result.hoursPerHoliday).toBeCloseTo(7 * 925 / 1582)
+    expect(result.realizedHours).toBeCloseTo(800 + 9 * 7 * 925 / 1582)
+  })
+
+  it('uses the self-consistent realized-hours coefficient once the contract is reached', () => {
+    const result = calculateCdiPublicHolidayHours({
+      annualContractHours: 100,
+      fullTimeAnnualHours: 1582,
+      realizedHoursExcludingHolidays: 200,
+      weekdayHolidayCount: 10,
+    })
+
+    expect(result.basis).toBe('realized')
+    expect(result.coefficient).toBeCloseTo(result.realizedHours / 1582)
+    expect(result.totalHours).toBeCloseTo(result.hoursPerHoliday * 10)
+    expect(result.realizedHours).toBeCloseTo(200 + result.totalHours)
   })
 })
 

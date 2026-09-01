@@ -2,12 +2,16 @@ import { useEffect, useMemo, useState } from 'react'
 import { CalendarDays, ChevronDown, ClipboardCheck, Save, Sigma } from 'lucide-react'
 import {
   calculateAnnualSummary,
-  countWeekdayFrenchPublicHolidaysForSchoolSeason,
+  calculateCdiPublicHolidayHours,
+  CDI_FULL_TIME_ANNUAL_HOURS,
   formatHoursMinutes,
+  getFrenchPublicHolidaysForSchoolSeason,
+  isWeekday,
 } from '../lib/annualSummary'
 import { monthLabel, schoolMonths, schoolYearForDate } from '../lib/format'
 import { calculateRetainedHours } from '../lib/hourTotals'
 import { getEmployeeSummaries, getMonthlyEventHours, saveAnnualTracking } from '../services/api'
+import { getGovernmentPublicHolidaysForSchoolSeason } from '../services/publicHolidays'
 import type { EmployeeSummary, MonthlyEventHour, MonthlyHours, MonthlyPayrollEntry, SchoolYearSettings } from '../types'
 import { useAuth } from '../context/AuthContext'
 
@@ -45,6 +49,12 @@ function eventDate(iso: string) {
   return new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' }).format(new Date(iso))
 }
 
+function holidayDate(date: Date) {
+  return new Intl.DateTimeFormat('fr-FR', {
+    weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC',
+  }).format(date)
+}
+
 export function TimeTrackingPage() {
   const { user } = useAuth()
   const canEdit = user?.role === 'admin'
@@ -59,6 +69,8 @@ export function TimeTrackingPage() {
   const [error, setError] = useState('')
   const [saveMessage, setSaveMessage] = useState('')
   const [saving, setSaving] = useState(false)
+  const [publicHolidays, setPublicHolidays] = useState(() => getFrenchPublicHolidaysForSchoolSeason({ startYear: currentSchoolYear }))
+  const [holidaySource, setHolidaySource] = useState<'loading' | 'government' | 'fallback'>('loading')
   const [settingsDraft, setSettingsDraft] = useState({ annual: '', fullTime: '', paidMonths: '12' })
   const [payrollDraft, setPayrollDraft] = useState<Record<number, { paid: string; leave: string }>>({})
 
@@ -74,14 +86,30 @@ export function TimeTrackingPage() {
       .finally(() => setLoading(false))
   }, [schoolYear])
 
+  useEffect(() => {
+    let active = true
+    setPublicHolidays(getFrenchPublicHolidaysForSchoolSeason({ startYear: schoolYear }))
+    setHolidaySource('loading')
+    void getGovernmentPublicHolidaysForSchoolSeason({ startYear: schoolYear })
+      .then((holidays) => {
+        if (!active) return
+        setPublicHolidays(holidays)
+        setHolidaySource('government')
+      })
+      .catch(() => {
+        if (active) setHolidaySource('fallback')
+      })
+    return () => { active = false }
+  }, [schoolYear])
+
   const employee = employees.find((item) => item.id === selectedEmployeeId)
-  const months = useMemo(() => schoolMonths.map((month) => employee?.monthlyHours.find((item) => item.month === month) ?? emptyMonth(month)), [employee])
+  const calendarMonths = useMemo(() => schoolMonths.map((month) => employee?.monthlyHours.find((item) => item.month === month) ?? emptyMonth(month)), [employee])
 
   useEffect(() => {
     if (!employee) return
     setSettingsDraft({
       annual: formatHoursMinutes(employee.settings.annualContractMinutes / 60),
-      fullTime: formatHoursMinutes(employee.settings.fullTimeAnnualMinutes / 60),
+      fullTime: formatHoursMinutes(CDI_FULL_TIME_ANNUAL_HOURS),
       paidMonths: String(employee.settings.paidMonths),
     })
     setPayrollDraft(Object.fromEntries(schoolMonths.map((month) => {
@@ -103,12 +131,12 @@ export function TimeTrackingPage() {
       .finally(() => setEventsLoading(false))
   }, [employee, schoolYear, selectedMonth, view])
 
-  const totals = useMemo(() => months.reduce((sum, month) => ({
+  const calendarTotals = useMemo(() => calendarMonths.reduce((sum, month) => ({
     contract: sum.contract + month.contractHours,
     absence: sum.absence + month.absenceHours,
     replacement: sum.replacement + month.replacementHours,
     holiday: sum.holiday + month.publicHolidayHours,
-  }), { contract: 0, absence: 0, replacement: 0, holiday: 0 }), [months])
+  }), { contract: 0, absence: 0, replacement: 0, holiday: 0 }), [calendarMonths])
 
   const payrollEntries = useMemo<MonthlyPayrollEntry[]>(() => schoolMonths.map((month) => ({
     month,
@@ -118,11 +146,41 @@ export function TimeTrackingPage() {
   const payslipHours = payrollEntries.reduce((sum, entry) => sum + entry.paidMinutes, 0) / 60
   const payslipLeaveHours = payrollEntries.reduce((sum, entry) => sum + entry.paidLeaveMinutes, 0) / 60
   const annualMinutes = parseDuration(settingsDraft.annual)
-  const fullTimeMinutes = parseDuration(settingsDraft.fullTime)
+  const fullTimeMinutes = CDI_FULL_TIME_ANNUAL_HOURS * 60
   const paidMonths = Number(settingsDraft.paidMonths)
-  const validDraft = annualMinutes != null && annualMinutes > 0 && fullTimeMinutes != null && fullTimeMinutes > 0
+  const validContractDraft = annualMinutes != null && annualMinutes > 0 && fullTimeMinutes != null && fullTimeMinutes > 0
+  const validDraft = validContractDraft
     && Number.isInteger(paidMonths) && paidMonths >= 1 && paidMonths <= 12
     && schoolMonths.every((month) => parseDuration(payrollDraft[month]?.paid ?? '') != null && parseDuration(payrollDraft[month]?.leave ?? '') != null)
+
+  const weekdayHolidayCount = publicHolidays.filter(({ date }) => isWeekday(date)).length
+  const cdiHolidayCalculation = employee?.contractType === 'CDI' && validContractDraft
+    ? calculateCdiPublicHolidayHours({
+      annualContractHours: annualMinutes! / 60,
+      fullTimeAnnualHours: fullTimeMinutes! / 60,
+      realizedHoursExcludingHolidays: calendarTotals.contract + calendarTotals.replacement - calendarTotals.absence,
+      weekdayHolidayCount,
+    })
+    : null
+
+  const months = useMemo(() => calendarMonths.map((month) => {
+    if (!cdiHolidayCalculation) return month
+    const automaticHolidayHours = publicHolidays
+      .filter(({ date }) => date.getUTCMonth() + 1 === month.month && isWeekday(date))
+      .length * cdiHolidayCalculation.hoursPerHoliday
+    return {
+      ...month,
+      publicHolidayHours: automaticHolidayHours,
+      weightedHours: month.weightedHours - month.publicHolidayHours + automaticHolidayHours,
+    }
+  }), [calendarMonths, cdiHolidayCalculation, publicHolidays])
+
+  const totals = useMemo(() => months.reduce((sum, month) => ({
+    contract: sum.contract + month.contractHours,
+    absence: sum.absence + month.absenceHours,
+    replacement: sum.replacement + month.replacementHours,
+    holiday: sum.holiday + month.publicHolidayHours,
+  }), { contract: 0, absence: 0, replacement: 0, holiday: 0 }), [months])
 
   const annual = employee && validDraft ? calculateAnnualSummary({
     contractType: employee.contractType,
@@ -168,6 +226,12 @@ export function TimeTrackingPage() {
 
   const monthData = months.find((item) => item.month === selectedMonth) ?? emptyMonth(selectedMonth)
   const monthlyRetained = calculateRetainedHours(monthData)
+  const visibleEvents = employee?.contractType === 'CDI'
+    ? events.filter((event) => event.hourCategory !== 'public_holiday')
+    : events
+  const selectedMonthHolidays = employee?.contractType === 'CDI'
+    ? publicHolidays.filter(({ date }) => date.getUTCMonth() + 1 === selectedMonth)
+    : []
 
   return (
     <div className="page tracking-page">
@@ -178,6 +242,7 @@ export function TimeTrackingPage() {
 
       {error && <div className="alert alert--error" role="alert">{error}</div>}
       {saveMessage && <div className={`alert ${saveMessage.includes('enregistré') ? 'alert--success' : 'alert--warning'}`} role="status">{saveMessage}</div>}
+      {employee?.contractType === 'CDI' && holidaySource === 'fallback' && <div className="alert alert--warning" role="status">L’API gouvernementale des jours fériés est temporairement indisponible. Le calendrier métropolitain de secours est affiché.</div>}
 
       <section className="filters tracking-filters" aria-label="Filtres du suivi">
         <label><span>Salarié</span><div className="select-wrap"><select value={selectedEmployeeId} onChange={(event) => { setSelectedEmployeeId(event.target.value); setSaveMessage('') }} disabled={loading}><option value="">Sélectionner</option>{employees.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.contractType}</option>)}</select><ChevronDown aria-hidden="true" /></div></label>
@@ -194,7 +259,7 @@ export function TimeTrackingPage() {
 
       {employee && view === 'monthly' && <>
         <section className="metric-grid tracking-metrics" aria-label="Totaux du mois">
-          <article className="metric metric--lead"><p>Heures retenues</p><strong>{formatHoursMinutes(monthlyRetained)} <small>h</small></strong><span>{monthData.eventCount} événement{monthData.eventCount > 1 ? 's' : ''} configuré{monthData.eventCount > 1 ? 's' : ''}</span></article>
+          <article className="metric metric--lead"><p>Heures retenues</p><strong>{formatHoursMinutes(monthlyRetained)} <small>h</small></strong><span>{monthData.eventCount} événement{monthData.eventCount > 1 ? 's' : ''} calendrier · {selectedMonthHolidays.length} férié{selectedMonthHolidays.length > 1 ? 's' : ''}</span></article>
           <article className="metric"><p>Contrat</p><strong>{formatHoursMinutes(monthData.contractHours)} <small>h</small></strong><span>Avec et sans préparation</span></article>
           <article className="metric"><p>Absences</p><strong>{formatHoursMinutes(monthData.absenceHours)} <small>h</small></strong><span>Total des heures d’absence</span></article>
           <article className="metric"><p>Remplacements</p><strong>{formatHoursMinutes(monthData.replacementHours)} <small>h</small></strong><span>À payer en plus du contrat</span></article>
@@ -202,10 +267,14 @@ export function TimeTrackingPage() {
         </section>
         <section className="panel monthly-ledger">
           <div className="panel-heading"><div><p className="eyebrow">{monthLabel(selectedMonth)} · {employee.name}</p><h2>Détail des événements</h2></div><span className="ledger-total">Total pondéré <strong>{formatHoursMinutes(monthData.weightedHours)}</strong></span></div>
-          <div className="table-scroll"><table><thead><tr><th>Calendrier</th><th>Objet</th><th>Date</th><th>Début</th><th>Fin</th><th>Durée</th><th>Préparation</th><th>Rubrique</th></tr></thead><tbody>
-            {events.map((event) => <tr key={event.id}><td><span className="calendar-cell"><i style={{ background: event.calendarColor ?? '#91b7bd' }} />{event.calendarName}</span></td><td><strong>{event.title}</strong></td><td>{eventDate(event.startsAt)}</td><td>{eventTime(event.startsAt)}</td><td>{eventTime(event.endsAt)}</td><td>{formatHoursMinutes(event.weightedHours)}</td><td><span className="coefficient">× {event.coefficient.toLocaleString('fr-FR')}</span></td><td>{categoryLabels[event.hourCategory]}</td></tr>)}
-            {!eventsLoading && events.length === 0 && <tr><td colSpan={8} className="table-empty">Aucun événement configuré pour ce mois.</td></tr>}
-            {eventsLoading && <tr><td colSpan={8} className="table-empty">Chargement du détail…</td></tr>}
+          <div className="table-scroll"><table><thead><tr><th>Calendrier</th><th>Objet</th><th>Date</th><th>Début</th><th>Fin</th><th>Durée</th><th>Coefficient</th><th>Rubrique</th><th>Prise en compte</th></tr></thead><tbody>
+            {visibleEvents.map((event) => <tr key={event.id}><td><span className="calendar-cell"><i style={{ background: event.calendarColor ?? '#91b7bd' }} />{event.calendarName}</span></td><td><strong>{event.title}</strong></td><td>{eventDate(event.startsAt)}</td><td>{eventTime(event.startsAt)}</td><td>{eventTime(event.endsAt)}</td><td>{formatHoursMinutes(event.weightedHours)}</td><td><span className="coefficient">× {event.coefficient.toLocaleString('fr-FR')}</span></td><td>{categoryLabels[event.hourCategory]}</td><td><span className="holiday-status">Calendrier</span></td></tr>)}
+            {selectedMonthHolidays.map((holiday) => {
+              const counted = isWeekday(holiday.date)
+              return <tr className="holiday-row" key={`holiday-${holiday.date.toISOString()}`}><td><span className="calendar-cell"><i />API du gouvernement</span></td><td><strong>{holiday.name}</strong></td><td>{holidayDate(holiday.date)}</td><td>—</td><td>—</td><td>{formatHoursMinutes(counted ? (cdiHolidayCalculation?.hoursPerHoliday ?? 0) : 0)}</td><td><span className="coefficient">× {(cdiHolidayCalculation?.coefficient ?? 0).toLocaleString('fr-FR', { maximumFractionDigits: 4 })}</span></td><td>Jour férié</td><td><span className={`holiday-status holiday-status--${counted ? 'counted' : 'excluded'}`}>{counted ? 'Compté · lundi à vendredi' : 'Non compté · week-end'}</span></td></tr>
+            })}
+            {!eventsLoading && visibleEvents.length === 0 && selectedMonthHolidays.length === 0 && <tr><td colSpan={9} className="table-empty">Aucun événement configuré pour ce mois.</td></tr>}
+            {eventsLoading && <tr><td colSpan={9} className="table-empty">Chargement du détail…</td></tr>}
           </tbody></table></div>
         </section>
       </>}
@@ -214,7 +283,7 @@ export function TimeTrackingPage() {
         <section className="contract-strip" aria-label="Paramètres du contrat">
           <div><span>Contrat</span><strong>{employee.contractType}</strong></div>
           <label><span>Heures annuelles</span><input value={settingsDraft.annual} onChange={(event) => setSettingsDraft((state) => ({ ...state, annual: event.target.value }))} disabled={!canEdit} inputMode="decimal" aria-label="Heures annuelles du contrat" /></label>
-          {employee.contractType === 'CDI' && <label><span>Référence temps plein</span><input value={settingsDraft.fullTime} onChange={(event) => setSettingsDraft((state) => ({ ...state, fullTime: event.target.value }))} disabled={!canEdit} inputMode="decimal" aria-label="Heures annuelles à temps plein" /></label>}
+          {employee.contractType === 'CDI' && <label><span>Référence temps plein</span><input value={settingsDraft.fullTime} disabled aria-label="Heures annuelles à temps plein" /></label>}
           {employee.contractType !== 'CDI' && <label><span>Mois de paie</span><input type="number" min="1" max="12" value={settingsDraft.paidMonths} onChange={(event) => setSettingsDraft((state) => ({ ...state, paidMonths: event.target.value }))} disabled={!canEdit} aria-label="Nombre de mois payés" /></label>}
         </section>
 
@@ -239,10 +308,23 @@ export function TimeTrackingPage() {
           </tbody></table></div>
         </section>
 
+        {employee.contractType === 'CDI' && <section className="panel annual-holidays" aria-label="Jours fériés de la saison">
+          <div className="panel-heading"><div><p className="eyebrow">Source · API du gouvernement</p><h2>Jours fériés de la saison</h2></div><span className="contract-badge">{weekdayHolidayCount} comptés sur {publicHolidays.length}</span></div>
+          <div className="holiday-calendar">{schoolMonths.map((month) => {
+            const monthHolidays = publicHolidays.filter(({ date }) => date.getUTCMonth() + 1 === month)
+            return <article key={month}><h3>{monthLabel(month)}</h3>{monthHolidays.length === 0
+              ? <p className="holiday-calendar__empty">Aucun jour férié</p>
+              : monthHolidays.map((holiday) => {
+                const counted = isWeekday(holiday.date)
+                return <div className="holiday-calendar__day" key={holiday.date.toISOString()}><span><strong>{holiday.name}</strong><small>{holidayDate(holiday.date)}</small></span><span className={`holiday-status holiday-status--${counted ? 'counted' : 'excluded'}`}>{counted ? `${formatHoursMinutes(cdiHolidayCalculation?.hoursPerHoliday ?? 0)} · compté` : '0:00 · non compté'}</span></div>
+              })}</article>
+          })}</div>
+        </section>}
+
         <section className="calculation-note">
           <ClipboardCheck aria-hidden="true" />
           <div><strong>Règle appliquée pour {employee.contractType}</strong>{employee.contractType === 'CDI'
-            ? <p>Base garantie : maximum entre le contrat et les heures réalisées + absences. Congés : 10 % de cette base. Fériés : ratio exact {formatHoursMinutes(annualMinutes! / 60)} / {formatHoursMinutes(fullTimeMinutes! / 60)} × 7 h × {countWeekdayFrenchPublicHolidaysForSchoolSeason({ startYear: schoolYear })} jours ouvrés. Les remplacements s’ajoutent toujours.</p>
+            ? <p>Heures réelles : contrat + fériés + remplacements − absences. Fériés : 7 h × coefficient {cdiHolidayCalculation?.coefficient.toLocaleString('fr-FR', { maximumFractionDigits: 4 })} ({cdiHolidayCalculation?.basis === 'realized' ? 'heures réelles' : 'contrat annuel'} / {formatHoursMinutes(fullTimeMinutes! / 60)}), uniquement du lundi au vendredi. Base garantie : maximum entre le contrat annuel et {formatHoursMinutes(cdiHolidayCalculation?.realizedHours ?? 0)} h réelles. Congés : 10 % de cette base.</p>
             : <p>Base garantie : maximum entre le contrat et les heures réalisées, absences et fériés du calendrier. Aucun congé supplémentaire. Les remplacements s’ajoutent toujours.</p>}
           </div>
         </section>

@@ -6,11 +6,16 @@ import { TimeTrackingPage } from './TimeTrackingPage'
 const getEmployeeSummaries = vi.fn()
 const getMonthlyEventHours = vi.fn()
 const saveAnnualTracking = vi.fn()
+const getGovernmentPublicHolidaysForSchoolSeason = vi.fn()
 
 vi.mock('../services/api', () => ({
   getEmployeeSummaries: (...args: unknown[]) => getEmployeeSummaries(...args),
   getMonthlyEventHours: (...args: unknown[]) => getMonthlyEventHours(...args),
   saveAnnualTracking: (...args: unknown[]) => saveAnnualTracking(...args),
+}))
+
+vi.mock('../services/publicHolidays', () => ({
+  getGovernmentPublicHolidaysForSchoolSeason: (...args: unknown[]) => getGovernmentPublicHolidaysForSchoolSeason(...args),
 }))
 
 vi.mock('../context/AuthContext', () => ({
@@ -59,6 +64,10 @@ describe('TimeTrackingPage', () => {
       weightedHours: 2.5, coefficient: 1.25, hourCategory: 'contract', hasPreparation: true,
     }])
     saveAnnualTracking.mockResolvedValue(undefined)
+    getGovernmentPublicHolidaysForSchoolSeason.mockResolvedValue([
+      { name: 'Férié ouvré test', date: new Date('2026-09-07T00:00:00.000Z') },
+      { name: 'Férié week-end test', date: new Date('2026-09-06T00:00:00.000Z') },
+    ])
   })
 
   it('shows the event-level monthly ledger with weighted duration and category', async () => {
@@ -73,29 +82,36 @@ describe('TimeTrackingPage', () => {
   it('shows every hour-type total in the monthly summary', async () => {
     render(<TimeTrackingPage />)
 
+    await screen.findByText('Férié ouvré test')
     const totals = await screen.findByRole('region', { name: 'Totaux du mois' })
     expect(totals).toHaveTextContent('Contrat887:56')
     expect(totals).toHaveTextContent('Absences2:00')
     expect(totals).toHaveTextContent('Remplacements3:00')
-    expect(totals).toHaveTextContent('Fériés4:00')
-    expect(screen.getByText('Heures retenues').closest('article')).toHaveTextContent('892:56')
-    expect(screen.getByText('Total pondéré').closest('span')).toHaveTextContent('896:56')
+    expect(totals).toHaveTextContent('Fériés4:06')
+    expect(screen.getByText('Heures retenues').closest('article')).toHaveTextContent('893:02')
+    expect(screen.getByText('Total pondéré').closest('span')).toHaveTextContent('897:02')
+    expect(screen.getByText('Férié week-end test').closest('tr')).toHaveTextContent('dimanche')
+    expect(screen.getByText('Férié week-end test').closest('tr')).toHaveTextContent('Non compté · week-end')
   })
 
   it('switches to the annual sheet, calculates the contract remainder and saves payslips', async () => {
     render(<TimeTrackingPage />)
     await screen.findByRole('option', { name: 'Jérôme Test · CDI' })
+    await screen.findByText('Férié ouvré test')
 
     fireEvent.click(screen.getByRole('tab', { name: 'Synthèse annuelle' }))
 
-    expect(screen.getByText('35:04')).toBeInTheDocument()
+    expect(screen.getByText('31:58')).toBeInTheDocument()
     expect(screen.getByText('Référence temps plein')).toBeInTheDocument()
     expect(screen.getByText('Règle appliquée pour CDI')).toBeInTheDocument()
     expect(screen.getByRole('rowheader', { name: 'Heures du contrat' })).toBeInTheDocument()
     expect(screen.getByRole('rowheader', { name: 'Heures d’absences' })).toBeInTheDocument()
     expect(screen.getByRole('rowheader', { name: 'Heures de remplacements' })).toBeInTheDocument()
     expect(screen.getByRole('rowheader', { name: 'Heures fériées' })).toBeInTheDocument()
-    expect(screen.getByRole('rowheader', { name: 'Total du mois' }).closest('tr')).toHaveTextContent('892:56')
+    expect(screen.getByRole('rowheader', { name: 'Heures fériées' }).closest('tr')).toHaveTextContent('4:06')
+    expect(screen.getByRole('rowheader', { name: 'Total du mois' }).closest('tr')).toHaveTextContent('893:02')
+    expect(screen.getByRole('region', { name: 'Jours fériés de la saison' })).toHaveTextContent('lundi')
+    expect(screen.getByRole('region', { name: 'Jours fériés de la saison' })).toHaveTextContent('dimanche')
     expect(screen.queryByRole('rowheader', { name: /prépa/i })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer la saison' }))
 
