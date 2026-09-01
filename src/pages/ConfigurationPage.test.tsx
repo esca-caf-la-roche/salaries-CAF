@@ -55,7 +55,7 @@ describe('ConfigurationPage', () => {
     saveCoefficientCalendars.mockImplementation(async (calendars: UsedCalendarCoefficient[]) => calendars)
   })
 
-  it('shows employee resources and only detected event calendars', async () => {
+  it('shows employee resources and the seven Kanban destinations without dropdowns', async () => {
     render(<ConfigurationPage />)
 
     expect(await screen.findByText('(CDII)-Alice Martin')).toBeInTheDocument()
@@ -63,16 +63,21 @@ describe('ConfigurationPage', () => {
     expect(screen.getByText('E-mail de connexion')).toBeInTheDocument()
     expect(await screen.findByText('Cours du mardi')).toBeInTheDocument()
     expect(screen.getByText('course-1@group.calendar.google.com', { exact: false })).toBeInTheDocument()
-    expect(screen.getByText('Coefficient')).toBeInTheDocument()
-    expect(screen.getByText("Type d'heures")).toBeInTheDocument()
-    expect(screen.getAllByText('À définir').length).toBeGreaterThan(0)
+    const kanban = document.querySelector('#calendriers-utilises')
+    expect(kanban?.querySelectorAll('select')).toHaveLength(0)
+    expect(screen.getByRole('region', { name: 'À définir' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Avec prépa' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Sans prépa' })).toBeInTheDocument()
+    for (const name of ['Heures du contrat', "Heures d'absences", 'Heures de remplacements', 'Heures fériées']) {
+      expect(screen.getByRole('region', { name })).toBeInTheDocument()
+    }
     expect(screen.getByLabelText('Type de contrat de (CDII)-Alice Martin')).toHaveTextContent('CDII')
     expect(screen.getByRole('spinbutton', { name: 'Heures annuelles de (CDII)-Alice Martin' })).toHaveValue(820)
-    const calendarRow = screen.getByText('Cours du mardi').closest('.coefficient-row')
-    expect(calendarRow?.querySelector('.calendar-color')).toHaveStyle({ background: '#7986cb' })
+    const calendarCard = screen.getByText('Cours du mardi').closest('.kanban-card')
+    expect(calendarCard?.querySelector('.calendar-color')).toHaveStyle({ background: '#7986cb' })
   })
 
-  it('groups configured calendars by hour category, then preparation level', async () => {
+  it('places complete cards in their hour category with a preparation badge', async () => {
     getCoefficientCalendars.mockResolvedValue([
       { ...usedCalendar, googleCalendarId: 'contract-prep', name: 'Cours préparé', coefficient: 1.25, hourCategory: 'contract' },
       { ...usedCalendar, googleCalendarId: 'contract-direct', name: 'Cours direct', coefficient: 1, hourCategory: 'contract' },
@@ -82,12 +87,13 @@ describe('ConfigurationPage', () => {
 
     render(<ConfigurationPage />)
 
-    expect(await screen.findByRole('heading', { name: 'Heures du contrat' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: "Heures d'absences" })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'À définir' })).toBeInTheDocument()
-    expect(screen.getAllByText('Avec prépa')).toHaveLength(2)
-    expect(screen.getByText('Sans prépa')).toBeInTheDocument()
-    expect(screen.getByText('Coefficient manquant').closest('.hour-type-group')).toHaveClass('hour-type-group--undefined')
+    const contractLane = await screen.findByRole('region', { name: 'Heures du contrat' })
+    expect(contractLane).toHaveTextContent('Cours préparé')
+    expect(contractLane).toHaveTextContent('Cours direct')
+    expect(contractLane).toHaveTextContent('Avec prépa · × 1,25')
+    expect(contractLane).toHaveTextContent('Sans prépa · × 1')
+    expect(screen.getByRole('region', { name: "Heures d'absences" })).toHaveTextContent('Absence préparée')
+    expect(screen.getByRole('region', { name: 'À définir' })).toHaveTextContent('Coefficient manquant')
   })
 
   it('requires a valid login email before enabling a resource', async () => {
@@ -113,14 +119,17 @@ describe('ConfigurationPage', () => {
     ]))
   })
 
-  it('saves one of the two supported coefficients for a detected calendar', async () => {
+  it('moves a card through preparation and hour type before saving', async () => {
     render(<ConfigurationPage />)
-    fireEvent.change(await screen.findByRole('combobox', { name: "Type d'heures de Cours du mardi" }), {
-      target: { value: 'contract' },
-    })
-    fireEvent.change(await screen.findByRole('combobox', { name: 'Coefficient de Cours du mardi' }), {
-      target: { value: '1.25' },
-    })
+    fireEvent.click(await screen.findByRole('button', { name: /Cours du mardi, préparation à définir/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Déplacer Cours du mardi vers Avec prépa' }))
+
+    expect(screen.getByRole('region', { name: 'Avec prépa' })).toHaveTextContent('Cours du mardi')
+    expect(screen.getByRole('button', { name: /Cours du mardi, avec préparation/ })).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Enregistrer les règles' })).toBeDisabled()
+    expect(screen.getByText('Terminez le classement des cartes déplacées.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Déplacer Cours du mardi vers Heures du contrat' }))
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les règles' }))
 
     await waitFor(() => expect(saveCoefficientCalendars).toHaveBeenCalledWith([
@@ -128,40 +137,52 @@ describe('ConfigurationPage', () => {
     ]))
   })
 
-  it('saves a four-value hour category independently from the coefficient value', async () => {
+  it('supports native drag and drop through the two Kanban stages', async () => {
     render(<ConfigurationPage />)
-    fireEvent.change(await screen.findByRole('combobox', { name: "Type d'heures de Cours du mardi" }), {
-      target: { value: 'replacement' },
-    })
-    fireEvent.change(screen.getByRole('combobox', { name: 'Coefficient de Cours du mardi' }), {
-      target: { value: '1.25' },
-    })
+    const values = new Map<string, string>()
+    const dataTransfer = {
+      effectAllowed: 'none',
+      dropEffect: 'none',
+      setData: (type: string, value: string) => values.set(type, value),
+      getData: (type: string) => values.get(type) ?? '',
+    }
+    const card = await screen.findByRole('button', { name: /Cours du mardi, préparation à définir/ })
+    const prepLane = screen.getByRole('region', { name: 'Sans prépa' })
+    fireEvent.dragStart(card, { dataTransfer })
+    fireEvent.dragOver(prepLane, { dataTransfer })
+    fireEvent.drop(prepLane, { dataTransfer })
+
+    expect(prepLane).toHaveTextContent('Cours du mardi')
+    const replacementLane = screen.getByRole('region', { name: 'Heures de remplacements' })
+    fireEvent.dragOver(replacementLane, { dataTransfer })
+    fireEvent.drop(replacementLane, { dataTransfer })
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les règles' }))
 
     await waitFor(() => expect(saveCoefficientCalendars).toHaveBeenCalledWith([
-      expect.objectContaining({ googleCalendarId: usedCalendar.googleCalendarId, coefficient: 1.25, hourCategory: 'replacement' }),
+      expect.objectContaining({ googleCalendarId: usedCalendar.googleCalendarId, coefficient: 1, hourCategory: 'replacement' }),
     ]))
   })
 
-  it('requires both the hour category and coefficient before saving', async () => {
+  it('resets the hour type when a complete card changes preparation', async () => {
+    getCoefficientCalendars.mockResolvedValue([{ ...usedCalendar, coefficient: 1.25, hourCategory: 'contract' }])
     render(<ConfigurationPage />)
-    fireEvent.change(await screen.findByRole('combobox', { name: 'Coefficient de Cours du mardi' }), {
-      target: { value: '1' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les règles' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Cours du mardi, avec préparation/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Déplacer Cours du mardi vers Sans prépa' }))
 
-    expect(await screen.findByText("Définissez la catégorie d'heures et le coefficient de chaque calendrier modifié.")).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Sans prépa' })).toHaveTextContent('Cours du mardi')
+    expect(screen.getByRole('region', { name: 'Heures du contrat' })).not.toHaveTextContent('Cours du mardi')
+    expect(screen.getByRole('button', { name: 'Enregistrer les règles' })).toBeDisabled()
     expect(saveCoefficientCalendars).not.toHaveBeenCalled()
   })
 
-  it('does not save a category without its coefficient', async () => {
+  it('can return a complete card to the undefined starting lane', async () => {
+    getCoefficientCalendars.mockResolvedValue([{ ...usedCalendar, coefficient: 1, hourCategory: 'absence' }])
     render(<ConfigurationPage />)
-    fireEvent.change(await screen.findByRole('combobox', { name: "Type d'heures de Cours du mardi" }), {
-      target: { value: 'absence' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les règles' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Cours du mardi, sans préparation/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Déplacer Cours du mardi vers À définir' }))
 
-    expect(await screen.findByText("Définissez la catégorie d'heures et le coefficient de chaque calendrier modifié.")).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'À définir' })).toHaveTextContent('Cours du mardi')
+    expect(screen.getByRole('button', { name: 'Enregistrer les règles' })).toBeDisabled()
     expect(saveCoefficientCalendars).not.toHaveBeenCalled()
   })
 })

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, CircleAlert, Mail, RefreshCw, Search } from 'lucide-react'
+import { Check, CircleAlert, GripVertical, Mail, RefreshCw, Search } from 'lucide-react'
 import { discoverResources, getCoefficientCalendars, getResources, saveCoefficientCalendars, saveResources, startGoogleConnection } from '../services/api'
 import type { EmployeeResource, HourCategory, PreparationCoefficient, UsedCalendarCoefficient } from '../types'
 
@@ -10,44 +10,108 @@ const configuredHourCategories: Array<{ value: HourCategory; label: string }> = 
   { value: 'public_holiday', label: 'Heures fériées' },
 ]
 
-const hourCategoryOptions: Array<{ value: HourCategory | null; label: string }> = [
-  { value: null, label: 'À définir' },
-  ...configuredHourCategories,
-]
-
 const preparationGroups: Array<{ value: PreparationCoefficient; label: string; coefficientLabel: string }> = [
   { value: 1.25, label: 'Avec prépa', coefficientLabel: '× 1,25' },
   { value: 1, label: 'Sans prépa', coefficientLabel: '× 1' },
 ]
 
-interface CalendarRuleRowProps {
+type KanbanDestination =
+  | { kind: 'undefined' }
+  | { kind: 'preparation'; coefficient: PreparationCoefficient }
+  | { kind: 'category'; hourCategory: HourCategory }
+
+interface CalendarCardProps {
   calendar: UsedCalendarCoefficient
-  onHourCategoryChange: (googleCalendarId: string, hourCategory: HourCategory | null) => void
-  onCoefficientChange: (googleCalendarId: string, coefficient: PreparationCoefficient | null) => void
+  selected: boolean
+  onSelect: (googleCalendarId: string) => void
+  onDragStart: (googleCalendarId: string) => void
+  onDragEnd: () => void
 }
 
-function CalendarRuleRow({ calendar, onHourCategoryChange, onCoefficientChange }: CalendarRuleRowProps) {
+function CalendarCard({ calendar, selected, onSelect, onDragStart, onDragEnd }: CalendarCardProps) {
   return (
-    <article className="coefficient-row">
-      <div className="calendar-identity">
-        <i className="calendar-color" style={calendar.color ? { background: calendar.color } : undefined} aria-hidden="true" />
-        <span><strong>{calendar.name}</strong><small>{calendar.eventCount} événement{calendar.eventCount > 1 ? 's' : ''} · {calendar.googleCalendarId}</small></span>
+    <button
+      className={`kanban-card${selected ? ' kanban-card--selected' : ''}`}
+      type="button"
+      draggable
+      data-calendar-id={calendar.googleCalendarId}
+      aria-pressed={selected}
+      aria-label={`${calendar.name}, ${calendar.coefficient === 1.25 ? 'avec préparation' : calendar.coefficient === 1 ? 'sans préparation' : 'préparation à définir'}, identifiant ${calendar.googleCalendarId}`}
+      onClick={() => onSelect(calendar.googleCalendarId)}
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = 'move'
+        event.dataTransfer.setData('text/plain', calendar.googleCalendarId)
+        onDragStart(calendar.googleCalendarId)
+      }}
+      onDragEnd={onDragEnd}
+    >
+      <i className="calendar-color" style={calendar.color ? { background: calendar.color } : undefined} aria-hidden="true" />
+      <span className="kanban-card__content">
+        <strong>{calendar.name}</strong>
+        <small>{calendar.eventCount} événement{calendar.eventCount !== 1 ? 's' : ''} · {calendar.googleCalendarId}</small>
+        {calendar.coefficient != null && <em>{calendar.coefficient === 1.25 ? 'Avec prépa · × 1,25' : 'Sans prépa · × 1'}</em>}
+      </span>
+      <GripVertical aria-hidden="true" />
+    </button>
+  )
+}
+
+interface KanbanLaneProps {
+  id: string
+  title: string
+  caption: string
+  calendars: UsedCalendarCoefficient[]
+  destination: KanbanDestination
+  activeCalendarId: string | null
+  activeCalendarName: string | null
+  canReceive: boolean
+  variant?: 'undefined' | 'preparation' | 'category'
+  onSelect: (googleCalendarId: string) => void
+  onDragStart: (googleCalendarId: string) => void
+  onDragEnd: () => void
+  onMove: (googleCalendarId: string, destination: KanbanDestination) => void
+}
+
+function KanbanLane({ id, title, caption, calendars, destination, activeCalendarId, activeCalendarName, canReceive, variant = 'category', onSelect, onDragStart, onDragEnd, onMove }: KanbanLaneProps) {
+  return (
+    <section
+      className={`kanban-lane kanban-lane--${variant}${canReceive ? ' kanban-lane--available' : ''}`}
+      aria-labelledby={`${id}-title`}
+      onDragOver={(event) => {
+        if (!canReceive) return
+        event.preventDefault()
+        event.dataTransfer.dropEffect = 'move'
+      }}
+      onDrop={(event) => {
+        if (!canReceive) return
+        event.preventDefault()
+        const googleCalendarId = event.dataTransfer.getData('text/plain') || activeCalendarId
+        if (googleCalendarId) onMove(googleCalendarId, destination)
+      }}
+    >
+      <header className="kanban-lane__heading">
+        <span><strong id={`${id}-title`}>{title}</strong><small>{caption}</small></span>
+        <b aria-label={`${calendars.length} calendrier${calendars.length !== 1 ? 's' : ''}`}>{calendars.length}</b>
+      </header>
+      {canReceive && activeCalendarId && (
+        <button className="kanban-drop-action" type="button" aria-label={`Déplacer ${activeCalendarName ?? 'le calendrier'} vers ${title}`} onClick={() => onMove(activeCalendarId, destination)}>
+          Déplacer ici
+        </button>
+      )}
+      <div className="kanban-lane__cards">
+        {calendars.map((calendar) => (
+          <CalendarCard
+            calendar={calendar}
+            selected={activeCalendarId === calendar.googleCalendarId}
+            onSelect={onSelect}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            key={calendar.googleCalendarId}
+          />
+        ))}
+        {!calendars.length && <p className="kanban-empty">Déposez un calendrier ici</p>}
       </div>
-      <label className="coefficient-select">
-        <span className="sr-only">Type d'heures de {calendar.name}</span>
-        <select aria-label={`Type d'heures de ${calendar.name}`} value={calendar.hourCategory ?? ''} onChange={(event) => onHourCategoryChange(calendar.googleCalendarId, event.target.value === '' ? null : event.target.value as HourCategory)}>
-          {hourCategoryOptions.map((option) => <option key={option.value ?? 'undefined'} value={option.value ?? ''}>{option.label}</option>)}
-        </select>
-      </label>
-      <label className="coefficient-select">
-        <span className="sr-only">Coefficient de {calendar.name}</span>
-        <select aria-label={`Coefficient de ${calendar.name}`} value={calendar.coefficient ?? ''} onChange={(event) => onCoefficientChange(calendar.googleCalendarId, event.target.value === '' ? null : Number(event.target.value) as PreparationCoefficient)}>
-          <option value="">À définir</option>
-          <option value="1">Sans prépa · ×1</option>
-          <option value="1.25">Avec prépa · ×1,25</option>
-        </select>
-      </label>
-    </article>
+    </section>
   )
 }
 
@@ -64,32 +128,40 @@ export function ConfigurationPage() {
   const [coefficientDirty, setCoefficientDirty] = useState(new Set<string>())
   const [saving, setSaving] = useState(false)
   const [coefficientsSaving, setCoefficientsSaving] = useState(false)
+  const [activeCalendarId, setActiveCalendarId] = useState<string | null>(null)
+  const [movedCalendarId, setMovedCalendarId] = useState<string | null>(null)
+  const [kanbanAnnouncement, setKanbanAnnouncement] = useState('')
   const [message, setMessage] = useState('')
 
   useEffect(() => { void getResources().then(setResources).catch(() => setMessage('Les ressources n\'ont pas pu être chargées.')).finally(() => setLoading(false)) }, [])
   useEffect(() => { void getCoefficientCalendars().then(setCoefficientCalendars).catch(() => setMessage('Les calendriers utilisés n\'ont pas pu être chargés.')).finally(() => setCoefficientsLoading(false)) }, [])
+  useEffect(() => {
+    if (!movedCalendarId) return
+    const movedCard = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-calendar-id]'))
+      .find((element) => element.dataset.calendarId === movedCalendarId)
+    movedCard?.focus()
+    setMovedCalendarId(null)
+  }, [coefficientCalendars, movedCalendarId])
   const filtered = useMemo(() => {
     const normalizedQuery = query.toLocaleLowerCase('fr')
     return resources.filter((resource) => `${resource.name} ${resource.googleCalendarId} ${resource.loginEmail} ${resource.contractType ?? ''}`.toLocaleLowerCase('fr').includes(normalizedQuery))
   }, [resources, query])
   const enabledCount = resources.filter((resource) => resource.enabled).length
-  const groupedCalendars = useMemo(() => {
-    const categories = configuredHourCategories.map((category) => {
-      const populatedPreparationGroups = preparationGroups.map((preparation) => ({
-        ...preparation,
-        calendars: coefficientCalendars.filter((calendar) => calendar.hourCategory === category.value && calendar.coefficient === preparation.value),
-      })).filter((preparation) => preparation.calendars.length)
-      return {
-        ...category,
-        preparationGroups: populatedPreparationGroups,
-        calendarCount: populatedPreparationGroups.reduce((total, group) => total + group.calendars.length, 0),
-      }
-    }).filter((category) => category.calendarCount)
+  const kanbanCalendars = useMemo(() => {
     return {
-      undefinedCalendars: coefficientCalendars.filter((calendar) => calendar.hourCategory == null || calendar.coefficient == null),
-      categories,
+      undefinedCalendars: coefficientCalendars.filter((calendar) => calendar.coefficient == null),
+      preparationGroups: preparationGroups.map((preparation) => ({
+        ...preparation,
+        calendars: coefficientCalendars.filter((calendar) => calendar.coefficient === preparation.value && calendar.hourCategory == null),
+      })),
+      categories: configuredHourCategories.map((category) => ({
+        ...category,
+        calendars: coefficientCalendars.filter((calendar) => calendar.hourCategory === category.value && calendar.coefficient != null),
+      })),
     }
   }, [coefficientCalendars])
+  const activeCalendar = coefficientCalendars.find((calendar) => calendar.googleCalendarId === activeCalendarId) ?? null
+  const hasIncompleteDirtyRules = coefficientCalendars.some((calendar) => coefficientDirty.has(calendar.googleCalendarId) && (calendar.hourCategory == null || calendar.coefficient == null))
 
   const patchResource = (id: string, patch: Partial<EmployeeResource>) => {
     setResources((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item))
@@ -103,14 +175,43 @@ export function ConfigurationPage() {
     catch { setMessage('La détection a échoué. Reconnectez le compte Google puis réessayez.') }
     finally { setDiscovering(false) }
   }
-  const patchCoefficient = (googleCalendarId: string, coefficient: PreparationCoefficient | null) => {
-    setCoefficientCalendars((items) => items.map((item) => item.googleCalendarId === googleCalendarId ? { ...item, coefficient } : item))
-    setCoefficientDirty((items) => new Set(items).add(googleCalendarId))
-    setMessage('')
+  const selectCalendar = (googleCalendarId: string) => {
+    if (activeCalendarId === googleCalendarId) {
+      setActiveCalendarId(null)
+      setKanbanAnnouncement('Sélection annulée.')
+      return
+    }
+    setActiveCalendarId(googleCalendarId)
+    const calendar = coefficientCalendars.find((item) => item.googleCalendarId === googleCalendarId)
+    setKanbanAnnouncement(calendar ? `${calendar.name} sélectionné. Choisissez une destination.` : '')
   }
-  const patchHourCategory = (googleCalendarId: string, hourCategory: HourCategory | null) => {
-    setCoefficientCalendars((items) => items.map((item) => item.googleCalendarId === googleCalendarId ? { ...item, hourCategory } : item))
+  const moveCalendar = (googleCalendarId: string, destination: KanbanDestination) => {
+    const calendar = coefficientCalendars.find((item) => item.googleCalendarId === googleCalendarId)
+    if (!calendar) return
+    let patch: Pick<UsedCalendarCoefficient, 'coefficient' | 'hourCategory'>
+    let destinationLabel: string
+    if (destination.kind === 'undefined') {
+      if (calendar.coefficient == null && calendar.hourCategory == null) return
+      patch = { coefficient: null, hourCategory: null }
+      destinationLabel = 'À définir ; préparation et type d’heures remis à définir'
+    } else if (destination.kind === 'preparation') {
+      if (calendar.coefficient === destination.coefficient && calendar.hourCategory == null) return
+      patch = { coefficient: destination.coefficient, hourCategory: null }
+      destinationLabel = `${destination.coefficient === 1.25 ? 'Avec prépa' : 'Sans prépa'} ; choisissez maintenant le type d’heures`
+    } else {
+      if (calendar.coefficient == null) {
+        setKanbanAnnouncement('Choisissez d’abord avec ou sans prépa.')
+        return
+      }
+      if (calendar.hourCategory === destination.hourCategory) return
+      patch = { coefficient: calendar.coefficient, hourCategory: destination.hourCategory }
+      destinationLabel = configuredHourCategories.find((category) => category.value === destination.hourCategory)?.label ?? 'type d’heures'
+    }
+    setCoefficientCalendars((items) => items.map((item) => item.googleCalendarId === googleCalendarId ? { ...item, ...patch } : item))
     setCoefficientDirty((items) => new Set(items).add(googleCalendarId))
+    setActiveCalendarId(destination.kind === 'preparation' ? googleCalendarId : null)
+    setMovedCalendarId(googleCalendarId)
+    setKanbanAnnouncement(`${calendar.name} déplacé vers ${destinationLabel}.`)
     setMessage('')
   }
   const connectGoogle = async () => {
@@ -126,6 +227,7 @@ export function ConfigurationPage() {
     try {
       setCoefficientCalendars(await getCoefficientCalendars())
       setCoefficientDirty(new Set())
+      setActiveCalendarId(null)
       setMessage('Calendriers utilisés actualisés.')
     } catch { setMessage('La détection des calendriers utilisés a échoué.') }
     finally { setCoefficientsRefreshing(false) }
@@ -182,8 +284,8 @@ export function ConfigurationPage() {
       {message && <div className="alert alert--success" role="status">{message}</div>}
       <section className="setup-note">
         <span><CircleAlert aria-hidden="true" /></span>
-        <div><strong>Comment fonctionne le calcul ?</strong><p>Les heures annuelles fixent l'objectif du salarié. Chaque calendrier utilisé détermine indépendamment sa catégorie d'heures et le coefficient appliqué aux événements. Une saison va du 1er septembre au 31 août.</p></div>
-        <code>calendrier → catégorie + coefficient</code>
+        <div><strong>Comment fonctionne le calcul ?</strong><p>Les heures annuelles fixent l'objectif du salarié. Chaque calendrier choisit d'abord son niveau de préparation, puis son type d'heures. Une saison va du 1er septembre au 31 août.</p></div>
+        <code>calendrier → prépa → type d'heures</code>
       </section>
       <section className="panel configuration-panel">
         <div className="configuration-toolbar">
@@ -220,27 +322,85 @@ export function ConfigurationPage() {
             <RefreshCw className={coefficientsRefreshing ? 'spin' : ''} aria-hidden="true" /> {coefficientsRefreshing ? 'Actualisation…' : 'Actualiser les calendriers utilisés'}
           </button>
         </div>
-        <div className="coefficient-head" aria-hidden="true"><span>Calendrier d'origine</span><span>Type d'heures</span><span>Coefficient</span></div>
         {coefficientsLoading ? <div className="skeleton-list" aria-label="Chargement des calendriers utilisés"><i /><i /></div> : (
-          <div className="calendar-list hour-type-list">
-            {groupedCalendars.undefinedCalendars.length > 0 ? <section className="hour-type-group hour-type-group--undefined" aria-labelledby="hour-category-undefined">
-              <header className="hour-type-heading"><h3 id="hour-category-undefined">À définir</h3><span>{groupedCalendars.undefinedCalendars.length} calendrier{groupedCalendars.undefinedCalendars.length > 1 ? 's' : ''}</span></header>
-              <p className="hour-type-guidance">Complétez le type d'heures et le niveau de préparation.</p>
-              {groupedCalendars.undefinedCalendars.map((calendar) => <CalendarRuleRow calendar={calendar} onHourCategoryChange={patchHourCategory} onCoefficientChange={patchCoefficient} key={calendar.googleCalendarId} />)}
-            </section> : null}
-            {groupedCalendars.categories.map((category) => <section className="hour-type-group" aria-labelledby={`hour-category-${category.value}`} key={category.value}>
-              <header className="hour-type-heading"><h3 id={`hour-category-${category.value}`}>{category.label}</h3><span>{category.calendarCount} calendrier{category.calendarCount > 1 ? 's' : ''}</span></header>
-              <div className="preparation-list">
-                {category.preparationGroups.map((preparation) => <section className="preparation-group" aria-labelledby={`${category.value}-${preparation.value}`} key={preparation.value}>
-                  <header className="preparation-heading"><h4 id={`${category.value}-${preparation.value}`}>{preparation.label}</h4><span>{preparation.coefficientLabel}</span><small>{preparation.calendars.length}</small></header>
-                  {preparation.calendars.map((calendar) => <CalendarRuleRow calendar={calendar} onHourCategoryChange={patchHourCategory} onCoefficientChange={patchCoefficient} key={calendar.googleCalendarId} />)}
-                </section>)}
+          <div className="kanban-shell">
+            <div className="kanban-instructions">
+              <span><b>1</b> Choisissez la préparation</span>
+              <i aria-hidden="true" />
+              <span><b>2</b> Classez le type d'heures</span>
+              <p>Sélectionnez une carte puis cliquez sur « Déplacer ici », ou faites-la glisser.</p>
+            </div>
+            <p className="sr-only" aria-live="polite">{kanbanAnnouncement}</p>
+            {activeCalendar && <div className="kanban-selection" role="status"><span><i style={activeCalendar.color ? { background: activeCalendar.color } : undefined} />{activeCalendar.name} sélectionné</span><button type="button" onClick={() => setActiveCalendarId(null)}>Annuler</button></div>}
+            <div className="kanban-board">
+              <div className="kanban-stage kanban-stage--waiting">
+                <div className="kanban-stage__label"><b>Départ</b><span>Règles incomplètes</span></div>
+                <KanbanLane
+                  id="kanban-undefined"
+                  title="À définir"
+                  caption="Commencez par la préparation"
+                  calendars={kanbanCalendars.undefinedCalendars}
+                  destination={{ kind: 'undefined' }}
+                  activeCalendarId={activeCalendarId}
+                  activeCalendarName={activeCalendar?.name ?? null}
+                  canReceive={activeCalendar != null && (activeCalendar.coefficient != null || activeCalendar.hourCategory != null)}
+                  variant="undefined"
+                  onSelect={selectCalendar}
+                  onDragStart={setActiveCalendarId}
+                  onDragEnd={() => undefined}
+                  onMove={moveCalendar}
+                />
               </div>
-            </section>)}
+              <div className="kanban-stage">
+                <div className="kanban-stage__label"><b>Étape 1</b><span>Niveau de préparation</span></div>
+                <div className="kanban-stage__grid kanban-stage__grid--preparation">
+                  {kanbanCalendars.preparationGroups.map((preparation) => (
+                    <KanbanLane
+                      id={`kanban-preparation-${preparation.value}`}
+                      title={preparation.label}
+                      caption={`${preparation.coefficientLabel} · type remis à définir`}
+                      calendars={preparation.calendars}
+                      destination={{ kind: 'preparation', coefficient: preparation.value }}
+                      activeCalendarId={activeCalendarId}
+                      activeCalendarName={activeCalendar?.name ?? null}
+                      canReceive={activeCalendar != null && (activeCalendar.coefficient !== preparation.value || activeCalendar.hourCategory != null)}
+                      variant="preparation"
+                      onSelect={selectCalendar}
+                      onDragStart={setActiveCalendarId}
+                      onDragEnd={() => undefined}
+                      onMove={moveCalendar}
+                      key={preparation.value}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="kanban-stage">
+                <div className="kanban-stage__label"><b>Étape 2</b><span>Type d'heures</span></div>
+                <div className="kanban-stage__grid kanban-stage__grid--categories">
+                  {kanbanCalendars.categories.map((category) => (
+                    <KanbanLane
+                      id={`kanban-category-${category.value}`}
+                      title={category.label}
+                      caption="Destination finale"
+                      calendars={category.calendars}
+                      destination={{ kind: 'category', hourCategory: category.value }}
+                      activeCalendarId={activeCalendarId}
+                      activeCalendarName={activeCalendar?.name ?? null}
+                      canReceive={activeCalendar?.coefficient != null && activeCalendar.hourCategory !== category.value}
+                      onSelect={selectCalendar}
+                      onDragStart={setActiveCalendarId}
+                      onDragEnd={() => undefined}
+                      onMove={moveCalendar}
+                      key={category.value}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
             {!coefficientCalendars.length && <div className="empty-state"><Search aria-hidden="true" /><strong>Aucun calendrier utilisé détecté</strong><span>Activez une ressource puis lancez une synchronisation pour analyser ses événements.</span></div>}
           </div>
         )}
-        <footer className="configuration-footer"><span>{coefficientDirty.size ? `${coefficientDirty.size} règle${coefficientDirty.size > 1 ? 's' : ''} non enregistrée${coefficientDirty.size > 1 ? 's' : ''}` : <><Check aria-hidden="true" /> Règles de comptage à jour</>}</span><button className="button button--primary" type="button" onClick={() => void saveCoefficients()} disabled={!coefficientDirty.size || coefficientsSaving}>{coefficientsSaving ? 'Enregistrement…' : 'Enregistrer les règles'}</button></footer>
+        <footer className="configuration-footer"><span>{hasIncompleteDirtyRules ? 'Terminez le classement des cartes déplacées.' : coefficientDirty.size ? `${coefficientDirty.size} règle${coefficientDirty.size > 1 ? 's' : ''} non enregistrée${coefficientDirty.size > 1 ? 's' : ''}` : <><Check aria-hidden="true" /> Règles de comptage à jour</>}</span><button className="button button--primary" type="button" onClick={() => void saveCoefficients()} disabled={!coefficientDirty.size || hasIncompleteDirtyRules || coefficientsSaving}>{coefficientsSaving ? 'Enregistrement…' : 'Enregistrer les règles'}</button></footer>
       </section>
     </div>
   )
