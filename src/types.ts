@@ -1,6 +1,13 @@
 export type UserRole = 'admin' | 'employee'
 export type ContractType = 'CDI' | 'CDII' | 'CDD'
-export type HourCategory = 'contract' | 'absence' | 'replacement' | 'public_holiday'
+export type HourType =
+  | 'work_with_prep'
+  | 'work_without_prep'
+  | 'absence_with_prep'
+  | 'absence_without_prep'
+  | 'replacement_with_prep'
+  | 'replacement_without_prep'
+  | 'public_holiday_with_prep'
 
 export interface AppUser {
   id: string
@@ -31,7 +38,7 @@ export interface UsedCalendarCoefficient {
   googleCalendarId: string
   name: string
   coefficient: PreparationCoefficient | null
-  hourCategory: HourCategory
+  hourType: HourType | null
   eventCount: number
 }
 
@@ -39,10 +46,13 @@ export interface MonthlyHours {
   month: number
   rawHours: number
   weightedHours: number
-  contractHours: number
-  absenceHours: number
-  replacementHours: number
-  publicHolidayHours: number
+  workWithPrepHours: number
+  workWithoutPrepHours: number
+  absenceWithPrepHours: number
+  absenceWithoutPrepHours: number
+  replacementWithPrepHours: number
+  replacementWithoutPrepHours: number
+  publicHolidayWithPrepHours: number
   eventCount: number
 }
 

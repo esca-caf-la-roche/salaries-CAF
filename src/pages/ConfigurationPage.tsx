@@ -1,7 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, CircleAlert, Mail, RefreshCw, Search } from 'lucide-react'
 import { discoverResources, getCoefficientCalendars, getResources, saveCoefficientCalendars, saveResources, startGoogleConnection } from '../services/api'
-import type { EmployeeResource, HourCategory, PreparationCoefficient, UsedCalendarCoefficient } from '../types'
+import type { EmployeeResource, HourType, PreparationCoefficient, UsedCalendarCoefficient } from '../types'
+
+const hourTypeGroups: Array<{ value: HourType | null; label: string }> = [
+  { value: null, label: 'À définir' },
+  { value: 'work_with_prep', label: 'Avec prépa' },
+  { value: 'work_without_prep', label: 'Sans prépa' },
+  { value: 'absence_with_prep', label: 'Absences avec prépa' },
+  { value: 'absence_without_prep', label: 'Absences sans prépa' },
+  { value: 'replacement_with_prep', label: 'Remplacements avec prépa' },
+  { value: 'replacement_without_prep', label: 'Remplacements sans prépa' },
+  { value: 'public_holiday_with_prep', label: 'Fériés (avec prépa)' },
+]
 
 export function ConfigurationPage() {
   const [resources, setResources] = useState<EmployeeResource[]>([])
@@ -25,6 +36,10 @@ export function ConfigurationPage() {
     return resources.filter((resource) => `${resource.name} ${resource.googleCalendarId} ${resource.loginEmail} ${resource.contractType ?? ''}`.toLocaleLowerCase('fr').includes(normalizedQuery))
   }, [resources, query])
   const enabledCount = resources.filter((resource) => resource.enabled).length
+  const groupedCalendars = useMemo(() => hourTypeGroups.map((group) => ({
+    ...group,
+    calendars: coefficientCalendars.filter((calendar) => calendar.hourType === group.value),
+  })).filter((group) => group.calendars.length), [coefficientCalendars])
 
   const patchResource = (id: string, patch: Partial<EmployeeResource>) => {
     setResources((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item))
@@ -38,13 +53,13 @@ export function ConfigurationPage() {
     catch { setMessage('La détection a échoué. Reconnectez le compte Google puis réessayez.') }
     finally { setDiscovering(false) }
   }
-  const patchCoefficient = (googleCalendarId: string, coefficient: PreparationCoefficient) => {
+  const patchCoefficient = (googleCalendarId: string, coefficient: PreparationCoefficient | null) => {
     setCoefficientCalendars((items) => items.map((item) => item.googleCalendarId === googleCalendarId ? { ...item, coefficient } : item))
     setCoefficientDirty((items) => new Set(items).add(googleCalendarId))
     setMessage('')
   }
-  const patchHourCategory = (googleCalendarId: string, hourCategory: HourCategory) => {
-    setCoefficientCalendars((items) => items.map((item) => item.googleCalendarId === googleCalendarId ? { ...item, hourCategory } : item))
+  const patchHourType = (googleCalendarId: string, hourType: HourType | null) => {
+    setCoefficientCalendars((items) => items.map((item) => item.googleCalendarId === googleCalendarId ? { ...item, hourType } : item))
     setCoefficientDirty((items) => new Set(items).add(googleCalendarId))
     setMessage('')
   }
@@ -82,8 +97,8 @@ export function ConfigurationPage() {
   }
   const saveCoefficients = async () => {
     const changed = coefficientCalendars.filter((calendar) => coefficientDirty.has(calendar.googleCalendarId))
-    if (changed.some((calendar) => calendar.coefficient == null)) {
-      setMessage('Choisissez un coefficient pour chaque calendrier modifié.')
+    if (changed.some((calendar) => calendar.hourType == null || calendar.coefficient == null)) {
+      setMessage('Définissez le type d\'heures et le coefficient de chaque calendrier modifié.')
       return
     }
     setCoefficientsSaving(true)
@@ -112,8 +127,8 @@ export function ConfigurationPage() {
       {message && <div className="alert alert--success" role="status">{message}</div>}
       <section className="setup-note">
         <span><CircleAlert aria-hidden="true" /></span>
-        <div><strong>Comment fonctionne le calcul ?</strong><p>Chaque ressource regroupe ses événements. Leur calendrier d'origine détermine le coefficient et la rubrique annuelle : contrat, absence, remplacement ou férié. Une saison va du 1er septembre au 31 août.</p></div>
-        <code>ressource → calendrier → rubrique</code>
+        <div><strong>Comment fonctionne le calcul ?</strong><p>Les heures annuelles du contrat fixent l'objectif du salarié. Chaque calendrier utilisé détermine séparément le type d'heures et le coefficient appliqué aux événements. Une saison va du 1er septembre au 31 août.</p></div>
+        <code>calendrier → type + coefficient</code>
       </section>
       <section className="panel configuration-panel">
         <div className="configuration-toolbar">
@@ -143,36 +158,36 @@ export function ConfigurationPage() {
         )}
         <footer className="configuration-footer"><span>{dirty.size ? `${dirty.size} modification${dirty.size > 1 ? 's' : ''} non enregistrée${dirty.size > 1 ? 's' : ''}` : <><Check aria-hidden="true" /> Configuration à jour</>}</span><button className="button button--primary" type="button" onClick={() => void save()} disabled={!dirty.size || saving}>{saving ? 'Enregistrement…' : 'Enregistrer les modifications'}</button></footer>
       </section>
-      <section className="panel configuration-panel coefficient-panel">
+      <section className="panel configuration-panel coefficient-panel" id="calendriers-utilises">
         <div className="configuration-toolbar">
           <div><p className="eyebrow">Calendriers utilisés</p><h2>{coefficientCalendars.length} calendrier{coefficientCalendars.length > 1 ? 's' : ''} détecté{coefficientCalendars.length > 1 ? 's' : ''}</h2></div>
           <button className="button button--secondary" type="button" onClick={() => void refreshCoefficients()} disabled={coefficientsRefreshing}>
             <RefreshCw className={coefficientsRefreshing ? 'spin' : ''} aria-hidden="true" /> {coefficientsRefreshing ? 'Actualisation…' : 'Actualiser les calendriers utilisés'}
           </button>
         </div>
-        <div className="coefficient-head" aria-hidden="true"><span>Calendrier d'origine</span><span>Comptage annuel</span><span>Coefficient</span></div>
+        <div className="coefficient-head" aria-hidden="true"><span>Calendrier d'origine</span><span>Type d'heures</span><span>Coefficient</span></div>
         {coefficientsLoading ? <div className="skeleton-list" aria-label="Chargement des calendriers utilisés"><i /><i /></div> : (
-          <div className="calendar-list">
-            {coefficientCalendars.map((calendar) => <article className="coefficient-row" key={calendar.googleCalendarId}>
-              <div className="calendar-identity"><i /><span><strong>{calendar.name}</strong><small>{calendar.eventCount} événement{calendar.eventCount > 1 ? 's' : ''} · {calendar.googleCalendarId}</small></span></div>
-              <label className="coefficient-select">
-                <span className="sr-only">Comptage annuel de {calendar.name}</span>
-                <select aria-label={`Comptage annuel de ${calendar.name}`} value={calendar.hourCategory} onChange={(event) => patchHourCategory(calendar.googleCalendarId, event.target.value as HourCategory)}>
-                  <option value="contract">Heures du contrat</option>
-                  <option value="absence">Heures d'absence</option>
-                  <option value="replacement">Heures de remplacement</option>
-                  <option value="public_holiday">Heures fériées</option>
-                </select>
-              </label>
-              <label className="coefficient-select">
-                <span className="sr-only">Coefficient de {calendar.name}</span>
-                <select value={calendar.coefficient ?? ''} onChange={(event) => patchCoefficient(calendar.googleCalendarId, Number(event.target.value) as PreparationCoefficient)}>
-                  <option value="" disabled>Choisir…</option>
-                  <option value="1">Sans prépa · ×1</option>
-                  <option value="1.25">Avec prépa · ×1,25</option>
-                </select>
-              </label>
-            </article>)}
+          <div className="calendar-list hour-type-list">
+            {groupedCalendars.map((group) => <section className={group.value == null ? 'hour-type-group hour-type-group--undefined' : 'hour-type-group'} key={group.value ?? 'undefined'}>
+              <header className="hour-type-heading"><strong>{group.label}</strong><span>{group.calendars.length} calendrier{group.calendars.length > 1 ? 's' : ''}</span></header>
+              {group.calendars.map((calendar) => <article className="coefficient-row" key={calendar.googleCalendarId}>
+                <div className="calendar-identity"><i /><span><strong>{calendar.name}</strong><small>{calendar.eventCount} événement{calendar.eventCount > 1 ? 's' : ''} · {calendar.googleCalendarId}</small></span></div>
+                <label className="coefficient-select">
+                  <span className="sr-only">Type d'heures de {calendar.name}</span>
+                  <select aria-label={`Type d'heures de ${calendar.name}`} value={calendar.hourType ?? ''} onChange={(event) => patchHourType(calendar.googleCalendarId, event.target.value === '' ? null : event.target.value as HourType)}>
+                    {hourTypeGroups.map((option) => <option key={option.value ?? 'undefined'} value={option.value ?? ''}>{option.label}</option>)}
+                  </select>
+                </label>
+                <label className="coefficient-select">
+                  <span className="sr-only">Coefficient de {calendar.name}</span>
+                  <select aria-label={`Coefficient de ${calendar.name}`} value={calendar.coefficient ?? ''} onChange={(event) => patchCoefficient(calendar.googleCalendarId, event.target.value === '' ? null : Number(event.target.value) as PreparationCoefficient)}>
+                    <option value="">À définir</option>
+                    <option value="1">Sans prépa · ×1</option>
+                    <option value="1.25">Avec prépa · ×1,25</option>
+                  </select>
+                </label>
+              </article>)}
+            </section>)}
             {!coefficientCalendars.length && <div className="empty-state"><Search aria-hidden="true" /><strong>Aucun calendrier utilisé détecté</strong><span>Activez une ressource puis lancez une synchronisation pour analyser ses événements.</span></div>}
           </div>
         )}

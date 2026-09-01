@@ -27,13 +27,22 @@ function mapResource(resource: Record<string, unknown>): EmployeeResource {
 
 function mapCoefficientCalendar(calendar: Record<string, unknown>): UsedCalendarCoefficient {
   const coefficient = calendar.coefficient == null ? null : Number(calendar.coefficient)
+  const supportedHourTypes = [
+    'work_with_prep',
+    'work_without_prep',
+    'absence_with_prep',
+    'absence_without_prep',
+    'replacement_with_prep',
+    'replacement_without_prep',
+    'public_holiday_with_prep',
+  ]
   return {
     googleCalendarId: String(calendar.google_calendar_id),
     name: String(calendar.label ?? calendar.google_calendar_id),
     coefficient: coefficient === 1 || coefficient === 1.25 ? coefficient : null,
-    hourCategory: ['contract', 'absence', 'replacement', 'public_holiday'].includes(String(calendar.hour_category))
-      ? calendar.hour_category as UsedCalendarCoefficient['hourCategory']
-      : 'contract',
+    hourType: supportedHourTypes.includes(String(calendar.hour_type))
+      ? calendar.hour_type as UsedCalendarCoefficient['hourType']
+      : null,
     eventCount: Number(calendar.event_count ?? 0),
   }
 }
@@ -105,7 +114,7 @@ export async function saveCoefficientCalendars(calendars: UsedCalendarCoefficien
       calendars: calendars.map((calendar) => ({
         googleCalendarId: calendar.googleCalendarId,
         coefficient: calendar.coefficient,
-        hourCategory: calendar.hourCategory,
+        hourType: calendar.hourType,
       })),
     },
   })
@@ -144,7 +153,7 @@ export async function runIncrementalSync(): Promise<SyncState> {
     lastSyncedAt: new Date().toISOString(),
     message: failed.length
       ? `${synced} calendrier(s) synchronisé(s), ${failed.length} en erreur.`
-      : `${synced} ressource(s) synchronisée(s).${unmapped ? ` ${unmapped} événement(s) ignoré(s) car leur calendrier d'origine n'a pas de coefficient.` : ''}`,
+      : `${synced} ressource(s) synchronisée(s).${unmapped ? ` ${unmapped} événement(s) ignoré(s) car leur calendrier d'origine n'a pas de type d'heures et de coefficient définis.` : ''}`,
   }
 }
 
@@ -155,7 +164,7 @@ export async function getEmployeeSummaries(schoolYear: number): Promise<Employee
   }
   const { data, error } = await supabase
     .from('monthly_hours')
-    .select('employee_id, employee_name, calendar_name, month, raw_hours, weighted_hours, contract_hours, absence_hours, replacement_hours, public_holiday_hours, event_count')
+    .select('employee_id, employee_name, calendar_name, month, raw_hours, weighted_hours, work_with_prep_hours, work_without_prep_hours, absence_with_prep_hours, absence_without_prep_hours, replacement_with_prep_hours, replacement_without_prep_hours, public_holiday_with_prep_hours, event_count')
     .eq('school_year', schoolYear)
   if (error) throw error
 
@@ -171,10 +180,13 @@ export async function getEmployeeSummaries(schoolYear: number): Promise<Employee
       month: row.month,
       rawHours: Number(row.raw_hours),
       weightedHours: Number(row.weighted_hours),
-      contractHours: Number(row.contract_hours ?? 0),
-      absenceHours: Number(row.absence_hours ?? 0),
-      replacementHours: Number(row.replacement_hours ?? 0),
-      publicHolidayHours: Number(row.public_holiday_hours ?? 0),
+      workWithPrepHours: Number(row.work_with_prep_hours ?? 0),
+      workWithoutPrepHours: Number(row.work_without_prep_hours ?? 0),
+      absenceWithPrepHours: Number(row.absence_with_prep_hours ?? 0),
+      absenceWithoutPrepHours: Number(row.absence_without_prep_hours ?? 0),
+      replacementWithPrepHours: Number(row.replacement_with_prep_hours ?? 0),
+      replacementWithoutPrepHours: Number(row.replacement_without_prep_hours ?? 0),
+      publicHolidayWithPrepHours: Number(row.public_holiday_with_prep_hours ?? 0),
       eventCount: row.event_count,
     })
     grouped.set(row.employee_id, employee)

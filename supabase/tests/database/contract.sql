@@ -50,15 +50,33 @@ begin
   end if;
   if not exists (
     select 1 from information_schema.columns
-    where table_schema = 'public' and table_name = 'coefficient_rules' and column_name = 'hour_category'
+    where table_schema = 'public' and table_name = 'coefficient_rules' and column_name = 'hour_type'
   ) then
-    raise exception 'La rubrique de comptage annuel est absente';
+    raise exception 'Le type d''heures est absent';
+  end if;
+  if (
+    select count(*) from public.coefficient_rules
+    where report_column in (
+      'Avec prépa', 'Sans prépa', 'Absences avec prépa', 'Absences sans prépa',
+      'Remplacements avec prépa', 'Remplacements sans prépa', 'Fériés (avec prépa)'
+    ) and hour_type is not null and coefficient in (1, 1.25)
+  ) < 38 then
+    raise exception 'La configuration CSV des calendriers est incomplète';
   end if;
   if not exists (
     select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'monthly_hours' and column_name = 'school_year'
   ) then
     raise exception 'La saison scolaire est absente de monthly_hours';
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'monthly_hours' and column_name = 'work_with_prep_hours'
+  ) or not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'monthly_hours' and column_name = 'replacement_without_prep_hours'
+  ) then
+    raise exception 'La répartition par type d''heures est incomplète';
   end if;
   if not exists (
     select 1 from information_schema.columns

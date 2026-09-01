@@ -21,7 +21,7 @@ type ResourceUpdate = {
   id?: string; enabled?: boolean; loginEmail?: string;
   annualContractHours?: number;
 };
-type CoefficientUpdate = { googleCalendarId?: string; coefficient?: number; hourCategory?: string };
+type CoefficientUpdate = { googleCalendarId?: string; coefficient?: number; hourType?: string };
 
 const UNASSIGNED_RESOURCE_NAME = "(CDII)-A DETERMINER";
 
@@ -284,7 +284,7 @@ async function saveCoefficients(admin: SupabaseClient, ownerId: string, updates:
   const normalizedUpdates = updates.map((update) => ({
     googleCalendarId: normalizeEmail(update.googleCalendarId),
     coefficient: Number(update.coefficient),
-    hourCategory: String(update.hourCategory ?? "").trim().toLowerCase(),
+    hourType: String(update.hourType ?? "").trim().toLowerCase(),
   }));
   if (normalizedUpdates.some((update) =>
     !update.googleCalendarId || (update.coefficient !== 1 && update.coefficient !== 1.25)
@@ -292,9 +292,17 @@ async function saveCoefficients(admin: SupabaseClient, ownerId: string, updates:
     throw new HttpError(400, "Coefficient invalide : choisissez 1 ou 1,25");
   }
   if (normalizedUpdates.some((update) =>
-    !["contract", "absence", "replacement", "public_holiday"].includes(update.hourCategory)
+    ![
+      "work_with_prep",
+      "work_without_prep",
+      "absence_with_prep",
+      "absence_without_prep",
+      "replacement_with_prep",
+      "replacement_without_prep",
+      "public_holiday_with_prep",
+    ].includes(update.hourType)
   )) {
-    throw new HttpError(400, "Type de comptage invalide");
+    throw new HttpError(400, "Type d'heures invalide");
   }
   if (new Set(normalizedUpdates.map((update) => update.googleCalendarId)).size !== normalizedUpdates.length) {
     throw new HttpError(400, "Un calendrier ne peut être configuré qu'une seule fois");
@@ -413,7 +421,7 @@ async function sync(admin: SupabaseClient, ownerId: string, calendarIds?: string
   if (error) throw error;
   const token = await getAccessToken(admin, connection.id);
   const { data: rules, error: rulesError } = await admin.from("coefficient_rules")
-    .select("id,google_calendar_id").eq("active", true);
+    .select("id,google_calendar_id").eq("active", true).not("hour_type", "is", null);
   if (rulesError) throw rulesError;
   const ruleByGoogleId = new Map((rules ?? []).map((rule) => [normalizeEmail(rule.google_calendar_id), { id: rule.id }]));
   const results = [];
