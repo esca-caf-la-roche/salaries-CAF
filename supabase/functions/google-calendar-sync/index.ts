@@ -1,4 +1,5 @@
 import { corsHeaders, errorResponse, HttpError, json } from "../_shared/http.ts";
+import { detectContractType } from "../_shared/contracts.ts";
 import { getAccessToken, googleFetch } from "../_shared/google.ts";
 import { requireAdmin } from "../_shared/supabase.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.112.4";
@@ -18,7 +19,7 @@ type GoogleEvent = {
 
 type ResourceUpdate = {
   id?: string; enabled?: boolean; loginEmail?: string;
-  contractType?: string; annualContractHours?: number;
+  annualContractHours?: number;
 };
 type CoefficientUpdate = { googleCalendarId?: string; coefficient?: number; hourCategory?: string };
 
@@ -96,10 +97,18 @@ async function discover(admin: SupabaseClient, ownerId: string) {
       display_name: calendar.name,
       active: isUnassignedResourceName(calendar.name),
       is_unassigned_resource: isUnassignedResourceName(calendar.name),
+      contract_type: isUnassignedResourceName(calendar.name) ? null : detectContractType(calendar.name),
     }));
   if (newEmployees.length) {
     const { error: employeeError } = await admin.from("employees").insert(newEmployees);
     if (employeeError) throw employeeError;
+  }
+  for (const calendar of storedResources ?? []) {
+    if (isUnassignedResourceName(calendar.name)) continue;
+    const { error: contractError } = await admin.from("employees").update({
+      contract_type: detectContractType(calendar.name),
+    }).eq("resource_calendar_id", calendar.id);
+    if (contractError) throw contractError;
   }
   const specialCalendarIds = (storedResources ?? [])
     .filter((calendar) => isUnassignedResourceName(calendar.name))
@@ -193,23 +202,30 @@ async function saveResources(admin: SupabaseClient, ownerId: string, updates: Re
   if (!Array.isArray(updates) || !updates.length) return { resources: await resourcePayload(admin, connection.id) };
   const ids = updates.map((update) => String(update.id ?? ""));
   const { data: employees, error } = await admin.from("employees")
-    .select("id,resource_calendar_id,is_unassigned_resource,calendars!inner(connection_id,is_resource)").in("id", ids)
+    .select("id,resource_calendar_id,is_unassigned_resource,calendars!inner(connection_id,is_resource,name)").in("id", ids)
     .eq("calendars.connection_id", connection.id).eq("calendars.is_resource", true);
   if (error) throw error;
   const allowedIds = new Set((employees ?? []).map((employee) => employee.id));
   if (allowedIds.size !== new Set(ids).size) throw new HttpError(400, "Ressource Google inconnue");
 
-  const specialById = new Map((employees ?? []).map((employee) => [employee.id, Boolean(employee.is_unassigned_resource)]));
+  const resourceDetailsById = new Map((employees ?? []).map((employee) => {
+    const calendar = Array.isArray(employee.calendars) ? employee.calendars[0] : employee.calendars;
+    return [employee.id, {
+      isUnassignedResource: Boolean(employee.is_unassigned_resource),
+      contractType: detectContractType(calendar?.name),
+    }];
+  }));
   const normalizedUpdates = updates.map((update) => {
     const id = String(update.id);
-    const isUnassignedResource = specialById.get(id) ?? false;
+    const details = resourceDetailsById.get(id);
+    const isUnassignedResource = details?.isUnassignedResource ?? false;
     const annualHoursText = String(update.annualContractHours ?? "").trim();
     const annualContractHours = annualHoursText === "" ? null : Number(annualHoursText);
     return {
       id,
       enabled: isUnassignedResource ? true : Boolean(update.enabled),
       loginEmail: isUnassignedResource ? "" : normalizeEmail(update.loginEmail),
-      contractType: isUnassignedResource ? "" : String(update.contractType ?? "").trim().toUpperCase(),
+      contractType: isUnassignedResource ? "" : details?.contractType ?? "",
       annualContractHours: isUnassignedResource ? null : (annualContractHours != null && Number.isFinite(annualContractHours) ? annualContractHours : null),
       isUnassignedResource,
     };

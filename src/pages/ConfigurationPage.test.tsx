@@ -7,7 +7,7 @@ const resource: EmployeeResource = {
   id: 'employee-1',
   calendarId: 'calendar-1',
   googleCalendarId: 'employee-1@resource.calendar.google.com',
-  name: 'Alice Martin',
+  name: '(CDII)-Alice Martin',
   color: '#3f7f73',
   enabled: false,
   loginEmail: '',
@@ -57,15 +57,15 @@ describe('ConfigurationPage', () => {
   it('shows employee resources and only detected event calendars', async () => {
     render(<ConfigurationPage />)
 
-    expect(await screen.findByText('Alice Martin')).toBeInTheDocument()
+    expect(await screen.findByText('(CDII)-Alice Martin')).toBeInTheDocument()
     expect(screen.getByText('employee-1@resource.calendar.google.com', { exact: false })).toBeInTheDocument()
     expect(screen.getByText('E-mail de connexion')).toBeInTheDocument()
     expect(await screen.findByText('Cours du mardi')).toBeInTheDocument()
     expect(screen.getByText('course-1@group.calendar.google.com', { exact: false })).toBeInTheDocument()
     expect(screen.getByText('Coefficient')).toBeInTheDocument()
     expect(screen.getByText('Comptage annuel')).toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: 'Type de contrat de Alice Martin' })).toHaveValue('CDII')
-    expect(screen.getByRole('spinbutton', { name: 'Heures annuelles de Alice Martin' })).toHaveValue(820)
+    expect(screen.getByLabelText('Type de contrat de (CDII)-Alice Martin')).toHaveTextContent('CDII')
+    expect(screen.getByRole('spinbutton', { name: 'Heures annuelles de (CDII)-Alice Martin' })).toHaveValue(820)
   })
 
   it('requires a valid login email before enabling a resource', async () => {
@@ -74,14 +74,14 @@ describe('ConfigurationPage', () => {
     fireEvent.click(toggle)
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les modifications' }))
 
-    expect(await screen.findByText('Ajoutez un e-mail de connexion valide pour Alice Martin.')).toBeInTheDocument()
+    expect(await screen.findByText('Ajoutez un e-mail de connexion valide pour (CDII)-Alice Martin.')).toBeInTheDocument()
     expect(saveResources).not.toHaveBeenCalled()
   })
 
   it('saves the selected resource with its normalized login field', async () => {
     render(<ConfigurationPage />)
     fireEvent.click(await screen.findByRole('checkbox'))
-    fireEvent.change(screen.getByRole('textbox', { name: 'E-mail de connexion de Alice Martin' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'E-mail de connexion de (CDII)-Alice Martin' }), {
       target: { value: 'alice@example.fr' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les modifications' }))

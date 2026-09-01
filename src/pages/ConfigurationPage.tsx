@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, CircleAlert, Mail, RefreshCw, Search } from 'lucide-react'
 import { discoverResources, getCoefficientCalendars, getResources, saveCoefficientCalendars, saveResources, startGoogleConnection } from '../services/api'
-import type { ContractType, EmployeeResource, HourCategory, PreparationCoefficient, UsedCalendarCoefficient } from '../types'
+import type { EmployeeResource, HourCategory, PreparationCoefficient, UsedCalendarCoefficient } from '../types'
 
 export function ConfigurationPage() {
   const [resources, setResources] = useState<EmployeeResource[]>([])
@@ -130,7 +130,7 @@ export function ConfigurationPage() {
                 : <label className="switch"><input type="checkbox" checked={resource.enabled} onChange={(event) => patchResource(resource.id, { enabled: event.target.checked })} /><span aria-hidden="true" /><em>{resource.enabled ? 'Suivie' : 'Ignorée'}</em></label>}
               {resource.isUnassignedResource
                 ? <span className="not-applicable">Sans contrat</span>
-                : <label className="compact-select"><span className="sr-only">Type de contrat de {resource.name}</span><select aria-label={`Type de contrat de ${resource.name}`} value={resource.contractType ?? ''} onChange={(event) => patchResource(resource.id, { contractType: (event.target.value || null) as ContractType | null })}><option value="">Choisir…</option><option value="CDI">CDI</option><option value="CDII">CDII</option><option value="CDD">CDD</option></select></label>}
+                : <span className="not-applicable" aria-label={`Type de contrat de ${resource.name}`}>{resource.contractType ?? 'Non détecté'}</span>}
               {resource.isUnassignedResource
                 ? <span className="not-applicable">—</span>
                 : <label className="hours-input"><span className="sr-only">Heures annuelles de {resource.name}</span><input aria-label={`Heures annuelles de ${resource.name}`} type="number" min="0.01" step="0.01" placeholder="Ex. 1607" value={resource.annualContractHours ?? ''} onChange={(event) => patchResource(resource.id, { annualContractHours: event.target.value === '' ? null : Number(event.target.value) })} /><span>h</span></label>}

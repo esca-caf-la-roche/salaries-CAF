@@ -2,7 +2,7 @@
 
 Application statique React pour suivre les heures issues de Google Calendar, avant et après application d'un coefficient par ressource. L'interface est déployable sur GitHub Pages ; Supabase gère l'authentification, les données et la synchronisation Google côté serveur.
 
-L'authentification utilise exclusivement un OTP e-mail à 6 chiffres. Les administrateurs sont créés manuellement dans **Supabase Auth > Users**, puis reçoivent explicitement le rôle `admin` dans `public.profiles`. Pour les salariés, la page **Configuration** affiche uniquement les calendriers ressources Google : l'administrateur sélectionne une ressource, renseigne son type de contrat (CDI, CDII ou CDD), son volume annuel et l'e-mail de connexion, puis le compte Auth correspondant est provisionné côté serveur.
+L'authentification utilise exclusivement un OTP e-mail à 6 chiffres. Les administrateurs sont créés manuellement dans **Supabase Auth > Users**, puis reçoivent explicitement le rôle `admin` dans `public.profiles`. Pour les salariés, la page **Configuration** affiche uniquement les calendriers ressources Google : le type de contrat est détecté depuis le préfixe `(CDI)-`, `(CDII)-` ou `(CDD)-` du nom de la ressource ; l'administrateur renseigne ensuite le volume annuel et l'e-mail de connexion, puis le compte Auth correspondant est provisionné côté serveur.
 
 La ressource Google nommée exactement **`(CDII)-A DETERMINER`** représente les cours sans moniteur attribué. Elle est toujours suivie, ne crée aucun compte salarié et n'exige ni e-mail ni informations contractuelles. Ses données restent visibles par les administrateurs uniquement.
 

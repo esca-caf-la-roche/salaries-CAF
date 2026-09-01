@@ -1,19 +1,22 @@
 import { demoCoefficientCalendars, demoEmployees, demoResources, demoSyncState } from '../data/demo'
 import { isDemoMode, supabase } from '../lib/supabase'
+import { detectContractType } from '../lib/contracts'
 import type { EmployeeResource, EmployeeSummary, MonthlyHours, SyncState, UsedCalendarCoefficient } from '../types'
 
 const pause = (milliseconds = 180) => new Promise((resolve) => window.setTimeout(resolve, milliseconds))
 
 function mapResource(resource: Record<string, unknown>): EmployeeResource {
+  const name = String(resource.name)
+  const detectedContractType = detectContractType(name)
   return {
     id: String(resource.id),
     calendarId: String(resource.calendar_id),
     googleCalendarId: String(resource.google_calendar_id),
-    name: String(resource.name),
+    name,
     color: String(resource.color ?? '#3f7f73'),
     enabled: Boolean(resource.enabled),
     loginEmail: String(resource.login_email ?? ''),
-    contractType: ['CDI', 'CDII', 'CDD'].includes(String(resource.contract_type)) ? resource.contract_type as EmployeeResource['contractType'] : null,
+    contractType: detectedContractType,
     annualContractHours: resource.annual_contract_hours == null ? null : Number(resource.annual_contract_hours),
     isUnassignedResource: Boolean(resource.is_unassigned_resource),
     userId: resource.user_id ? String(resource.user_id) : null,
@@ -59,7 +62,6 @@ export async function saveResources(resources: EmployeeResource[]): Promise<Empl
         id: resource.id,
         enabled: resource.enabled,
         loginEmail: resource.loginEmail,
-        contractType: resource.contractType,
         annualContractHours: resource.annualContractHours,
       })),
     },
