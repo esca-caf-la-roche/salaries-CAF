@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarClock, CheckCheck, MapPin, SlidersHorizontal, X } from 'lucide-react'
+import { CalendarClock, CheckCheck, MapPin, Printer, SlidersHorizontal, X } from 'lucide-react'
 import { eventDayKey, eventDayLabel, eventMonthKey, eventMonthLabel, eventStart, formatEventTime } from '../lib/unassignedEvents'
 import { getUnassignedEvents } from '../services/api'
 import type { UnassignedEvent } from '../types'
@@ -77,7 +77,12 @@ export function UnassignedEventsPage() {
           <h1>À déterminer</h1>
           <p>Tous les événements encore associés à la ressource « À déterminer », organisés par mois et regroupés par journée.</p>
         </div>
-        {!loading && <div className="unassigned-total"><strong>{events.length}</strong><span>événement{events.length > 1 ? 's' : ''} au total</span></div>}
+        {!loading && <div className="page-heading__actions">
+          <button className="button button--secondary print-button" type="button" onClick={() => window.print()} disabled={groupedEvents.length === 0}>
+            <Printer aria-hidden="true" /> Imprimer
+          </button>
+          <div className="unassigned-total"><strong>{events.length}</strong><span>événement{events.length > 1 ? 's' : ''} au total</span></div>
+        </div>}
       </header>
 
       {error && <div className="alert alert--error" role="alert">{error}</div>}

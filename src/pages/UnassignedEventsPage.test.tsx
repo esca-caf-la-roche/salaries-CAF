@@ -71,5 +71,16 @@ describe('UnassignedEventsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Aucun' }))
 
     expect(screen.getByText('Aucun événement avec ces calendriers')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Imprimer' })).toBeDisabled()
+  })
+
+  it('opens the browser print dialog', async () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => undefined)
+    render(<UnassignedEventsPage />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Imprimer' }))
+
+    expect(print).toHaveBeenCalledOnce()
+    print.mockRestore()
   })
 })
