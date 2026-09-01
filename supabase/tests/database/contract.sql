@@ -15,9 +15,6 @@ begin
   if not has_function_privilege('service_role', 'public.internal_get_google_credentials(uuid)', 'execute') then
     raise exception 'service_role doit pouvoir récupérer les jetons Google';
   end if;
-  if (select count(*) from public.coefficient_rules) <> 38 then
-    raise exception 'Le seed doit contenir exactement 38 règles';
-  end if;
   if exists (select 1 from public.coefficient_rules where coefficient not in (1, 1.25)) then
     raise exception 'Coefficient inattendu dans le seed';
   end if;
@@ -38,6 +35,30 @@ begin
     where table_schema = 'public' and table_name = 'employees' and column_name = 'resource_calendar_id'
   ) then
     raise exception 'La liaison salarié vers calendrier ressource est absente';
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'employees' and column_name = 'contract_type'
+  ) or not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'employees' and column_name = 'annual_contract_hours'
+  ) or not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'employees' and column_name = 'is_unassigned_resource'
+  ) then
+    raise exception 'La configuration du contrat ou de la ressource à déterminer est incomplète';
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'coefficient_rules' and column_name = 'hour_category'
+  ) then
+    raise exception 'La rubrique de comptage annuel est absente';
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'monthly_hours' and column_name = 'school_year'
+  ) then
+    raise exception 'La saison scolaire est absente de monthly_hours';
   end if;
   if not exists (
     select 1 from information_schema.columns

@@ -16,8 +16,17 @@ type GoogleEvent = {
   [key: string]: unknown;
 };
 
-type ResourceUpdate = { id?: string; enabled?: boolean; loginEmail?: string };
-type CoefficientUpdate = { googleCalendarId?: string; coefficient?: number };
+type ResourceUpdate = {
+  id?: string; enabled?: boolean; loginEmail?: string;
+  contractType?: string; annualContractHours?: number;
+};
+type CoefficientUpdate = { googleCalendarId?: string; coefficient?: number; hourCategory?: string };
+
+const UNASSIGNED_RESOURCE_NAME = "(CDII)-A DETERMINER";
+
+function isUnassignedResourceName(value: unknown): boolean {
+  return String(value ?? "").trim().toLocaleUpperCase("fr") === UNASSIGNED_RESOURCE_NAME;
+}
 
 async function connectionFor(admin: SupabaseClient, ownerId: string) {
   const { data, error } = await admin.from("google_connections")
@@ -82,10 +91,32 @@ async function discover(admin: SupabaseClient, ownerId: string) {
   const assignedIds = new Set((assigned ?? []).map((employee) => employee.resource_calendar_id));
   const newEmployees = (storedResources ?? [])
     .filter((calendar) => !assignedIds.has(calendar.id))
-    .map((calendar) => ({ resource_calendar_id: calendar.id, display_name: calendar.name, active: false }));
+    .map((calendar) => ({
+      resource_calendar_id: calendar.id,
+      display_name: calendar.name,
+      active: isUnassignedResourceName(calendar.name),
+      is_unassigned_resource: isUnassignedResourceName(calendar.name),
+    }));
   if (newEmployees.length) {
     const { error: employeeError } = await admin.from("employees").insert(newEmployees);
     if (employeeError) throw employeeError;
+  }
+  const specialCalendarIds = (storedResources ?? [])
+    .filter((calendar) => isUnassignedResourceName(calendar.name))
+    .map((calendar) => calendar.id);
+  if (specialCalendarIds.length) {
+    const { error: specialEmployeeError } = await admin.from("employees").update({
+      active: true,
+      is_unassigned_resource: true,
+      email: null,
+      user_id: null,
+      contract_type: null,
+      annual_contract_hours: null,
+    }).in("resource_calendar_id", specialCalendarIds);
+    if (specialEmployeeError) throw specialEmployeeError;
+    const { error: specialCalendarError } = await admin.from("calendars")
+      .update({ enabled: true }).in("id", specialCalendarIds);
+    if (specialCalendarError) throw specialCalendarError;
   }
   return { resources: await resourcePayload(admin, connection.id), discovered: resourceCalendars.length };
 }
@@ -97,7 +128,7 @@ async function resourcePayload(admin: SupabaseClient, connectionId: string) {
   if (calendarError) throw calendarError;
   if (!calendars?.length) return [];
   const { data: employees, error: employeeError } = await admin.from("employees")
-    .select("id,resource_calendar_id,email,active,user_id")
+    .select("id,resource_calendar_id,email,active,user_id,contract_type,annual_contract_hours,is_unassigned_resource")
     .in("resource_calendar_id", calendars.map((calendar) => calendar.id));
   if (employeeError) throw employeeError;
   const employeeByCalendar = new Map((employees ?? []).map((employee) => [employee.resource_calendar_id, employee]));
@@ -108,7 +139,9 @@ async function resourcePayload(admin: SupabaseClient, connectionId: string) {
       id: employee.id, calendar_id: calendar.id, google_calendar_id: calendar.google_calendar_id,
       name: calendar.name, color: calendar.color, enabled: employee.active && calendar.enabled,
       login_email: employee.email, user_id: employee.user_id, event_count: calendar.event_count,
-      last_synced_at: calendar.last_synced_at,
+      last_synced_at: calendar.last_synced_at, contract_type: employee.contract_type,
+      annual_contract_hours: employee.annual_contract_hours,
+      is_unassigned_resource: employee.is_unassigned_resource,
     }];
   });
 }
@@ -160,23 +193,45 @@ async function saveResources(admin: SupabaseClient, ownerId: string, updates: Re
   if (!Array.isArray(updates) || !updates.length) return { resources: await resourcePayload(admin, connection.id) };
   const ids = updates.map((update) => String(update.id ?? ""));
   const { data: employees, error } = await admin.from("employees")
-    .select("id,resource_calendar_id,calendars!inner(connection_id,is_resource)").in("id", ids)
+    .select("id,resource_calendar_id,is_unassigned_resource,calendars!inner(connection_id,is_resource)").in("id", ids)
     .eq("calendars.connection_id", connection.id).eq("calendars.is_resource", true);
   if (error) throw error;
   const allowedIds = new Set((employees ?? []).map((employee) => employee.id));
   if (allowedIds.size !== new Set(ids).size) throw new HttpError(400, "Ressource Google inconnue");
 
-  const normalizedUpdates = updates.map((update) => ({
-    id: String(update.id), enabled: Boolean(update.enabled), loginEmail: normalizeEmail(update.loginEmail),
-  }));
-  const enabledEmails = normalizedUpdates.filter((update) => update.enabled).map((update) => update.loginEmail);
+  const specialById = new Map((employees ?? []).map((employee) => [employee.id, Boolean(employee.is_unassigned_resource)]));
+  const normalizedUpdates = updates.map((update) => {
+    const id = String(update.id);
+    const isUnassignedResource = specialById.get(id) ?? false;
+    const annualHoursText = String(update.annualContractHours ?? "").trim();
+    const annualContractHours = annualHoursText === "" ? null : Number(annualHoursText);
+    return {
+      id,
+      enabled: isUnassignedResource ? true : Boolean(update.enabled),
+      loginEmail: isUnassignedResource ? "" : normalizeEmail(update.loginEmail),
+      contractType: isUnassignedResource ? "" : String(update.contractType ?? "").trim().toUpperCase(),
+      annualContractHours: isUnassignedResource ? null : (annualContractHours != null && Number.isFinite(annualContractHours) ? annualContractHours : null),
+      isUnassignedResource,
+    };
+  });
+  const enabledEmails = normalizedUpdates.filter((update) => update.enabled && !update.isUnassignedResource).map((update) => update.loginEmail);
   if (new Set(enabledEmails).size !== enabledEmails.length) throw new HttpError(400, "Un e-mail de connexion ne peut appartenir qu'à une seule ressource");
   for (const update of normalizedUpdates) {
+    if (update.isUnassignedResource) continue;
     if (update.enabled && !validEmail(update.loginEmail)) throw new HttpError(400, "Un e-mail valide est requis pour chaque ressource suivie");
+    if (update.contractType && !["CDI", "CDII", "CDD"].includes(update.contractType)) {
+      throw new HttpError(400, "Type de contrat invalide : choisissez CDI, CDII ou CDD");
+    }
+    if (update.enabled && (!update.contractType || update.annualContractHours == null || update.annualContractHours <= 0)) {
+      throw new HttpError(400, "Le type de contrat et un nombre d'heures annuelles positif sont requis");
+    }
   }
 
   const createdUserIds: string[] = [];
-  const configuredUpdates: Array<{ id: string; enabled: boolean; loginEmail: string; userId: string | null }> = [];
+  const configuredUpdates: Array<{
+    id: string; enabled: boolean; loginEmail: string; contractType: string;
+    annualContractHours: number | null; isUnassignedResource: boolean; userId: string | null;
+  }> = [];
   /*
    * Auth provisioning cannot participate in the Postgres transaction. All Auth users are
    * therefore prepared first; the RPC applies every employee/calendar update atomically,
@@ -185,7 +240,7 @@ async function saveResources(admin: SupabaseClient, ownerId: string, updates: Re
   try {
     for (const update of normalizedUpdates) {
       let userId: string | null = null;
-      if (update.enabled) {
+      if (update.enabled && !update.isUnassignedResource) {
         const provisioned = await provisionUser(admin, update.loginEmail);
         userId = provisioned.user.id;
         if (provisioned.created) createdUserIds.push(userId);
@@ -213,11 +268,17 @@ async function saveCoefficients(admin: SupabaseClient, ownerId: string, updates:
   const normalizedUpdates = updates.map((update) => ({
     googleCalendarId: normalizeEmail(update.googleCalendarId),
     coefficient: Number(update.coefficient),
+    hourCategory: String(update.hourCategory ?? "").trim().toLowerCase(),
   }));
   if (normalizedUpdates.some((update) =>
     !update.googleCalendarId || (update.coefficient !== 1 && update.coefficient !== 1.25)
   )) {
     throw new HttpError(400, "Coefficient invalide : choisissez 1 ou 1,25");
+  }
+  if (normalizedUpdates.some((update) =>
+    !["contract", "absence", "replacement", "public_holiday"].includes(update.hourCategory)
+  )) {
+    throw new HttpError(400, "Type de comptage invalide");
   }
   if (new Set(normalizedUpdates.map((update) => update.googleCalendarId)).size !== normalizedUpdates.length) {
     throw new HttpError(400, "Un calendrier ne peut être configuré qu'une seule fois");

@@ -8,14 +8,14 @@ export const demoUser: AppUser = {
 }
 
 export const demoResources: EmployeeResource[] = [
-  { id: 'employee-1', calendarId: 'cal-1', googleCalendarId: 'demo-beatrice@resource.calendar.google.com', name: 'Béatrice Martin', color: '#e26d3f', enabled: true, loginEmail: 'beatrice@example.fr', eventCount: 42, lastSyncedAt: '2026-08-31T08:45:00Z' },
-  { id: 'employee-2', calendarId: 'cal-2', googleCalendarId: 'demo-paul@resource.calendar.google.com', name: 'Paul Renaud', color: '#3f7f73', enabled: true, loginEmail: 'paul@example.fr', eventCount: 36, lastSyncedAt: '2026-08-31T08:45:00Z' },
-  { id: 'employee-3', calendarId: 'cal-3', googleCalendarId: 'demo-remplacement@resource.calendar.google.com', name: 'Ressource remplacement', color: '#4d6f8a', enabled: false, loginEmail: '', eventCount: 18, lastSyncedAt: null },
+  { id: 'employee-1', calendarId: 'cal-1', googleCalendarId: 'demo-beatrice@resource.calendar.google.com', name: 'Béatrice Martin', color: '#e26d3f', enabled: true, loginEmail: 'beatrice@example.fr', contractType: 'CDI', annualContractHours: 1607, isUnassignedResource: false, eventCount: 42, lastSyncedAt: '2026-08-31T08:45:00Z' },
+  { id: 'employee-2', calendarId: 'cal-2', googleCalendarId: 'demo-paul@resource.calendar.google.com', name: 'Paul Renaud', color: '#3f7f73', enabled: true, loginEmail: 'paul@example.fr', contractType: 'CDII', annualContractHours: 820, isUnassignedResource: false, eventCount: 36, lastSyncedAt: '2026-08-31T08:45:00Z' },
+  { id: 'employee-3', calendarId: 'cal-3', googleCalendarId: 'demo-indetermine@resource.calendar.google.com', name: '(CDII)-A DETERMINER', color: '#4d6f8a', enabled: true, loginEmail: '', contractType: null, annualContractHours: null, isUnassignedResource: true, eventCount: 18, lastSyncedAt: null },
 ]
 
 export const demoCoefficientCalendars: UsedCalendarCoefficient[] = [
-  { googleCalendarId: 'demo-avec-prepa@group.calendar.google.com', name: 'Cours avec prépa', coefficient: 1.25, eventCount: 54 },
-  { googleCalendarId: 'demo-sans-prepa@group.calendar.google.com', name: 'Heures sans prépa', coefficient: 1, eventCount: 17 },
+  { googleCalendarId: 'demo-avec-prepa@group.calendar.google.com', name: 'Cours avec prépa', coefficient: 1.25, hourCategory: 'contract', eventCount: 54 },
+  { googleCalendarId: 'demo-sans-prepa@group.calendar.google.com', name: 'Absences', coefficient: 1, hourCategory: 'absence', eventCount: 17 },
 ]
 
 const seriesA = [62, 71, 68, 74, 79, 66, 42, 38, 72, 76, 69, 55]
@@ -26,13 +26,13 @@ export const demoEmployees: EmployeeSummary[] = [
     id: 'employee-1',
     name: 'Béatrice Martin',
     calendarName: 'Béatrice · Coordination',
-    monthlyHours: seriesA.map((hours, index) => ({ month: index + 1, rawHours: hours, weightedHours: hours, eventCount: Math.round(hours / 2.4) })),
+    monthlyHours: seriesA.map((hours, index) => ({ month: index + 1, rawHours: hours, weightedHours: hours, contractHours: hours, absenceHours: 0, replacementHours: 0, publicHolidayHours: 0, eventCount: Math.round(hours / 2.4) })),
   },
   {
     id: 'employee-2',
     name: 'Paul Renaud',
     calendarName: 'Paul · Encadrement',
-    monthlyHours: seriesB.map((hours, index) => ({ month: index + 1, rawHours: hours, weightedHours: hours * 1.25, eventCount: Math.round(hours / 2.2) })),
+    monthlyHours: seriesB.map((hours, index) => ({ month: index + 1, rawHours: hours, weightedHours: hours * 1.25, contractHours: hours * 1.25, absenceHours: 0, replacementHours: 0, publicHolidayHours: 0, eventCount: Math.round(hours / 2.2) })),
   },
 ]
 

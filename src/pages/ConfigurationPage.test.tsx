@@ -11,6 +11,9 @@ const resource: EmployeeResource = {
   color: '#3f7f73',
   enabled: false,
   loginEmail: '',
+  contractType: 'CDII',
+  annualContractHours: 820,
+  isUnassignedResource: false,
   eventCount: 4,
   lastSyncedAt: null,
 }
@@ -19,6 +22,7 @@ const usedCalendar: UsedCalendarCoefficient = {
   googleCalendarId: 'course-1@group.calendar.google.com',
   name: 'Cours du mardi',
   coefficient: null,
+  hourCategory: 'contract',
   eventCount: 12,
 }
 
@@ -59,6 +63,9 @@ describe('ConfigurationPage', () => {
     expect(await screen.findByText('Cours du mardi')).toBeInTheDocument()
     expect(screen.getByText('course-1@group.calendar.google.com', { exact: false })).toBeInTheDocument()
     expect(screen.getByText('Coefficient')).toBeInTheDocument()
+    expect(screen.getByText('Comptage annuel')).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Type de contrat de Alice Martin' })).toHaveValue('CDII')
+    expect(screen.getByRole('spinbutton', { name: 'Heures annuelles de Alice Martin' })).toHaveValue(820)
   })
 
   it('requires a valid login email before enabling a resource', async () => {
@@ -89,10 +96,25 @@ describe('ConfigurationPage', () => {
     fireEvent.change(await screen.findByRole('combobox', { name: 'Coefficient de Cours du mardi' }), {
       target: { value: '1.25' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les coefficients' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les règles' }))
 
     await waitFor(() => expect(saveCoefficientCalendars).toHaveBeenCalledWith([
-      expect.objectContaining({ googleCalendarId: usedCalendar.googleCalendarId, coefficient: 1.25 }),
+      expect.objectContaining({ googleCalendarId: usedCalendar.googleCalendarId, coefficient: 1.25, hourCategory: 'contract' }),
+    ]))
+  })
+
+  it('saves the annual counting category for a detected calendar', async () => {
+    render(<ConfigurationPage />)
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Comptage annuel de Cours du mardi' }), {
+      target: { value: 'replacement' },
+    })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Coefficient de Cours du mardi' }), {
+      target: { value: '1' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les règles' }))
+
+    await waitFor(() => expect(saveCoefficientCalendars).toHaveBeenCalledWith([
+      expect.objectContaining({ googleCalendarId: usedCalendar.googleCalendarId, hourCategory: 'replacement' }),
     ]))
   })
 })

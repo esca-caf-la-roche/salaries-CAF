@@ -16,9 +16,9 @@ Ajoutez exactement `GOOGLE_REDIRECT_URI` aux URI autorisées du client OAuth Goo
 
 - `google-oauth-start`, `POST { "redirectTo": "..." }`, JWT admin requis, retourne `authorizationUrl`.
 - `google-oauth-callback`, cible OAuth Google publique protégée par un state aléatoire, expirant et à usage unique.
-- `google-calendar-sync`, JWT admin requis : détection et sauvegarde des ressources avec `discover`, `resources` et `saveResources`; lecture et sauvegarde des calendriers d'origine utilisés avec `coefficientCalendars` et `saveCoefficients`; synchronisation avec `sync`.
+- `google-calendar-sync`, JWT admin requis : détection et sauvegarde des ressources, contrats et volumes annuels avec `discover`, `resources` et `saveResources`; lecture et sauvegarde du coefficient et de la rubrique des calendriers d'origine avec `coefficientCalendars` et `saveCoefficients`; synchronisation avec `sync`.
 
-La découverte conserve uniquement les calendriers ressources Google Workspace présents dans la liste du compte connecté. L'administrateur associe chaque ressource suivie à un e-mail de connexion ; la fonction crée si nécessaire le compte Auth salarié et le lie par `user_id`. Une sync initiale paginée produit un `nextSyncToken`; les suivantes utilisent exclusivement ce token. Chaque événement est pondé avec la règle correspondant à son `organizer.email`. Une réponse Google `410` invalide le token et déclenche un full resync sans effacer les anciennes données avant la réussite complète.
+La découverte conserve uniquement les calendriers ressources Google Workspace présents dans la liste du compte connecté. L'administrateur associe chaque ressource suivie à un contrat, un volume annuel et un e-mail de connexion ; la fonction crée si nécessaire le compte Auth salarié et le lie par `user_id`. `(CDII)-A DETERMINER` est activée automatiquement sans compte ni contrat. Une sync initiale paginée produit un `nextSyncToken`; les suivantes utilisent exclusivement ce token. Chaque événement est pondé et classé avec la règle correspondant à son `organizer.email`. Une réponse Google `410` invalide le token et déclenche un full resync sans effacer les anciennes données avant la réussite complète.
 
 ## Initialisation
 
@@ -29,4 +29,4 @@ La découverte conserve uniquement les calendriers ressources Google Workspace p
 5. Dans **Authentication > URL Configuration**, définir le Site URL à `https://esca-caf-la-roche.github.io/salaries-CAF/` et ajouter `https://esca-caf-la-roche.github.io/salaries-CAF/**` à la liste autorisée. Ces URL ne servent pas au parcours OTP, mais empêchent tout retour accidentel vers localhost pour les autres e-mails Auth.
 5. Déployer les trois fonctions, puis configurer les secrets.
 
-Les événements journée entière sont conservés mais exclus de `monthly_hours`. Les événements traversant un changement de mois sont ventilés à l'intersection exacte de chaque mois.
+Les événements journée entière sont conservés mais exclus de `monthly_hours`. Les événements traversant un changement de mois sont ventilés à l'intersection exacte de chaque mois. `monthly_hours.school_year` rattache septembre à décembre à l'année de début, et janvier à août à cette même saison.

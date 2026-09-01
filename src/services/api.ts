@@ -13,6 +13,9 @@ function mapResource(resource: Record<string, unknown>): EmployeeResource {
     color: String(resource.color ?? '#3f7f73'),
     enabled: Boolean(resource.enabled),
     loginEmail: String(resource.login_email ?? ''),
+    contractType: ['CDI', 'CDII', 'CDD'].includes(String(resource.contract_type)) ? resource.contract_type as EmployeeResource['contractType'] : null,
+    annualContractHours: resource.annual_contract_hours == null ? null : Number(resource.annual_contract_hours),
+    isUnassignedResource: Boolean(resource.is_unassigned_resource),
     userId: resource.user_id ? String(resource.user_id) : null,
     eventCount: Number(resource.event_count ?? 0),
     lastSyncedAt: resource.last_synced_at ? String(resource.last_synced_at) : null,
@@ -25,6 +28,9 @@ function mapCoefficientCalendar(calendar: Record<string, unknown>): UsedCalendar
     googleCalendarId: String(calendar.google_calendar_id),
     name: String(calendar.label ?? calendar.google_calendar_id),
     coefficient: coefficient === 1 || coefficient === 1.25 ? coefficient : null,
+    hourCategory: ['contract', 'absence', 'replacement', 'public_holiday'].includes(String(calendar.hour_category))
+      ? calendar.hour_category as UsedCalendarCoefficient['hourCategory']
+      : 'contract',
     eventCount: Number(calendar.event_count ?? 0),
   }
 }
@@ -53,6 +59,8 @@ export async function saveResources(resources: EmployeeResource[]): Promise<Empl
         id: resource.id,
         enabled: resource.enabled,
         loginEmail: resource.loginEmail,
+        contractType: resource.contractType,
+        annualContractHours: resource.annualContractHours,
       })),
     },
   })
@@ -95,6 +103,7 @@ export async function saveCoefficientCalendars(calendars: UsedCalendarCoefficien
       calendars: calendars.map((calendar) => ({
         googleCalendarId: calendar.googleCalendarId,
         coefficient: calendar.coefficient,
+        hourCategory: calendar.hourCategory,
       })),
     },
   })
@@ -137,16 +146,15 @@ export async function runIncrementalSync(): Promise<SyncState> {
   }
 }
 
-export async function getEmployeeSummaries(year: number): Promise<EmployeeSummary[]> {
+export async function getEmployeeSummaries(schoolYear: number): Promise<EmployeeSummary[]> {
   if (isDemoMode || !supabase) {
     await pause()
     return structuredClone(demoEmployees)
   }
   const { data, error } = await supabase
     .from('monthly_hours')
-    .select('employee_id, employee_name, calendar_name, month, raw_hours, weighted_hours, event_count')
-    .eq('year', year)
-    .order('month')
+    .select('employee_id, employee_name, calendar_name, month, raw_hours, weighted_hours, contract_hours, absence_hours, replacement_hours, public_holiday_hours, event_count')
+    .eq('school_year', schoolYear)
   if (error) throw error
 
   const grouped = new Map<string, EmployeeSummary>()
@@ -161,6 +169,10 @@ export async function getEmployeeSummaries(year: number): Promise<EmployeeSummar
       month: row.month,
       rawHours: Number(row.raw_hours),
       weightedHours: Number(row.weighted_hours),
+      contractHours: Number(row.contract_hours ?? 0),
+      absenceHours: Number(row.absence_hours ?? 0),
+      replacementHours: Number(row.replacement_hours ?? 0),
+      publicHolidayHours: Number(row.public_holiday_hours ?? 0),
       eventCount: row.event_count,
     })
     grouped.set(row.employee_id, employee)

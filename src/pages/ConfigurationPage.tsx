@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, CircleAlert, Mail, RefreshCw, Search } from 'lucide-react'
 import { discoverResources, getCoefficientCalendars, getResources, saveCoefficientCalendars, saveResources, startGoogleConnection } from '../services/api'
-import type { EmployeeResource, PreparationCoefficient, UsedCalendarCoefficient } from '../types'
+import type { ContractType, EmployeeResource, HourCategory, PreparationCoefficient, UsedCalendarCoefficient } from '../types'
 
 export function ConfigurationPage() {
   const [resources, setResources] = useState<EmployeeResource[]>([])
@@ -22,7 +22,7 @@ export function ConfigurationPage() {
   useEffect(() => { void getCoefficientCalendars().then(setCoefficientCalendars).catch(() => setMessage('Les calendriers utilisés n\'ont pas pu être chargés.')).finally(() => setCoefficientsLoading(false)) }, [])
   const filtered = useMemo(() => {
     const normalizedQuery = query.toLocaleLowerCase('fr')
-    return resources.filter((resource) => `${resource.name} ${resource.googleCalendarId} ${resource.loginEmail}`.toLocaleLowerCase('fr').includes(normalizedQuery))
+    return resources.filter((resource) => `${resource.name} ${resource.googleCalendarId} ${resource.loginEmail} ${resource.contractType ?? ''}`.toLocaleLowerCase('fr').includes(normalizedQuery))
   }, [resources, query])
   const enabledCount = resources.filter((resource) => resource.enabled).length
 
@@ -40,6 +40,11 @@ export function ConfigurationPage() {
   }
   const patchCoefficient = (googleCalendarId: string, coefficient: PreparationCoefficient) => {
     setCoefficientCalendars((items) => items.map((item) => item.googleCalendarId === googleCalendarId ? { ...item, coefficient } : item))
+    setCoefficientDirty((items) => new Set(items).add(googleCalendarId))
+    setMessage('')
+  }
+  const patchHourCategory = (googleCalendarId: string, hourCategory: HourCategory) => {
+    setCoefficientCalendars((items) => items.map((item) => item.googleCalendarId === googleCalendarId ? { ...item, hourCategory } : item))
     setCoefficientDirty((items) => new Set(items).add(googleCalendarId))
     setMessage('')
   }
@@ -61,15 +66,17 @@ export function ConfigurationPage() {
     finally { setCoefficientsRefreshing(false) }
   }
   const save = async () => {
-    const invalid = resources.find((resource) => resource.enabled && !/^\S+@\S+\.\S+$/.test(resource.loginEmail.trim()))
+    const invalid = resources.find((resource) => !resource.isUnassignedResource && resource.enabled && !/^\S+@\S+\.\S+$/.test(resource.loginEmail.trim()))
     if (invalid) { setMessage(`Ajoutez un e-mail de connexion valide pour ${invalid.name}.`); return }
+    const missingContract = resources.find((resource) => !resource.isUnassignedResource && resource.enabled && (!resource.contractType || resource.annualContractHours == null || resource.annualContractHours <= 0))
+    if (missingContract) { setMessage(`Ajoutez le type de contrat et les heures annuelles de ${missingContract.name}.`); return }
     setSaving(true)
     setMessage('')
     try {
       const changed = resources.filter((resource) => dirty.has(resource.id))
       setResources(await saveResources(changed))
       setDirty(new Set())
-      setMessage('Configuration enregistrée. Les salariés sélectionnés peuvent recevoir un code de connexion.')
+      setMessage('Configuration enregistrée. Les contrats et le suivi des ressources sont à jour.')
     } catch { setMessage('Les modifications n\'ont pas pu être enregistrées.') }
     finally { setSaving(false) }
   }
@@ -84,7 +91,7 @@ export function ConfigurationPage() {
     try {
       setCoefficientCalendars(await saveCoefficientCalendars(changed))
       setCoefficientDirty(new Set())
-      setMessage('Coefficients enregistrés. Les heures pondérées sont à jour.')
+      setMessage('Règles de comptage enregistrées. Les heures de la saison sont à jour.')
     } catch { setMessage('Les coefficients n\'ont pas pu être enregistrés.') }
     finally { setCoefficientsSaving(false) }
   }
@@ -92,7 +99,7 @@ export function ConfigurationPage() {
   return (
     <div className="page">
       <header className="page-heading">
-        <div><p className="eyebrow">Paramétrage</p><h1>Ressources et coefficients</h1><p>Choisissez les ressources salariées, puis indiquez si chaque calendrier utilisé comprend du temps de préparation.</p></div>
+        <div><p className="eyebrow">Paramétrage</p><h1>Ressources et comptage</h1><p>Configurez les contrats des ressources, puis classez les heures des calendriers utilisés.</p></div>
         <div className="page-actions">
           <button className="button button--secondary" type="button" onClick={() => void connectGoogle()} disabled={connecting}>
             {connecting ? 'Connexion…' : 'Connecter Google'}
@@ -105,21 +112,31 @@ export function ConfigurationPage() {
       {message && <div className="alert alert--success" role="status">{message}</div>}
       <section className="setup-note">
         <span><CircleAlert aria-hidden="true" /></span>
-        <div><strong>Comment fonctionne le calcul ?</strong><p>Chaque ressource regroupe ses événements. Le calendrier d'origine de chaque événement détermine ensuite le coefficient : sans préparation ×1, avec préparation ×1,25.</p></div>
-        <code>ressource → calendrier → coef.</code>
+        <div><strong>Comment fonctionne le calcul ?</strong><p>Chaque ressource regroupe ses événements. Leur calendrier d'origine détermine le coefficient et la rubrique annuelle : contrat, absence, remplacement ou férié. Une saison va du 1er septembre au 31 août.</p></div>
+        <code>ressource → calendrier → rubrique</code>
       </section>
       <section className="panel configuration-panel">
         <div className="configuration-toolbar">
           <div><p className="eyebrow">Calendriers ressources Google</p><h2>{enabledCount} ressource{enabledCount > 1 ? 's' : ''} suivie{enabledCount > 1 ? 's' : ''}</h2></div>
           <label className="search-field"><Search aria-hidden="true" /><span className="sr-only">Rechercher une ressource</span><input type="search" placeholder="Rechercher…" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
         </div>
-        <div className="calendar-head" aria-hidden="true"><span>Ressource</span><span>Suivi</span><span>E-mail de connexion</span></div>
+        <div className="calendar-head" aria-hidden="true"><span>Ressource</span><span>Suivi</span><span>Contrat</span><span>Heures annuelles</span><span>E-mail de connexion</span></div>
         {loading ? <div className="skeleton-list" aria-label="Chargement des ressources"><i /><i /><i /></div> : (
           <div className="calendar-list">
             {filtered.map((resource) => <article className={resource.enabled ? 'calendar-row calendar-row--enabled' : 'calendar-row'} key={resource.id}>
               <div className="calendar-identity"><i style={{ background: resource.color }} /><span><strong>{resource.name}</strong><small>{resource.eventCount ?? 0} événements · {resource.googleCalendarId}</small></span></div>
-              <label className="switch"><input type="checkbox" checked={resource.enabled} onChange={(event) => patchResource(resource.id, { enabled: event.target.checked })} /><span aria-hidden="true" /><em>{resource.enabled ? 'Suivie' : 'Ignorée'}</em></label>
-              <label className="email-input"><span className="sr-only">E-mail de connexion de {resource.name}</span><Mail aria-hidden="true" /><input type="email" placeholder="prenom@exemple.fr" value={resource.loginEmail} disabled={!resource.enabled} required={resource.enabled} onChange={(event) => patchResource(resource.id, { loginEmail: event.target.value })} /></label>
+              {resource.isUnassignedResource
+                ? <span className="automatic-tracking"><Check aria-hidden="true" /> Suivi automatique</span>
+                : <label className="switch"><input type="checkbox" checked={resource.enabled} onChange={(event) => patchResource(resource.id, { enabled: event.target.checked })} /><span aria-hidden="true" /><em>{resource.enabled ? 'Suivie' : 'Ignorée'}</em></label>}
+              {resource.isUnassignedResource
+                ? <span className="not-applicable">Sans contrat</span>
+                : <label className="compact-select"><span className="sr-only">Type de contrat de {resource.name}</span><select aria-label={`Type de contrat de ${resource.name}`} value={resource.contractType ?? ''} onChange={(event) => patchResource(resource.id, { contractType: (event.target.value || null) as ContractType | null })}><option value="">Choisir…</option><option value="CDI">CDI</option><option value="CDII">CDII</option><option value="CDD">CDD</option></select></label>}
+              {resource.isUnassignedResource
+                ? <span className="not-applicable">—</span>
+                : <label className="hours-input"><span className="sr-only">Heures annuelles de {resource.name}</span><input aria-label={`Heures annuelles de ${resource.name}`} type="number" min="0.01" step="0.01" placeholder="Ex. 1607" value={resource.annualContractHours ?? ''} onChange={(event) => patchResource(resource.id, { annualContractHours: event.target.value === '' ? null : Number(event.target.value) })} /><span>h</span></label>}
+              {resource.isUnassignedResource
+                ? <span className="not-applicable">Aucun e-mail requis</span>
+                : <label className="email-input"><span className="sr-only">E-mail de connexion de {resource.name}</span><Mail aria-hidden="true" /><input type="email" placeholder="prenom@exemple.fr" value={resource.loginEmail} disabled={!resource.enabled} required={resource.enabled} onChange={(event) => patchResource(resource.id, { loginEmail: event.target.value })} /></label>}
             </article>)}
             {!filtered.length && <div className="empty-state"><Search aria-hidden="true" /><strong>Aucune ressource trouvée</strong><span>Modifiez votre recherche ou relancez la détection Google.</span></div>}
           </div>
@@ -133,11 +150,20 @@ export function ConfigurationPage() {
             <RefreshCw className={coefficientsRefreshing ? 'spin' : ''} aria-hidden="true" /> {coefficientsRefreshing ? 'Actualisation…' : 'Actualiser les calendriers utilisés'}
           </button>
         </div>
-        <div className="coefficient-head" aria-hidden="true"><span>Calendrier d'origine</span><span>Coefficient</span></div>
+        <div className="coefficient-head" aria-hidden="true"><span>Calendrier d'origine</span><span>Comptage annuel</span><span>Coefficient</span></div>
         {coefficientsLoading ? <div className="skeleton-list" aria-label="Chargement des calendriers utilisés"><i /><i /></div> : (
           <div className="calendar-list">
             {coefficientCalendars.map((calendar) => <article className="coefficient-row" key={calendar.googleCalendarId}>
               <div className="calendar-identity"><i /><span><strong>{calendar.name}</strong><small>{calendar.eventCount} événement{calendar.eventCount > 1 ? 's' : ''} · {calendar.googleCalendarId}</small></span></div>
+              <label className="coefficient-select">
+                <span className="sr-only">Comptage annuel de {calendar.name}</span>
+                <select aria-label={`Comptage annuel de ${calendar.name}`} value={calendar.hourCategory} onChange={(event) => patchHourCategory(calendar.googleCalendarId, event.target.value as HourCategory)}>
+                  <option value="contract">Heures du contrat</option>
+                  <option value="absence">Heures d'absence</option>
+                  <option value="replacement">Heures de remplacement</option>
+                  <option value="public_holiday">Heures fériées</option>
+                </select>
+              </label>
               <label className="coefficient-select">
                 <span className="sr-only">Coefficient de {calendar.name}</span>
                 <select value={calendar.coefficient ?? ''} onChange={(event) => patchCoefficient(calendar.googleCalendarId, Number(event.target.value) as PreparationCoefficient)}>
@@ -150,7 +176,7 @@ export function ConfigurationPage() {
             {!coefficientCalendars.length && <div className="empty-state"><Search aria-hidden="true" /><strong>Aucun calendrier utilisé détecté</strong><span>Activez une ressource puis lancez une synchronisation pour analyser ses événements.</span></div>}
           </div>
         )}
-        <footer className="configuration-footer"><span>{coefficientDirty.size ? `${coefficientDirty.size} coefficient${coefficientDirty.size > 1 ? 's' : ''} non enregistré${coefficientDirty.size > 1 ? 's' : ''}` : <><Check aria-hidden="true" /> Coefficients à jour</>}</span><button className="button button--primary" type="button" onClick={() => void saveCoefficients()} disabled={!coefficientDirty.size || coefficientsSaving}>{coefficientsSaving ? 'Enregistrement…' : 'Enregistrer les coefficients'}</button></footer>
+        <footer className="configuration-footer"><span>{coefficientDirty.size ? `${coefficientDirty.size} règle${coefficientDirty.size > 1 ? 's' : ''} non enregistrée${coefficientDirty.size > 1 ? 's' : ''}` : <><Check aria-hidden="true" /> Règles de comptage à jour</>}</span><button className="button button--primary" type="button" onClick={() => void saveCoefficients()} disabled={!coefficientDirty.size || coefficientsSaving}>{coefficientsSaving ? 'Enregistrement…' : 'Enregistrer les règles'}</button></footer>
       </section>
     </div>
   )
