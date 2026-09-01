@@ -1,3 +1,4 @@
+import { FunctionsHttpError } from '@supabase/supabase-js'
 import { demoCoefficientCalendars, demoEmployees, demoResources, demoSyncState, demoUnassignedEvents } from '../data/demo'
 import { isDemoMode, supabase } from '../lib/supabase'
 import { detectContractType } from '../lib/contracts'
@@ -13,6 +14,14 @@ import type {
 } from '../types'
 
 const pause = (milliseconds = 180) => new Promise((resolve) => window.setTimeout(resolve, milliseconds))
+
+async function throwFunctionError(error: unknown, fallback: string): Promise<never> {
+  if (error instanceof FunctionsHttpError) {
+    const payload = await error.context.clone().json().catch(() => null) as { error?: unknown } | null
+    if (typeof payload?.error === 'string' && payload.error.trim()) throw new Error(payload.error)
+  }
+  throw new Error(error instanceof Error && error.message ? error.message : fallback)
+}
 
 function mapResource(resource: Record<string, unknown>): EmployeeResource {
   const name = String(resource.name)
@@ -60,7 +69,7 @@ export async function getResources(): Promise<EmployeeResource[]> {
   const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
     body: { action: 'resources' },
   })
-  if (error) throw error
+  if (error) await throwFunctionError(error, 'Les ressources n\'ont pas pu être chargées.')
   return (data?.resources ?? []).map(mapResource)
 }
 
@@ -116,7 +125,7 @@ export async function getUnassignedEvents(): Promise<UnassignedEvent[]> {
   const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
     body: { action: 'unassignedEvents' },
   })
-  if (error) throw error
+  if (error) await throwFunctionError(error, 'Les ressources n\'ont pas pu être enregistrées.')
   return (data?.events ?? []) as UnassignedEvent[]
 }
 

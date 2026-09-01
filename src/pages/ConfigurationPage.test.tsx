@@ -182,6 +182,40 @@ describe('ConfigurationPage', () => {
     ]))
   })
 
+  it('saves one completed resource even when another followed resource is still incomplete', async () => {
+    getResources.mockResolvedValue([
+      resourceWith({ id: 'first', name: '(CDII)-Alice', enabled: true, loginEmail: 'alice@example.fr', annualContractHours: null }),
+      resourceWith({ id: 'second', name: '(CDI)-Camille', enabled: true, loginEmail: 'camille@example.fr', annualContractHours: null }),
+    ])
+    render(<ConfigurationPage />)
+
+    fireEvent.change(await screen.findByRole('spinbutton', { name: 'Heures annuelles de (CDII)-Alice' }), {
+      target: { value: '820' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les modifications' }))
+
+    await waitFor(() => expect(saveResources).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'first', annualContractHours: 820 }),
+    ]))
+    expect(saveResources).not.toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ id: 'second' }),
+    ]))
+  })
+
+  it('shows a precise save failure next to the resource save button', async () => {
+    saveResources.mockRejectedValueOnce(new Error('Cette adresse appartient déjà à un compte administrateur.'))
+    render(<ConfigurationPage />)
+    fireEvent.click(await screen.findByRole('checkbox'))
+    fireEvent.change(screen.getByRole('textbox', { name: 'E-mail de connexion de (CDII)-Alice Martin' }), {
+      target: { value: 'admin@example.fr' },
+    })
+    const saveButton = screen.getByRole('button', { name: 'Enregistrer les modifications' })
+    const footer = saveButton.closest('.configuration-footer')
+    fireEvent.click(saveButton)
+
+    await waitFor(() => expect(footer).toHaveTextContent('Cette adresse appartient déjà à un compte administrateur.'))
+  })
+
   it('supports native drag and drop through the two Kanban stages', async () => {
     render(<ConfigurationPage />)
     const values = new Map<string, string>()

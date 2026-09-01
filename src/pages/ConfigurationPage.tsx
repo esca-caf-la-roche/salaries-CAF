@@ -189,6 +189,7 @@ export function ConfigurationPage() {
   const [movedCalendarId, setMovedCalendarId] = useState<string | null>(null)
   const [kanbanAnnouncement, setKanbanAnnouncement] = useState('')
   const [message, setMessage] = useState('')
+  const [resourceMessage, setResourceMessage] = useState('')
 
   useEffect(() => { void getResources().then(setResources).catch(() => setMessage('Les ressources n\'ont pas pu être chargées.')).finally(() => setLoading(false)) }, [])
   useEffect(() => { void getCoefficientCalendars().then(setCoefficientCalendars).catch(() => setMessage('Les calendriers utilisés n\'ont pas pu être chargés.')).finally(() => setCoefficientsLoading(false)) }, [])
@@ -230,6 +231,7 @@ export function ConfigurationPage() {
   const patchResource = (id: string, patch: Partial<EmployeeResource>) => {
     setResources((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item))
     setDirty((items) => new Set(items).add(id))
+    setResourceMessage('')
     setMessage('')
   }
   const detect = async () => {
@@ -297,18 +299,19 @@ export function ConfigurationPage() {
     finally { setCoefficientsRefreshing(false) }
   }
   const save = async () => {
-    const invalid = resources.find((resource) => !resource.isUnassignedResource && resource.enabled && !/^\S+@\S+\.\S+$/.test(resource.loginEmail.trim()))
-    if (invalid) { setMessage(`Ajoutez un e-mail de connexion valide pour ${invalid.name}.`); return }
-    const missingContract = resources.find((resource) => !resource.isUnassignedResource && resource.enabled && (!resource.contractType || resource.annualContractHours == null || resource.annualContractHours <= 0))
-    if (missingContract) { setMessage(`Ajoutez le type de contrat et les heures annuelles de ${missingContract.name}.`); return }
+    const changed = resources.filter((resource) => dirty.has(resource.id))
+    const invalid = changed.find((resource) => !resource.isUnassignedResource && resource.enabled && !/^\S+@\S+\.\S+$/.test(resource.loginEmail.trim()))
+    if (invalid) { setResourceMessage(`Ajoutez un e-mail de connexion valide pour ${invalid.name}.`); return }
+    const missingContract = changed.find((resource) => !resource.isUnassignedResource && resource.enabled && (!resource.contractType || resource.annualContractHours == null || resource.annualContractHours <= 0))
+    if (missingContract) { setResourceMessage(`Ajoutez le type de contrat et les heures annuelles de ${missingContract.name}.`); return }
     setSaving(true)
+    setResourceMessage('')
     setMessage('')
     try {
-      const changed = resources.filter((resource) => dirty.has(resource.id))
       setResources(await saveResources(changed))
       setDirty(new Set())
-      setMessage('Configuration enregistrée. Les contrats et le suivi des ressources sont à jour.')
-    } catch { setMessage('Les modifications n\'ont pas pu être enregistrées.') }
+      setResourceMessage('Configuration enregistrée. Les contrats et le suivi des ressources sont à jour.')
+    } catch (error) { setResourceMessage(error instanceof Error ? error.message : 'Les modifications n\'ont pas pu être enregistrées.') }
     finally { setSaving(false) }
   }
   const saveCoefficients = async () => {
@@ -383,7 +386,7 @@ export function ConfigurationPage() {
             {!filtered.length && <div className="empty-state"><Search aria-hidden="true" /><strong>Aucune ressource trouvée</strong><span>Modifiez votre recherche ou relancez la détection Google.</span></div>}
           </div>
         )}
-        <footer className="configuration-footer"><span>{dirty.size ? `${dirty.size} modification${dirty.size > 1 ? 's' : ''} non enregistrée${dirty.size > 1 ? 's' : ''}` : <><Check aria-hidden="true" /> Configuration à jour</>}</span><button className="button button--primary" type="button" onClick={() => void save()} disabled={!dirty.size || saving}>{saving ? 'Enregistrement…' : 'Enregistrer les modifications'}</button></footer>
+        <footer className="configuration-footer"><span role="status">{resourceMessage || (dirty.size ? `${dirty.size} modification${dirty.size > 1 ? 's' : ''} non enregistrée${dirty.size > 1 ? 's' : ''}` : <><Check aria-hidden="true" /> Configuration à jour</>)}</span><button className="button button--primary" type="button" onClick={() => void save()} disabled={!dirty.size || saving}>{saving ? 'Enregistrement…' : 'Enregistrer les modifications'}</button></footer>
       </section>
       <section className="panel configuration-panel coefficient-panel" id="calendriers-utilises">
         <div className="configuration-toolbar">
