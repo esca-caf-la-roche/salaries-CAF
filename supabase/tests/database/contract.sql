@@ -21,6 +21,9 @@ begin
   if not has_function_privilege('service_role', 'public.internal_used_coefficient_calendars(uuid)', 'execute') then
     raise exception 'service_role doit pouvoir détecter les calendriers utilisés';
   end if;
+  if not has_function_privilege('service_role', 'public.internal_configure_coefficients(uuid,jsonb)', 'execute') then
+    raise exception 'service_role doit pouvoir configurer les calendriers utilisés';
+  end if;
   if has_function_privilege('authenticated', 'public.internal_configure_coefficients(uuid,jsonb)', 'execute') then
     raise exception 'authenticated ne doit pas modifier directement les coefficients';
   end if;
@@ -50,16 +53,36 @@ begin
   end if;
   if not exists (
     select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'coefficient_rules'
+      and column_name = 'hour_category' and is_nullable = 'YES'
+  ) then
+    raise exception 'La catégorie d''heures nullable est absente';
+  end if;
+  if exists (
+    select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'coefficient_rules' and column_name = 'hour_type'
   ) then
-    raise exception 'Le type d''heures est absent';
+    raise exception 'Les anciens types d''heures ne doivent plus exister';
+  end if;
+  if exists (
+    select 1 from public.coefficient_rules
+    where active and hour_category is null
+  ) then
+    raise exception 'Une règle active ne peut pas avoir une catégorie d''heures indéfinie';
+  end if;
+  if (
+    select array_agg(enumlabel::text order by enumsortorder)
+    from pg_enum
+    where enumtypid = 'public.hour_category'::regtype
+  ) is distinct from array['contract', 'absence', 'replacement', 'public_holiday'] then
+    raise exception 'Les quatre catégories d''heures sont invalides';
   end if;
   if (
     select count(*) from public.coefficient_rules
     where report_column in (
       'Avec prépa', 'Sans prépa', 'Absences avec prépa', 'Absences sans prépa',
       'Remplacements avec prépa', 'Remplacements sans prépa', 'Fériés (avec prépa)'
-    ) and hour_type is not null and coefficient in (1, 1.25)
+    ) and hour_category is not null and coefficient in (1, 1.25)
   ) < 38 then
     raise exception 'La configuration CSV des calendriers est incomplète';
   end if;
@@ -70,13 +93,30 @@ begin
     raise exception 'La saison scolaire est absente de monthly_hours';
   end if;
   if not exists (
+    select 1 from pg_class
+    where oid = 'public.monthly_hours'::regclass
+      and reloptions @> array['security_invoker=true']
+  ) then
+    raise exception 'monthly_hours doit respecter les politiques RLS de l''appelant';
+  end if;
+  if not has_table_privilege('authenticated', 'public.monthly_hours', 'select')
+    or has_table_privilege('anon', 'public.monthly_hours', 'select') then
+    raise exception 'Les droits de lecture de monthly_hours sont invalides';
+  end if;
+  if not exists (
     select 1 from information_schema.columns
-    where table_schema = 'public' and table_name = 'monthly_hours' and column_name = 'work_with_prep_hours'
+    where table_schema = 'public' and table_name = 'monthly_hours' and column_name = 'contract_hours'
   ) or not exists (
     select 1 from information_schema.columns
-    where table_schema = 'public' and table_name = 'monthly_hours' and column_name = 'replacement_without_prep_hours'
+    where table_schema = 'public' and table_name = 'monthly_hours' and column_name = 'absence_hours'
+  ) or not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'monthly_hours' and column_name = 'replacement_hours'
+  ) or not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'monthly_hours' and column_name = 'public_holiday_hours'
   ) then
-    raise exception 'La répartition par type d''heures est incomplète';
+    raise exception 'La répartition entre les quatre catégories d''heures est incomplète';
   end if;
   if not exists (
     select 1 from information_schema.columns

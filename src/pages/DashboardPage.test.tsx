@@ -24,7 +24,7 @@ describe('DashboardPage', () => {
     vi.clearAllMocks()
     getEmployeeSummaries.mockResolvedValue([])
     getCoefficientCalendars.mockResolvedValue([
-      { googleCalendarId: 'unknown@group.calendar.google.com', name: 'Nouveau calendrier', coefficient: null, hourType: null, eventCount: 3 },
+      { googleCalendarId: 'unknown@group.calendar.google.com', name: 'Nouveau calendrier', coefficient: null, hourCategory: null, eventCount: 3 },
     ])
   })
 
@@ -35,5 +35,9 @@ describe('DashboardPage', () => {
     expect(screen.getByText("1 type d'heures à définir", { exact: false })).toBeInTheDocument()
     expect(screen.getByText('1 coefficient à définir', { exact: false })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Configurer les calendriers' })).toHaveAttribute('href', '/configuration#calendriers-utilises')
+    expect(screen.getByRole('columnheader', { name: 'Heures du contrat' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: "Heures d'absences" })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Heures de remplacements' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Heures fériées' })).toBeInTheDocument()
   })
 })

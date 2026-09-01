@@ -1,17 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, CircleAlert, Mail, RefreshCw, Search } from 'lucide-react'
 import { discoverResources, getCoefficientCalendars, getResources, saveCoefficientCalendars, saveResources, startGoogleConnection } from '../services/api'
-import type { EmployeeResource, HourType, PreparationCoefficient, UsedCalendarCoefficient } from '../types'
+import type { EmployeeResource, HourCategory, PreparationCoefficient, UsedCalendarCoefficient } from '../types'
 
-const hourTypeGroups: Array<{ value: HourType | null; label: string }> = [
+const hourCategoryGroups: Array<{ value: HourCategory | null; label: string }> = [
   { value: null, label: 'À définir' },
-  { value: 'work_with_prep', label: 'Avec prépa' },
-  { value: 'work_without_prep', label: 'Sans prépa' },
-  { value: 'absence_with_prep', label: 'Absences avec prépa' },
-  { value: 'absence_without_prep', label: 'Absences sans prépa' },
-  { value: 'replacement_with_prep', label: 'Remplacements avec prépa' },
-  { value: 'replacement_without_prep', label: 'Remplacements sans prépa' },
-  { value: 'public_holiday_with_prep', label: 'Fériés (avec prépa)' },
+  { value: 'contract', label: 'Heures du contrat' },
+  { value: 'absence', label: "Heures d'absences" },
+  { value: 'replacement', label: 'Heures de remplacements' },
+  { value: 'public_holiday', label: 'Heures fériées' },
 ]
 
 export function ConfigurationPage() {
@@ -36,9 +33,9 @@ export function ConfigurationPage() {
     return resources.filter((resource) => `${resource.name} ${resource.googleCalendarId} ${resource.loginEmail} ${resource.contractType ?? ''}`.toLocaleLowerCase('fr').includes(normalizedQuery))
   }, [resources, query])
   const enabledCount = resources.filter((resource) => resource.enabled).length
-  const groupedCalendars = useMemo(() => hourTypeGroups.map((group) => ({
+  const groupedCalendars = useMemo(() => hourCategoryGroups.map((group) => ({
     ...group,
-    calendars: coefficientCalendars.filter((calendar) => calendar.hourType === group.value),
+    calendars: coefficientCalendars.filter((calendar) => calendar.hourCategory === group.value),
   })).filter((group) => group.calendars.length), [coefficientCalendars])
 
   const patchResource = (id: string, patch: Partial<EmployeeResource>) => {
@@ -58,8 +55,8 @@ export function ConfigurationPage() {
     setCoefficientDirty((items) => new Set(items).add(googleCalendarId))
     setMessage('')
   }
-  const patchHourType = (googleCalendarId: string, hourType: HourType | null) => {
-    setCoefficientCalendars((items) => items.map((item) => item.googleCalendarId === googleCalendarId ? { ...item, hourType } : item))
+  const patchHourCategory = (googleCalendarId: string, hourCategory: HourCategory | null) => {
+    setCoefficientCalendars((items) => items.map((item) => item.googleCalendarId === googleCalendarId ? { ...item, hourCategory } : item))
     setCoefficientDirty((items) => new Set(items).add(googleCalendarId))
     setMessage('')
   }
@@ -97,8 +94,8 @@ export function ConfigurationPage() {
   }
   const saveCoefficients = async () => {
     const changed = coefficientCalendars.filter((calendar) => coefficientDirty.has(calendar.googleCalendarId))
-    if (changed.some((calendar) => calendar.hourType == null || calendar.coefficient == null)) {
-      setMessage('Définissez le type d\'heures et le coefficient de chaque calendrier modifié.')
+    if (changed.some((calendar) => calendar.hourCategory == null || calendar.coefficient == null)) {
+      setMessage('Définissez la catégorie d\'heures et le coefficient de chaque calendrier modifié.')
       return
     }
     setCoefficientsSaving(true)
@@ -127,8 +124,8 @@ export function ConfigurationPage() {
       {message && <div className="alert alert--success" role="status">{message}</div>}
       <section className="setup-note">
         <span><CircleAlert aria-hidden="true" /></span>
-        <div><strong>Comment fonctionne le calcul ?</strong><p>Les heures annuelles du contrat fixent l'objectif du salarié. Chaque calendrier utilisé détermine séparément le type d'heures et le coefficient appliqué aux événements. Une saison va du 1er septembre au 31 août.</p></div>
-        <code>calendrier → type + coefficient</code>
+        <div><strong>Comment fonctionne le calcul ?</strong><p>Les heures annuelles fixent l'objectif du salarié. Chaque calendrier utilisé détermine indépendamment sa catégorie d'heures et le coefficient appliqué aux événements. Une saison va du 1er septembre au 31 août.</p></div>
+        <code>calendrier → catégorie + coefficient</code>
       </section>
       <section className="panel configuration-panel">
         <div className="configuration-toolbar">
@@ -174,8 +171,8 @@ export function ConfigurationPage() {
                 <div className="calendar-identity"><i /><span><strong>{calendar.name}</strong><small>{calendar.eventCount} événement{calendar.eventCount > 1 ? 's' : ''} · {calendar.googleCalendarId}</small></span></div>
                 <label className="coefficient-select">
                   <span className="sr-only">Type d'heures de {calendar.name}</span>
-                  <select aria-label={`Type d'heures de ${calendar.name}`} value={calendar.hourType ?? ''} onChange={(event) => patchHourType(calendar.googleCalendarId, event.target.value === '' ? null : event.target.value as HourType)}>
-                    {hourTypeGroups.map((option) => <option key={option.value ?? 'undefined'} value={option.value ?? ''}>{option.label}</option>)}
+                  <select aria-label={`Type d'heures de ${calendar.name}`} value={calendar.hourCategory ?? ''} onChange={(event) => patchHourCategory(calendar.googleCalendarId, event.target.value === '' ? null : event.target.value as HourCategory)}>
+                    {hourCategoryGroups.map((option) => <option key={option.value ?? 'undefined'} value={option.value ?? ''}>{option.label}</option>)}
                   </select>
                 </label>
                 <label className="coefficient-select">

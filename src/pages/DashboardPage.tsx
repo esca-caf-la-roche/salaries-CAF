@@ -42,21 +42,18 @@ export function DashboardPage() {
       month: monthNumber,
       rawHours: total.rawHours + (month?.rawHours ?? 0),
       weightedHours: total.weightedHours + (month?.weightedHours ?? 0),
-      workWithPrepHours: total.workWithPrepHours + (month?.workWithPrepHours ?? 0),
-      workWithoutPrepHours: total.workWithoutPrepHours + (month?.workWithoutPrepHours ?? 0),
-      absenceWithPrepHours: total.absenceWithPrepHours + (month?.absenceWithPrepHours ?? 0),
-      absenceWithoutPrepHours: total.absenceWithoutPrepHours + (month?.absenceWithoutPrepHours ?? 0),
-      replacementWithPrepHours: total.replacementWithPrepHours + (month?.replacementWithPrepHours ?? 0),
-      replacementWithoutPrepHours: total.replacementWithoutPrepHours + (month?.replacementWithoutPrepHours ?? 0),
-      publicHolidayWithPrepHours: total.publicHolidayWithPrepHours + (month?.publicHolidayWithPrepHours ?? 0),
+      contractHours: total.contractHours + (month?.contractHours ?? 0),
+      absenceHours: total.absenceHours + (month?.absenceHours ?? 0),
+      replacementHours: total.replacementHours + (month?.replacementHours ?? 0),
+      publicHolidayHours: total.publicHolidayHours + (month?.publicHolidayHours ?? 0),
       eventCount: total.eventCount + (month?.eventCount ?? 0),
     }
-  }, { month: monthNumber, rawHours: 0, weightedHours: 0, workWithPrepHours: 0, workWithoutPrepHours: 0, absenceWithPrepHours: 0, absenceWithoutPrepHours: 0, replacementWithPrepHours: 0, replacementWithoutPrepHours: 0, publicHolidayWithPrepHours: 0, eventCount: 0 })), [visible])
+  }, { month: monthNumber, rawHours: 0, weightedHours: 0, contractHours: 0, absenceHours: 0, replacementHours: 0, publicHolidayHours: 0, eventCount: 0 })), [visible])
   const periodData = selectedMonth === 'all' ? combined : combined.filter((item) => item.month === selectedMonth)
   const rawTotal = periodData.reduce((sum, item) => sum + item.rawHours, 0)
   const weightedTotal = periodData.reduce((sum, item) => sum + item.weightedHours, 0)
   const eventTotal = periodData.reduce((sum, item) => sum + item.eventCount, 0)
-  const calendarsWithoutType = usedCalendars.filter((calendar) => calendar.hourType == null).length
+  const calendarsWithoutType = usedCalendars.filter((calendar) => calendar.hourCategory == null).length
   const calendarsWithoutCoefficient = usedCalendars.filter((calendar) => calendar.coefficient == null).length
 
   const synchronize = async () => {
@@ -104,18 +101,15 @@ export function DashboardPage() {
 
       <section className="panel">
         <div className="panel-heading"><div><p className="eyebrow">Détail</p><h2>Répartition par salarié</h2></div></div>
-        <div className="table-scroll"><table><thead><tr><th>Salarié</th><th>Calendrier</th><th>Heures calendrier</th><th>Avec prépa</th><th>Sans prépa</th><th>Abs. avec prépa</th><th>Abs. sans prépa</th><th>Rempl. avec prépa</th><th>Rempl. sans prépa</th><th>Fériés</th><th>Heures retenues</th></tr></thead><tbody>{visible.map((employee) => {
+        <div className="table-scroll"><table><thead><tr><th>Salarié</th><th>Calendrier</th><th>Heures calendrier</th><th>Heures du contrat</th><th>Heures d'absences</th><th>Heures de remplacements</th><th>Heures fériées</th><th>Heures retenues</th></tr></thead><tbody>{visible.map((employee) => {
           const rows = selectedMonth === 'all' ? employee.monthlyHours : employee.monthlyHours.filter((item) => item.month === selectedMonth)
           const raw = rows.reduce((sum, item) => sum + item.rawHours, 0)
           const weighted = rows.reduce((sum, item) => sum + item.weightedHours, 0)
-          const workWithPrep = rows.reduce((sum, item) => sum + item.workWithPrepHours, 0)
-          const workWithoutPrep = rows.reduce((sum, item) => sum + item.workWithoutPrepHours, 0)
-          const absenceWithPrep = rows.reduce((sum, item) => sum + item.absenceWithPrepHours, 0)
-          const absenceWithoutPrep = rows.reduce((sum, item) => sum + item.absenceWithoutPrepHours, 0)
-          const replacementWithPrep = rows.reduce((sum, item) => sum + item.replacementWithPrepHours, 0)
-          const replacementWithoutPrep = rows.reduce((sum, item) => sum + item.replacementWithoutPrepHours, 0)
-          const publicHolidayWithPrep = rows.reduce((sum, item) => sum + item.publicHolidayWithPrepHours, 0)
-          return <tr key={employee.id}><td><strong>{employee.name}</strong></td><td>{employee.calendarName}</td><td>{formatHours(raw)} h</td><td>{formatHours(workWithPrep)} h</td><td>{formatHours(workWithoutPrep)} h</td><td>{formatHours(absenceWithPrep)} h</td><td>{formatHours(absenceWithoutPrep)} h</td><td>{formatHours(replacementWithPrep)} h</td><td>{formatHours(replacementWithoutPrep)} h</td><td>{formatHours(publicHolidayWithPrep)} h</td><td><strong>{formatHours(weighted)} h</strong></td></tr>
+          const contract = rows.reduce((sum, item) => sum + item.contractHours, 0)
+          const absence = rows.reduce((sum, item) => sum + item.absenceHours, 0)
+          const replacement = rows.reduce((sum, item) => sum + item.replacementHours, 0)
+          const publicHoliday = rows.reduce((sum, item) => sum + item.publicHolidayHours, 0)
+          return <tr key={employee.id}><td><strong>{employee.name}</strong></td><td>{employee.calendarName}</td><td>{formatHours(raw)} h</td><td>{formatHours(contract)} h</td><td>{formatHours(absence)} h</td><td>{formatHours(replacement)} h</td><td>{formatHours(publicHoliday)} h</td><td><strong>{formatHours(weighted)} h</strong></td></tr>
         })}</tbody></table></div>
       </section>
     </div>

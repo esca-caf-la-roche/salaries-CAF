@@ -22,7 +22,7 @@ const usedCalendar: UsedCalendarCoefficient = {
   googleCalendarId: 'course-1@group.calendar.google.com',
   name: 'Cours du mardi',
   coefficient: null,
-  hourType: null,
+  hourCategory: null,
   eventCount: 12,
 }
 
@@ -95,7 +95,7 @@ describe('ConfigurationPage', () => {
   it('saves one of the two supported coefficients for a detected calendar', async () => {
     render(<ConfigurationPage />)
     fireEvent.change(await screen.findByRole('combobox', { name: "Type d'heures de Cours du mardi" }), {
-      target: { value: 'work_with_prep' },
+      target: { value: 'contract' },
     })
     fireEvent.change(await screen.findByRole('combobox', { name: 'Coefficient de Cours du mardi' }), {
       target: { value: '1.25' },
@@ -103,33 +103,44 @@ describe('ConfigurationPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les règles' }))
 
     await waitFor(() => expect(saveCoefficientCalendars).toHaveBeenCalledWith([
-      expect.objectContaining({ googleCalendarId: usedCalendar.googleCalendarId, coefficient: 1.25, hourType: 'work_with_prep' }),
+      expect.objectContaining({ googleCalendarId: usedCalendar.googleCalendarId, coefficient: 1.25, hourCategory: 'contract' }),
     ]))
   })
 
-  it('saves the hour type for a detected calendar', async () => {
+  it('saves a four-value hour category independently from the coefficient value', async () => {
     render(<ConfigurationPage />)
     fireEvent.change(await screen.findByRole('combobox', { name: "Type d'heures de Cours du mardi" }), {
-      target: { value: 'replacement_without_prep' },
+      target: { value: 'replacement' },
     })
     fireEvent.change(screen.getByRole('combobox', { name: 'Coefficient de Cours du mardi' }), {
-      target: { value: '1' },
+      target: { value: '1.25' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les règles' }))
 
     await waitFor(() => expect(saveCoefficientCalendars).toHaveBeenCalledWith([
-      expect.objectContaining({ googleCalendarId: usedCalendar.googleCalendarId, hourType: 'replacement_without_prep' }),
+      expect.objectContaining({ googleCalendarId: usedCalendar.googleCalendarId, coefficient: 1.25, hourCategory: 'replacement' }),
     ]))
   })
 
-  it('requires both the hour type and coefficient before saving', async () => {
+  it('requires both the hour category and coefficient before saving', async () => {
     render(<ConfigurationPage />)
     fireEvent.change(await screen.findByRole('combobox', { name: 'Coefficient de Cours du mardi' }), {
       target: { value: '1' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les règles' }))
 
-    expect(await screen.findByText("Définissez le type d'heures et le coefficient de chaque calendrier modifié.")).toBeInTheDocument()
+    expect(await screen.findByText("Définissez la catégorie d'heures et le coefficient de chaque calendrier modifié.")).toBeInTheDocument()
+    expect(saveCoefficientCalendars).not.toHaveBeenCalled()
+  })
+
+  it('does not save a category without its coefficient', async () => {
+    render(<ConfigurationPage />)
+    fireEvent.change(await screen.findByRole('combobox', { name: "Type d'heures de Cours du mardi" }), {
+      target: { value: 'absence' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les règles' }))
+
+    expect(await screen.findByText("Définissez la catégorie d'heures et le coefficient de chaque calendrier modifié.")).toBeInTheDocument()
     expect(saveCoefficientCalendars).not.toHaveBeenCalled()
   })
 })
