@@ -9,6 +9,7 @@ import {
   isWeekday,
 } from '../lib/annualSummary'
 import { monthLabel, schoolMonths, schoolYearForDate } from '../lib/format'
+import { contractTypeLabel } from '../lib/contracts'
 import { calculateRetainedHours } from '../lib/hourTotals'
 import { getEmployeeSummaries, getMonthlyEventHours, saveAnnualTracking } from '../services/api'
 import { getGovernmentPublicHolidaysForSchoolSeason } from '../services/publicHolidays'
@@ -103,6 +104,7 @@ export function TimeTrackingPage() {
   }, [schoolYear])
 
   const employee = employees.find((item) => item.id === selectedEmployeeId)
+  const isIndependent = employee?.contractType === 'INDEP'
   const calendarMonths = useMemo(() => schoolMonths.map((month) => employee?.monthlyHours.find((item) => item.month === month) ?? emptyMonth(month)), [employee])
 
   useEffect(() => {
@@ -141,14 +143,14 @@ export function TimeTrackingPage() {
   const payrollEntries = useMemo<MonthlyPayrollEntry[]>(() => schoolMonths.map((month) => ({
     month,
     paidMinutes: parseDuration(payrollDraft[month]?.paid ?? '') ?? 0,
-    paidLeaveMinutes: parseDuration(payrollDraft[month]?.leave ?? '') ?? 0,
-  })), [payrollDraft])
+    paidLeaveMinutes: isIndependent ? 0 : parseDuration(payrollDraft[month]?.leave ?? '') ?? 0,
+  })), [payrollDraft, isIndependent])
   const payslipHours = payrollEntries.reduce((sum, entry) => sum + entry.paidMinutes, 0) / 60
   const payslipLeaveHours = payrollEntries.reduce((sum, entry) => sum + entry.paidLeaveMinutes, 0) / 60
-  const annualMinutes = parseDuration(settingsDraft.annual)
+  const annualMinutes = isIndependent ? 0 : parseDuration(settingsDraft.annual)
   const fullTimeMinutes = CDI_FULL_TIME_ANNUAL_HOURS * 60
   const paidMonths = Number(settingsDraft.paidMonths)
-  const validContractDraft = annualMinutes != null && annualMinutes > 0 && fullTimeMinutes != null && fullTimeMinutes > 0
+  const validContractDraft = annualMinutes != null && (isIndependent || annualMinutes > 0) && fullTimeMinutes != null && fullTimeMinutes > 0
   const validDraft = validContractDraft
     && Number.isInteger(paidMonths) && paidMonths >= 1 && paidMonths <= 12
     && schoolMonths.every((month) => parseDuration(payrollDraft[month]?.paid ?? '') != null && parseDuration(payrollDraft[month]?.leave ?? '') != null)
@@ -245,7 +247,7 @@ export function TimeTrackingPage() {
       {employee?.contractType === 'CDI' && holidaySource === 'fallback' && <div className="alert alert--warning" role="status">L’API gouvernementale des jours fériés est temporairement indisponible. Le calendrier métropolitain de secours est affiché.</div>}
 
       <section className="filters tracking-filters" aria-label="Filtres du suivi">
-        <label><span>Salarié</span><div className="select-wrap"><select value={selectedEmployeeId} onChange={(event) => { setSelectedEmployeeId(event.target.value); setSaveMessage('') }} disabled={loading}><option value="">Sélectionner</option>{employees.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.contractType}</option>)}</select><ChevronDown aria-hidden="true" /></div></label>
+        <label><span>Salarié</span><div className="select-wrap"><select value={selectedEmployeeId} onChange={(event) => { setSelectedEmployeeId(event.target.value); setSaveMessage('') }} disabled={loading}><option value="">Sélectionner</option>{employees.map((item) => <option key={item.id} value={item.id}>{item.name} · {contractTypeLabel(item.contractType)}</option>)}</select><ChevronDown aria-hidden="true" /></div></label>
         <label><span>Saison</span><div className="select-wrap"><select value={schoolYear} onChange={(event) => setSchoolYear(Number(event.target.value))}>{[currentSchoolYear - 2, currentSchoolYear - 1, currentSchoolYear, currentSchoolYear + 1].map((year) => <option key={year} value={year}>{year}–{year + 1}</option>)}</select><ChevronDown aria-hidden="true" /></div></label>
         {view === 'monthly' && <label><span>Mois</span><div className="select-wrap"><select value={selectedMonth} onChange={(event) => setSelectedMonth(Number(event.target.value))}>{schoolMonths.map((month) => <option key={month} value={month}>{monthLabel(month)}</option>)}</select><ChevronDown aria-hidden="true" /></div></label>}
       </section>
@@ -260,51 +262,51 @@ export function TimeTrackingPage() {
       {employee && view === 'monthly' && <>
         <section className="metric-grid tracking-metrics" aria-label="Totaux du mois">
           <article className="metric metric--lead"><p>Heures retenues</p><strong>{formatHoursMinutes(monthlyRetained)} <small>h</small></strong><span>{monthData.eventCount} événement{monthData.eventCount > 1 ? 's' : ''} calendrier · {selectedMonthHolidays.length} férié{selectedMonthHolidays.length > 1 ? 's' : ''}</span></article>
-          <article className="metric"><p>Contrat</p><strong>{formatHoursMinutes(monthData.contractHours)} <small>h</small></strong><span>Avec et sans préparation</span></article>
-          <article className="metric"><p>Absences</p><strong>{formatHoursMinutes(monthData.absenceHours)} <small>h</small></strong><span>Total des heures d’absence</span></article>
+          <article className="metric"><p>{isIndependent ? 'Heures réalisées' : 'Contrat'}</p><strong>{formatHoursMinutes(monthData.contractHours)} <small>h</small></strong><span>{isIndependent ? 'Temps réel, tous calendriers' : 'Avec et sans préparation'}</span></article>
+          {!isIndependent && <><article className="metric"><p>Absences</p><strong>{formatHoursMinutes(monthData.absenceHours)} <small>h</small></strong><span>Total des heures d’absence</span></article>
           <article className="metric"><p>Remplacements</p><strong>{formatHoursMinutes(monthData.replacementHours)} <small>h</small></strong><span>À payer en plus du contrat</span></article>
-          <article className="metric"><p>Fériés</p><strong>{formatHoursMinutes(monthData.publicHolidayHours)} <small>h</small></strong><span>Total des heures fériées</span></article>
+          <article className="metric"><p>Fériés</p><strong>{formatHoursMinutes(monthData.publicHolidayHours)} <small>h</small></strong><span>Total des heures fériées</span></article></>}
         </section>
         <section className="panel monthly-ledger">
-          <div className="panel-heading"><div><p className="eyebrow">{monthLabel(selectedMonth)} · {employee.name}</p><h2>Détail des événements</h2></div><span className="ledger-total">Total pondéré <strong>{formatHoursMinutes(monthData.weightedHours)}</strong></span></div>
-          <div className="table-scroll"><table><thead><tr><th>Calendrier</th><th>Objet</th><th>Date</th><th>Début</th><th>Fin</th><th>Durée</th><th>Coefficient</th><th>Rubrique</th><th>Prise en compte</th></tr></thead><tbody>
-            {visibleEvents.map((event) => <tr key={event.id}><td><span className="calendar-cell"><i style={{ background: event.calendarColor ?? '#91b7bd' }} />{event.calendarName}</span></td><td><strong>{event.title}</strong></td><td>{eventDate(event.startsAt)}</td><td>{eventTime(event.startsAt)}</td><td>{eventTime(event.endsAt)}</td><td>{formatHoursMinutes(event.weightedHours)}</td><td><span className="coefficient">× {event.coefficient.toLocaleString('fr-FR')}</span></td><td>{categoryLabels[event.hourCategory]}</td><td><span className="holiday-status">Calendrier</span></td></tr>)}
+          <div className="panel-heading"><div><p className="eyebrow">{monthLabel(selectedMonth)} · {employee.name}</p><h2>Détail des événements</h2></div><span className="ledger-total">{isIndependent ? 'Total réel' : 'Total pondéré'} <strong>{formatHoursMinutes(monthData.weightedHours)}</strong></span></div>
+          <div className="table-scroll"><table><thead><tr><th>Calendrier</th><th>Objet</th><th>Date</th><th>Début</th><th>Fin</th><th>Durée</th>{!isIndependent && <><th>Coefficient</th><th>Rubrique</th></>}<th>Prise en compte</th></tr></thead><tbody>
+            {visibleEvents.map((event) => <tr key={event.id}><td><span className="calendar-cell"><i style={{ background: event.calendarColor ?? '#91b7bd' }} />{event.calendarName}</span></td><td data-label="Total"><strong>{event.title}</strong></td><td>{eventDate(event.startsAt)}</td><td>{eventTime(event.startsAt)}</td><td>{eventTime(event.endsAt)}</td><td>{formatHoursMinutes(event.weightedHours)}</td>{!isIndependent && <><td><span className="coefficient">× {event.coefficient.toLocaleString('fr-FR')}</span></td><td>{categoryLabels[event.hourCategory]}</td></>}<td><span className="holiday-status">Calendrier</span></td></tr>)}
             {selectedMonthHolidays.map((holiday) => {
               const counted = isWeekday(holiday.date)
-              return <tr className="holiday-row" key={`holiday-${holiday.date.toISOString()}`}><td><span className="calendar-cell"><i />API du gouvernement</span></td><td><strong>{holiday.name}</strong></td><td>{holidayDate(holiday.date)}</td><td>—</td><td>—</td><td>{formatHoursMinutes(counted ? (cdiHolidayCalculation?.hoursPerHoliday ?? 0) : 0)}</td><td><span className="coefficient">× {(cdiHolidayCalculation?.coefficient ?? 0).toLocaleString('fr-FR', { maximumFractionDigits: 4 })}</span></td><td>Jour férié</td><td><span className={`holiday-status holiday-status--${counted ? 'counted' : 'excluded'}`}>{counted ? 'Compté · lundi à vendredi' : 'Non compté · week-end'}</span></td></tr>
+              return <tr className="holiday-row" key={`holiday-${holiday.date.toISOString()}`}><td><span className="calendar-cell"><i />API du gouvernement</span></td><td data-label="Total"><strong>{holiday.name}</strong></td><td>{holidayDate(holiday.date)}</td><td>—</td><td>—</td><td>{formatHoursMinutes(counted ? (cdiHolidayCalculation?.hoursPerHoliday ?? 0) : 0)}</td><td><span className="coefficient">× {(cdiHolidayCalculation?.coefficient ?? 0).toLocaleString('fr-FR', { maximumFractionDigits: 4 })}</span></td><td>Jour férié</td><td><span className={`holiday-status holiday-status--${counted ? 'counted' : 'excluded'}`}>{counted ? 'Compté · lundi à vendredi' : 'Non compté · week-end'}</span></td></tr>
             })}
-            {!eventsLoading && visibleEvents.length === 0 && selectedMonthHolidays.length === 0 && <tr><td colSpan={9} className="table-empty">Aucun événement configuré pour ce mois.</td></tr>}
-            {eventsLoading && <tr><td colSpan={9} className="table-empty">Chargement du détail…</td></tr>}
+            {!eventsLoading && visibleEvents.length === 0 && selectedMonthHolidays.length === 0 && <tr><td colSpan={isIndependent ? 7 : 9} className="table-empty">Aucun événement configuré pour ce mois.</td></tr>}
+            {eventsLoading && <tr><td colSpan={isIndependent ? 7 : 9} className="table-empty">Chargement du détail…</td></tr>}
           </tbody></table></div>
         </section>
       </>}
 
       {employee && view === 'annual' && annual && <>
         <section className="contract-strip" aria-label="Paramètres du contrat">
-          <div><span>Contrat</span><strong>{employee.contractType}</strong></div>
-          <label><span>Heures annuelles</span><input value={settingsDraft.annual} onChange={(event) => setSettingsDraft((state) => ({ ...state, annual: event.target.value }))} disabled={!canEdit} inputMode="decimal" aria-label="Heures annuelles du contrat" /></label>
+          <div><span>Contrat</span><strong>{contractTypeLabel(employee.contractType)}</strong></div>
+          {!isIndependent && <label><span>Heures annuelles</span><input value={settingsDraft.annual} onChange={(event) => setSettingsDraft((state) => ({ ...state, annual: event.target.value }))} disabled={!canEdit} inputMode="decimal" aria-label="Heures annuelles du contrat" /></label>}
           {employee.contractType === 'CDI' && <label><span>Référence temps plein</span><input value={settingsDraft.fullTime} disabled aria-label="Heures annuelles à temps plein" /></label>}
-          {employee.contractType !== 'CDI' && <label><span>Mois de paie</span><input type="number" min="1" max="12" value={settingsDraft.paidMonths} onChange={(event) => setSettingsDraft((state) => ({ ...state, paidMonths: event.target.value }))} disabled={!canEdit} aria-label="Nombre de mois payés" /></label>}
+          {!isIndependent && employee.contractType !== 'CDI' && <label><span>Mois de paie</span><input type="number" min="1" max="12" value={settingsDraft.paidMonths} onChange={(event) => setSettingsDraft((state) => ({ ...state, paidMonths: event.target.value }))} disabled={!canEdit} aria-label="Nombre de mois payés" /></label>}
         </section>
 
         <section className="annual-scoreboard" aria-label="Régularisation annuelle">
-          <article><span>Reste à réaliser</span><strong>{formatHoursMinutes(annual.remainingToWorkHours)}</strong><small>sur le contrat annuel</small></article>
-          <article><span>Total dû</span><strong>{formatHoursMinutes(annual.totalDueHours)}</strong><small>garantie + compléments</small></article>
-          <article><span>Total bulletins</span><strong>{formatHoursMinutes(annual.payslipTotalHours)}</strong><small>heures + congés saisis</small></article>
+          {!isIndependent && <article><span>Reste à réaliser</span><strong>{formatHoursMinutes(annual.remainingToWorkHours)}</strong><small>sur le contrat annuel</small></article>}
+          <article><span>Total dû</span><strong>{formatHoursMinutes(annual.totalDueHours)}</strong><small>{isIndependent ? 'durée réelle des événements' : 'garantie + compléments'}</small></article>
+          <article><span>Total bulletins</span><strong>{formatHoursMinutes(annual.payslipTotalHours)}</strong><small>{isIndependent ? 'heures saisies' : 'heures + congés saisis'}</small></article>
           <article className={annual.payBalanceHours > 0 ? 'annual-scoreboard__balance--due' : 'annual-scoreboard__balance--settled'}><span>{annual.payBalanceHours > 0 ? 'Reste à payer' : annual.payBalanceHours < 0 ? 'Avance payée' : 'Solde'}</span><strong>{formatHoursMinutes(Math.abs(annual.payBalanceHours))}</strong><small>{annual.payBalanceHours === 0 ? 'saison équilibrée' : 'écart avec les bulletins'}</small></article>
         </section>
 
         <section className="panel annual-sheet">
-          <div className="panel-heading"><div><p className="eyebrow">Saison {schoolYear}–{schoolYear + 1}</p><h2>Lecture annuelle, mois par mois</h2></div><span className="contract-badge">{employee.contractType} · {formatHoursMinutes(annualMinutes! / 60)} h</span></div>
+          <div className="panel-heading"><div><p className="eyebrow">Saison {schoolYear}–{schoolYear + 1}</p><h2>Lecture annuelle, mois par mois</h2></div><span className="contract-badge">{contractTypeLabel(employee.contractType)} · {isIndependent ? 'Temps réel' : `${formatHoursMinutes(annualMinutes! / 60)} h`}</span></div>
           <div className="annual-table-scroll"><table><thead><tr><th>Désignation</th>{schoolMonths.map((month) => <th key={month}>{monthLabel(month)}</th>)}<th>Total</th></tr></thead><tbody>
-            <AnnualRow label="Heures du contrat" months={months} value={(month) => month.contractHours} tone="work" />
-            <AnnualRow label="Heures d’absences" months={months} value={(month) => month.absenceHours} tone="absence" />
+            <AnnualRow label={isIndependent ? 'Heures réalisées' : 'Heures du contrat'} months={months} value={(month) => month.contractHours} tone="work" />
+            {!isIndependent && <><AnnualRow label="Heures d’absences" months={months} value={(month) => month.absenceHours} tone="absence" />
             <AnnualRow label="Heures de remplacements" months={months} value={(month) => month.replacementHours} tone="replacement" />
-            <AnnualRow label="Heures fériées" months={months} value={(month) => month.publicHolidayHours} />
+            <AnnualRow label="Heures fériées" months={months} value={(month) => month.publicHolidayHours} /></>}
             <AnnualRow label="Total du mois" months={months} value={calculateRetainedHours} strong />
-            {employee.contractType === 'CDII' && <tr className="annual-row annual-row--weeks"><th scope="row">Semaines travaillées</th>{months.map((month) => <td key={month.month}>{month.workedWeeks || '—'}</td>)}<td><strong>{employee.annualWorkedWeeks}</strong></td></tr>}
-            <tr className="annual-row annual-row--input"><th scope="row">Bulletin</th>{schoolMonths.map((month) => <td key={month}><input value={payrollDraft[month]?.paid ?? ''} onChange={(event) => setPayrollDraft((state) => ({ ...state, [month]: { ...state[month], paid: event.target.value } }))} disabled={!canEdit} aria-label={`Heures du bulletin de ${monthLabel(month)}`} /></td>)}<td><strong>{formatHoursMinutes(payslipHours)}</strong></td></tr>
-            {employee.contractType === 'CDI' && <tr className="annual-row annual-row--input"><th scope="row">Congés payés au bulletin</th>{schoolMonths.map((month) => <td key={month}><input value={payrollDraft[month]?.leave ?? ''} onChange={(event) => setPayrollDraft((state) => ({ ...state, [month]: { ...state[month], leave: event.target.value } }))} disabled={!canEdit} aria-label={`Congés payés de ${monthLabel(month)}`} /></td>)}<td><strong>{formatHoursMinutes(payslipLeaveHours)}</strong></td></tr>}
+            {employee.contractType === 'CDII' && <tr className="annual-row annual-row--weeks"><th scope="row">Semaines travaillées</th>{months.map((month) => <td key={month.month} data-label={monthLabel(month.month)}>{month.workedWeeks || '—'}</td>)}<td data-label="Total"><strong>{employee.annualWorkedWeeks}</strong></td></tr>}
+            <tr className="annual-row annual-row--input"><th scope="row">Bulletin</th>{schoolMonths.map((month) => <td key={month} data-label={monthLabel(month)}><input value={payrollDraft[month]?.paid ?? ''} onChange={(event) => setPayrollDraft((state) => ({ ...state, [month]: { ...state[month], paid: event.target.value } }))} disabled={!canEdit} aria-label={`Heures du bulletin de ${monthLabel(month)}`} /></td>)}<td data-label="Total"><strong>{formatHoursMinutes(payslipHours)}</strong></td></tr>
+            {employee.contractType === 'CDI' && <tr className="annual-row annual-row--input"><th scope="row">Congés payés au bulletin</th>{schoolMonths.map((month) => <td key={month} data-label={monthLabel(month)}><input value={payrollDraft[month]?.leave ?? ''} onChange={(event) => setPayrollDraft((state) => ({ ...state, [month]: { ...state[month], leave: event.target.value } }))} disabled={!canEdit} aria-label={`Congés payés de ${monthLabel(month)}`} /></td>)}<td data-label="Total"><strong>{formatHoursMinutes(payslipLeaveHours)}</strong></td></tr>}
           </tbody></table></div>
         </section>
 
@@ -323,7 +325,7 @@ export function TimeTrackingPage() {
 
         <section className="calculation-note">
           <ClipboardCheck aria-hidden="true" />
-          <div><strong>Règle appliquée pour {employee.contractType}</strong>{employee.contractType === 'CDI'
+          <div><strong>Règle appliquée pour {contractTypeLabel(employee.contractType)}</strong>{employee.contractType === 'CDI'
             ? <>
               <div className="calculation-breakdown" role="region" aria-label="Comparaison entre les heures réelles et le contrat annuel">
                 <span><small>Heures réelles</small><b>{formatHoursMinutes(cdiHolidayCalculation?.realizedHours ?? 0)}</b></span>
@@ -336,7 +338,7 @@ export function TimeTrackingPage() {
                 ? `les heures réelles atteignent ou dépassent le contrat : le coefficient évolue donc avec le réel (${formatHoursMinutes(cdiHolidayCalculation?.realizedHours ?? 0)} / 1582).`
                 : `les heures réelles restent sous le contrat : le coefficient est donc garanti sur le contrat annuel (${formatHoursMinutes(annualMinutes! / 60)} / 1582).`} Chaque férié du lundi au vendredi vaut 7 h × ce coefficient. Les congés représentent 10 % de la base garantie.</p>
             </>
-            : <p>Base garantie : maximum entre le contrat et les heures réalisées, absences et fériés du calendrier. Aucun congé supplémentaire. Les remplacements s’ajoutent toujours.</p>}
+            : isIndependent ? <p>Chaque événement horaire compte à sa durée réelle, quel que soit le calendrier. Aucune majoration de préparation, garantie annuelle ou heure de congé ou de férié automatique n’est ajoutée.</p> : <p>Base garantie : maximum entre le contrat et les heures réalisées, absences et fériés du calendrier. Aucun congé supplémentaire. Les remplacements s’ajoutent toujours.</p>}
           </div>
         </section>
       </>}
@@ -352,5 +354,5 @@ function AnnualRow({ label, months, value, tone, strong = false }: {
   strong?: boolean
 }) {
   const total = months.reduce((sum, month) => sum + value(month), 0)
-  return <tr className={`annual-row${tone ? ` annual-row--${tone}` : ''}${strong ? ' annual-row--total' : ''}`}><th scope="row">{label}</th>{months.map((month) => <td key={month.month}>{formatHoursMinutes(value(month))}</td>)}<td><strong>{formatHoursMinutes(total)}</strong></td></tr>
+  return <tr className={`annual-row${tone ? ` annual-row--${tone}` : ''}${strong ? ' annual-row--total' : ''}`}><th scope="row">{label}</th>{months.map((month) => <td key={month.month} data-label={monthLabel(month.month)}>{formatHoursMinutes(value(month))}</td>)}<td data-label="Total"><strong>{formatHoursMinutes(total)}</strong></td></tr>
 }

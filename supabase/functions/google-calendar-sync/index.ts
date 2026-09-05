@@ -258,10 +258,10 @@ async function saveResources(admin: SupabaseClient, ownerId: string, updates: Re
   for (const update of normalizedUpdates) {
     if (update.isUnassignedResource) continue;
     if (update.enabled && !validEmail(update.loginEmail)) throw new HttpError(400, "Un e-mail valide est requis pour chaque ressource suivie");
-    if (update.contractType && !["CDI", "CDII", "CDD"].includes(update.contractType)) {
-      throw new HttpError(400, "Type de contrat invalide : choisissez CDI, CDII ou CDD");
+    if (update.contractType && !["CDI", "CDII", "CDD", "INDEP"].includes(update.contractType)) {
+      throw new HttpError(400, "Type de contrat invalide : choisissez CDI, CDII, CDD ou Indépendant");
     }
-    if (update.enabled && (!update.contractType || update.annualContractHours == null || update.annualContractHours <= 0)) {
+    if (update.enabled && (!update.contractType || (update.contractType !== "INDEP" && (update.annualContractHours == null || update.annualContractHours <= 0)))) {
       throw new HttpError(400, "Le type de contrat et un nombre d'heures annuelles positif sont requis");
     }
   }
@@ -397,7 +397,9 @@ async function executeSync(admin: SupabaseClient, calendar: Record<string, unkno
     }
     const liveRows = events.filter((event) => event.status !== "cancelled" && event.start && event.end)
       .map((event) => eventRow(String(calendar.id), event, run.id, ruleByGoogleId));
-    unmapped += liveRows.filter((event) => !event.coefficient_rule_id).length;
+    if (calendar.contract_type !== "INDEP") {
+      unmapped += liveRows.filter((event) => !event.coefficient_rule_id).length;
+    }
     for (let offset = 0; offset < liveRows.length; offset += 250) {
       const { error } = await admin.from("calendar_events").upsert(liveRows.slice(offset, offset + 250), {
         onConflict: "calendar_id,google_event_id",
@@ -432,7 +434,7 @@ async function executeSync(admin: SupabaseClient, calendar: Record<string, unkno
 
 async function sync(admin: SupabaseClient, ownerId: string, calendarIds?: string[]) {
   const connection = await connectionFor(admin, ownerId);
-  let query = admin.from("calendars").select("id,google_calendar_id,sync_token")
+  let query = admin.from("calendars").select("id,google_calendar_id,sync_token,employees!employees_resource_calendar_id_fkey(contract_type)")
     .eq("connection_id", connection.id).eq("is_resource", true).eq("enabled", true);
   if (calendarIds?.length) query = query.in("id", calendarIds);
   const { data: calendars, error } = await query;
@@ -453,7 +455,8 @@ async function sync(admin: SupabaseClient, ownerId: string, calendarIds?: string
     if (lockError) throw lockError;
     if (!locked) { results.push({ calendarId: calendar.id, skipped: "already_running" }); continue; }
     try {
-      results.push(await executeSync(admin, calendar, token, calendar.sync_token ? "incremental" : "full", ruleByGoogleId));
+      const employee = Array.isArray(calendar.employees) ? calendar.employees[0] : calendar.employees;
+      results.push(await executeSync(admin, { ...calendar, contract_type: employee?.contract_type }, token, calendar.sync_token ? "incremental" : "full", ruleByGoogleId));
     } catch (syncError) {
       const message = syncError instanceof Error ? syncError.message : "Erreur de synchronisation";
       await admin.from("sync_runs").update({

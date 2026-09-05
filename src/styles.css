@@ -169,11 +169,13 @@ tbody tr:last-child td { border-bottom: 0; }
 .annual-scoreboard .annual-scoreboard__balance--settled { color: white; border-color: var(--pine); background: var(--pine); }
 .annual-scoreboard .annual-scoreboard__balance--due > *, .annual-scoreboard .annual-scoreboard__balance--settled > * { color: inherit; }
 .contract-badge { padding: 6px 10px; color: var(--pine); border-radius: 99px; background: #dceae5; font: 500 .64rem "DM Mono", monospace; }
-.annual-table-scroll { width: 100%; overflow-x: clip; }
+.annual-sheet { container-type: inline-size; }
+.annual-table-scroll { width: 100%; padding: 16px 24px 24px; }
 .annual-sheet table { width: 100%; table-layout: fixed; }
-.annual-sheet th, .annual-sheet td { padding: 10px 3px; text-align: right; font-family: "DM Mono", monospace; }
+.annual-sheet th, .annual-sheet td { padding: 12px 5px; text-align: right; font-family: "DM Mono", monospace; }
 .annual-sheet thead th { position: sticky; top: 0; z-index: 1; }
-.annual-sheet th:first-child { position: sticky; left: 0; z-index: 2; width: 16%; text-align: left; box-shadow: 1px 0 var(--line); }
+.annual-sheet th:first-child { position: sticky; left: 0; z-index: 2; width: 18%; padding-left: 12px; padding-right: 12px; text-align: left; box-shadow: 1px 0 var(--line); }
+.annual-sheet th:last-child, .annual-sheet td:last-child { width: 9%; padding-right: 12px; }
 .annual-sheet thead th:first-child { z-index: 3; }
 .annual-sheet tbody th { overflow-wrap: anywhere; color: var(--ink); background: #fffefa; font-size: clamp(.53rem, .72vw, .66rem); text-transform: none; letter-spacing: 0; white-space: normal; }
 .annual-sheet td { color: #3e4d47; font-size: clamp(.5rem, .72vw, .68rem); }
@@ -183,8 +185,20 @@ tbody tr:last-child td { border-bottom: 0; }
 .annual-row--total td, .annual-row--total th { color: var(--pine); border-top: 2px solid var(--pine); background: #d7e9e3; font-weight: 700; }
 .annual-row--weeks td, .annual-row--weeks th { background: #fff1df; }
 .annual-row--input td, .annual-row--input th { background: #f7d3aa; }
-.annual-row--input input { min-width: 0; width: 100%; padding: 7px 2px; color: var(--ink); border: 1px solid rgba(23,63,53,.24); border-radius: 4px; background: rgba(255,255,255,.58); font: 500 clamp(.5rem, .7vw, .65rem) "DM Mono", monospace; text-align: right; }
+.annual-row--input input { min-width: 0; width: 100%; padding: 7px 4px; color: var(--ink); border: 1px solid rgba(23,63,53,.24); border-radius: 4px; background: rgba(255,255,255,.58); font: 500 clamp(.5rem, .7vw, .65rem) "DM Mono", monospace; text-align: right; }
 .annual-row--input input:disabled { border-color: transparent; background: transparent; }
+@container (max-width: 820px) {
+  .annual-table-scroll { padding: 16px; }
+  .annual-sheet table, .annual-sheet tbody { display: block; }
+  .annual-sheet thead { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
+  .annual-sheet tbody { display: grid; gap: 14px; }
+  .annual-sheet tbody tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .annual-sheet tbody th:first-child { position: static; grid-column: 1 / -1; width: auto; padding: 12px; box-shadow: none; font-size: .72rem; }
+  .annual-sheet tbody td { min-width: 0; padding: 10px 12px; font-size: .72rem; }
+  .annual-sheet tbody td::before { content: attr(data-label); display: block; margin-bottom: 6px; color: var(--muted); font-size: .6rem; text-transform: uppercase; }
+  .annual-sheet tbody td:last-child { grid-column: 1 / -1; width: auto; border-top: 1px solid var(--line); font-weight: 700; }
+  .annual-row--input input { padding: 8px 6px; font-size: .72rem; }
+}
 .annual-holidays { overflow: visible; }
 .holiday-calendar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); }
 .holiday-calendar article { min-width: 0; padding: 14px; background: var(--paper); }

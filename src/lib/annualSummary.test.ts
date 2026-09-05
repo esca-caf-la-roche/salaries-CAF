@@ -41,6 +41,19 @@ describe('French metropolitan public holidays', () => {
 })
 
 describe('calculateAnnualSummary', () => {
+  it('counts independent actual hours without annual guarantee, leave or supplements', () => {
+    const result = calculateAnnualSummary({
+      ...baseInput, contractType: 'INDEP', annualContractHours: 1000,
+      calendarContractHours: 12.5, calendarAbsenceHours: 0,
+      calendarReplacementHours: 0, calendarPublicHolidayHours: 0,
+      payslipHours: 10, payslipPaidLeaveHours: 4,
+    })
+    expect(result).toMatchObject({
+      contractualRealizedHours: 12.5, totalDueHours: 12.5, payslipTotalHours: 10,
+      remainingToWorkHours: 0, payBalanceHours: 2.5,
+      paidLeaveDueHours: 0, publicHolidayDueHours: 0, overtimeHours: 0,
+    })
+  })
   it('uses contract + holidays + replacements - absences as CDI realized hours', () => {
     const result = calculateAnnualSummary(baseInput)
 

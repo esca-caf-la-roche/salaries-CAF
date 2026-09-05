@@ -188,6 +188,22 @@ export function calculateCdiPublicHolidayHours({
 export function calculateAnnualSummary(input: AnnualSummaryInput): AnnualSummary {
   validateInput(input)
 
+  if (input.contractType === 'INDEP') {
+    const realizedHours = input.calendarContractHours + input.calendarAbsenceHours
+      + input.calendarReplacementHours + input.calendarPublicHolidayHours
+    return mapValuesToRoundedMinutes({
+      contractualRealizedHours: realizedHours,
+      guaranteedBaseHours: realizedHours,
+      overtimeHours: 0,
+      paidLeaveDueHours: 0,
+      publicHolidayDueHours: 0,
+      totalDueHours: realizedHours,
+      payslipTotalHours: input.payslipHours,
+      remainingToWorkHours: 0,
+      payBalanceHours: realizedHours - input.payslipHours,
+    })
+  }
+
   const isCdi = input.contractType === 'CDI'
   const ordinaryRealizedHours = input.calendarContractHours + input.calendarAbsenceHours
   const contractualRealizedHours = isCdi

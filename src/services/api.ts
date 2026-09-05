@@ -224,19 +224,20 @@ export async function getEmployeeSummaries(schoolYear: number): Promise<Employee
 
   const grouped = new Map<string, EmployeeSummary>()
   for (const row of employeesResult.data ?? []) {
-    if (!row.contract_type || row.annual_contract_hours == null) continue
+    if (!row.contract_type || (row.contract_type !== 'INDEP' && row.annual_contract_hours == null)) continue
     const saved = settingsByEmployee.get(row.id)
+    const contractType = row.contract_type === 'INDEP' ? 'INDEP' : saved?.contract_type ?? row.contract_type
     grouped.set(row.id, {
       id: row.id,
       name: row.display_name,
       calendarName: '',
-      contractType: saved?.contract_type ?? row.contract_type,
+      contractType,
       annualContractHours: Number(saved?.annual_contract_minutes ?? Math.round(Number(row.annual_contract_hours) * 60)) / 60,
       annualWorkedWeeks: weeksByEmployee.get(row.id) ?? 0,
       monthlyHours: [],
       payroll: payrollByEmployee.get(row.id) ?? [],
       settings: {
-        contractType: saved?.contract_type ?? row.contract_type,
+        contractType,
         annualContractMinutes: saved?.annual_contract_minutes ?? Math.round(Number(row.annual_contract_hours) * 60),
         fullTimeAnnualMinutes: saved?.full_time_annual_minutes ?? 1582 * 60,
         paidMonths: saved?.paid_months ?? 12,

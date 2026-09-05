@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Check, ChevronDown, CircleAlert, GripVertical, Mail, RefreshCw, Search } from 'lucide-react'
 import { discoverResources, getCoefficientCalendars, getResources, saveCoefficientCalendars, saveResources, startGoogleConnection } from '../services/api'
 import type { ContractType, EmployeeResource, HourCategory, PreparationCoefficient, UsedCalendarCoefficient } from '../types'
+import { contractTypeLabel } from '../lib/contracts'
 
 const configuredHourCategories: Array<{ value: HourCategory; label: string }> = [
   { value: 'contract', label: 'Heures du contrat' },
@@ -21,6 +22,7 @@ const resourceGroups: Array<{ value: ResourceGroupKey; label: string; caption: s
   { value: 'CDI', label: 'CDI', caption: 'Contrats à durée indéterminée' },
   { value: 'CDII', label: 'CDII', caption: 'Contrats intermittents' },
   { value: 'CDD', label: 'CDD', caption: 'Contrats à durée déterminée' },
+  { value: 'INDEP', label: 'Indépendant', caption: 'Durée réelle des événements, tous calendriers' },
   { value: 'unassigned', label: 'Sans contrat', caption: 'Cours sans moniteur attribué' },
   { value: 'unknown', label: 'À vérifier', caption: 'Type de contrat non détecté' },
 ]
@@ -51,17 +53,17 @@ function ResourceCard({ resource, onPatch }: ResourceCardProps) {
           : <label className="switch"><input type="checkbox" checked={resource.enabled} onChange={(event) => onPatch(resource.id, { enabled: event.target.checked })} /><span aria-hidden="true" /><em>{resource.enabled ? 'Suivie' : 'Ignorée'}</em></label>}
       </header>
       <div className="resource-card__meta">
-        <span className="resource-contract" aria-label={`Type de contrat de ${resource.name}`}>{resource.isUnassignedResource ? 'Sans contrat' : resource.contractType ?? 'Non détecté'}</span>
+        <span className="resource-contract" aria-label={`Type de contrat de ${resource.name}`}>{resource.isUnassignedResource ? 'Sans contrat' : contractTypeLabel(resource.contractType)}</span>
         <code title={resource.googleCalendarId}>{resource.googleCalendarId}</code>
       </div>
       {resource.isUnassignedResource ? (
         <p className="resource-card__automatic">Cette ressource reste suivie sans compte salarié, volume annuel ni e-mail.</p>
       ) : (
         <div className="resource-card__fields">
-          <label className="resource-field">
+          {resource.contractType === 'INDEP' ? <p className="resource-card__automatic">Temps réel de tous les événements horaires, sans majoration de préparation ni volume annuel requis.</p> : <label className="resource-field">
             <span>Heures annuelles</span>
             <span className="hours-input"><input aria-label={`Heures annuelles de ${resource.name}`} type="number" min="0.01" step="0.01" placeholder="Ex. 1607" value={resource.annualContractHours ?? ''} onChange={(event) => onPatch(resource.id, { annualContractHours: event.target.value === '' ? null : Number(event.target.value) })} /><span>h</span></span>
-          </label>
+          </label>}
           <label className="resource-field">
             <span>E-mail de connexion</span>
             <span className="email-input"><Mail aria-hidden="true" /><input type="email" aria-label={`E-mail de connexion de ${resource.name}`} placeholder="prenom@exemple.fr" value={resource.loginEmail} disabled={!resource.enabled} required={resource.enabled} onChange={(event) => onPatch(resource.id, { loginEmail: event.target.value })} /></span>
@@ -302,7 +304,7 @@ export function ConfigurationPage() {
     const changed = resources.filter((resource) => dirty.has(resource.id))
     const invalid = changed.find((resource) => !resource.isUnassignedResource && resource.enabled && !/^\S+@\S+\.\S+$/.test(resource.loginEmail.trim()))
     if (invalid) { setResourceMessage(`Ajoutez un e-mail de connexion valide pour ${invalid.name}.`); return }
-    const missingContract = changed.find((resource) => !resource.isUnassignedResource && resource.enabled && (!resource.contractType || resource.annualContractHours == null || resource.annualContractHours <= 0))
+    const missingContract = changed.find((resource) => !resource.isUnassignedResource && resource.enabled && (!resource.contractType || (resource.contractType !== 'INDEP' && (resource.annualContractHours == null || resource.annualContractHours <= 0))))
     if (missingContract) { setResourceMessage(`Ajoutez le type de contrat et les heures annuelles de ${missingContract.name}.`); return }
     setSaving(true)
     setResourceMessage('')
@@ -351,7 +353,7 @@ export function ConfigurationPage() {
       {message && <div className="alert alert--success" role="status">{message}</div>}
       <section className="setup-note">
         <span><CircleAlert aria-hidden="true" /></span>
-        <div><strong>Comment fonctionne le calcul ?</strong><p>Les heures annuelles fixent l'objectif du salarié. Chaque calendrier choisit d'abord son niveau de préparation, puis son type d'heures. Une saison va du 1er septembre au 31 août.</p></div>
+        <div><strong>Comment fonctionne le calcul ?</strong><p>Les heures annuelles fixent l'objectif du salarié. Chaque calendrier choisit d'abord son niveau de préparation, puis son type d'heures. Pour une ressource marquée (Indep), tous les événements horaires comptent au temps réel, même sans règle de calendrier. Une saison va du 1er septembre au 31 août.</p></div>
         <code>calendrier → prépa → type d'heures</code>
       </section>
       <section className="panel configuration-panel">

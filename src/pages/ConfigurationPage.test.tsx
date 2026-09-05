@@ -81,6 +81,21 @@ describe('ConfigurationPage', () => {
     expect(calendarCard?.querySelector('.calendar-color')).toHaveStyle({ background: '#7986cb' })
   })
 
+  it('activates an independent resource without requiring annual hours', async () => {
+    getResources.mockResolvedValue([resourceWith({
+      name: '(Indep)-Alice', contractType: 'INDEP', annualContractHours: null,
+      loginEmail: 'alice@example.fr', enabled: true,
+    })])
+    render(<ConfigurationPage />)
+    expect(await screen.findByRole('region', { name: 'Indépendant' })).toHaveTextContent('(Indep)-Alice')
+    expect(screen.queryByRole('spinbutton', { name: 'Heures annuelles de (Indep)-Alice' })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox', { name: 'E-mail de connexion de (Indep)-Alice' }), { target: { value: 'alice2@example.fr' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les modifications' }))
+    await waitFor(() => expect(saveResources).toHaveBeenCalledWith([
+      expect.objectContaining({ contractType: 'INDEP', annualContractHours: null, enabled: true }),
+    ]))
+  })
+
   it('groups followed resources by contract and keeps unused resources collapsed', async () => {
     getResources.mockResolvedValue([
       resourceWith({ id: 'cdi', name: '(CDI)-Camille', googleCalendarId: 'cdi@resource.google.com', contractType: 'CDI', enabled: true }),

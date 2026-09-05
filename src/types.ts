@@ -1,5 +1,5 @@
 export type UserRole = 'admin' | 'employee'
-export type ContractType = 'CDI' | 'CDII' | 'CDD'
+export type ContractType = 'CDI' | 'CDII' | 'CDD' | 'INDEP'
 export type HourCategory = 'contract' | 'absence' | 'replacement' | 'public_holiday'
 
 export interface AppUser {
