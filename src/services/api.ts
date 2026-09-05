@@ -3,6 +3,7 @@ import { demoCoefficientCalendars, demoEmployees, demoResources, demoSyncState, 
 import { isDemoMode, supabase } from '../lib/supabase'
 import { detectContractType } from '../lib/contracts'
 import type {
+  IndependentEvent,
   EmployeeResource,
   EmployeeSummary,
   MonthlyEventHour,
@@ -127,6 +128,25 @@ export async function getUnassignedEvents(): Promise<UnassignedEvent[]> {
   })
   if (error) await throwFunctionError(error, 'Les ressources n\'ont pas pu être enregistrées.')
   return (data?.events ?? []) as UnassignedEvent[]
+}
+
+export async function getIndependentEvents(schoolYear: number): Promise<IndependentEvent[]> {
+  if (isDemoMode || !supabase) {
+    await pause()
+    return demoUnassignedEvents.map((event, index) => ({
+      ...structuredClone(event),
+      id: `independent-${event.id}`,
+      employeeId: index === 1 ? 'independent-2' : 'independent-1',
+      employeeName: index === 1 ? '(Indep)-Alex Exemple' : '(Indep)-Camille Démo',
+      startsAt: `${schoolYear}-10-${index === 2 ? '19' : '12'}T${index === 1 ? '15' : '08'}:00:00+02:00`,
+      endsAt: `${schoolYear}-10-${index === 2 ? '19' : '12'}T${index === 1 ? '17' : '10'}:00:00+02:00`,
+    }))
+  }
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: { action: 'independentEvents', schoolYear },
+  })
+  if (error) await throwFunctionError(error, 'Les événements des indépendants n’ont pas pu être chargés.')
+  return (data?.events ?? []) as IndependentEvent[]
 }
 
 export async function saveCoefficientCalendars(calendars: UsedCalendarCoefficient[]): Promise<UsedCalendarCoefficient[]> {

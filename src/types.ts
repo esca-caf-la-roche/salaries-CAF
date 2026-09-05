@@ -50,6 +50,11 @@ export interface UnassignedEvent {
   sourceCalendarColor: string | null
 }
 
+export interface IndependentEvent extends UnassignedEvent {
+  employeeId: string
+  employeeName: string
+}
+
 export interface MonthlyHours {
   month: number
   rawHours: number

@@ -1,4 +1,5 @@
 import { corsHeaders, errorResponse, HttpError, json } from "../_shared/http.ts";
+import { independentSeasonBounds, clipIndependentEvent } from "../_shared/independentEvents.ts";
 import { detectContractType } from "../_shared/contracts.ts";
 import { getAccessToken, googleFetch } from "../_shared/google.ts";
 import { requireAdmin } from "../_shared/supabase.ts";
@@ -469,6 +470,68 @@ async function sync(admin: SupabaseClient, ownerId: string, calendarIds?: string
   return { results };
 }
 
+function eventPayload(event: Record<string, unknown>) {
+  const raw = (event.raw ?? {}) as Record<string, unknown>;
+  const organizer = (raw.organizer ?? {}) as Record<string, unknown>;
+  const rule = Array.isArray(event.coefficient_rules)
+    ? event.coefficient_rules[0] as Record<string, unknown> | undefined
+    : event.coefficient_rules as Record<string, unknown> | null;
+  const sourceCalendarId = String(event.source_google_calendar_id ?? "");
+  return {
+    id: String(event.id),
+    googleEventId: String(event.google_event_id),
+    title: String(event.summary ?? "Événement sans titre"),
+    description: String(event.description ?? ""),
+    location: String(event.location ?? ""),
+    startsAt: String(event.starts_at ?? event.start_date ?? ""),
+    endsAt: String(event.ends_at ?? event.end_date ?? ""),
+    allDay: Boolean(event.all_day),
+    sourceCalendarId,
+    sourceCalendarName: String(rule?.label ?? organizer.displayName ?? sourceCalendarId ?? "Calendrier inconnu") || "Calendrier inconnu",
+    sourceCalendarColor: typeof rule?.color === "string" ? rule.color : null,
+  };
+}
+
+async function independentEvents(admin: SupabaseClient, ownerId: string, schoolYear: unknown) {
+  if (typeof schoolYear !== "number" || !Number.isInteger(schoolYear) || schoolYear < 2000 || schoolYear > 2100) {
+    throw new HttpError(400, "Année scolaire invalide");
+  }
+  const bounds = independentSeasonBounds(schoolYear);
+  const connection = await connectionFor(admin, ownerId);
+  const { data: employees, error: employeesError } = await admin.from("employees")
+    .select("id,display_name,resource_calendar_id,calendars!employees_resource_calendar_id_fkey!inner(id,last_synced_at)")
+    .eq("active", true).eq("contract_type", "INDEP")
+    .eq("calendars.connection_id", connection.id).eq("calendars.enabled", true).eq("calendars.is_resource", true);
+  if (employeesError) throw employeesError;
+  const events: Record<string, unknown>[] = [];
+  for (const employee of employees ?? []) {
+    const calendar = Array.isArray(employee.calendars) ? employee.calendars[0] : employee.calendars;
+    if (!calendar) continue;
+    if (!calendar.last_synced_at) {
+      const synchronization = await sync(admin, ownerId, [String(calendar.id)]);
+      const failed = synchronization.results.find((result) => "error" in result && result.error);
+      if (failed && "error" in failed) {
+        throw new HttpError(502, `Synchronisation de la ressource indépendante impossible : ${failed.error}`);
+      }
+    }
+    const pageSize = 1000;
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await admin.from("calendar_events")
+        .select("id,google_event_id,summary,description,location,starts_at,ends_at,all_day,source_google_calendar_id,raw,coefficient_rules(label,color)")
+        .eq("calendar_id", calendar.id).eq("all_day", false).neq("status", "cancelled")
+        .lt("starts_at", bounds.endsAt).gt("ends_at", bounds.startsAt)
+        .order("starts_at").order("id").range(from, from + pageSize - 1);
+      if (error) throw error;
+      for (const event of data ?? []) {
+        const clipped = clipIndependentEvent(event.starts_at, event.ends_at, bounds);
+        if (clipped) events.push({ ...eventPayload(event), ...clipped, employeeId: String(employee.id), employeeName: String(employee.display_name) });
+      }
+      if ((data ?? []).length < pageSize) break;
+    }
+  }
+  return { events };
+}
+
 async function unassignedEvents(admin: SupabaseClient, ownerId: string) {
   const connection = await connectionFor(admin, ownerId);
   const { data: calendars, error: calendarsError } = await admin.from("calendars")
@@ -507,25 +570,7 @@ async function unassignedEvents(admin: SupabaseClient, ownerId: string) {
 
   return {
     events: events.map((event) => {
-      const raw = (event.raw ?? {}) as Record<string, unknown>;
-      const organizer = (raw.organizer ?? {}) as Record<string, unknown>;
-      const rule = Array.isArray(event.coefficient_rules)
-        ? event.coefficient_rules[0] as Record<string, unknown> | undefined
-        : event.coefficient_rules as Record<string, unknown> | null;
-      const sourceCalendarId = String(event.source_google_calendar_id ?? "");
-      return {
-        id: String(event.id),
-        googleEventId: String(event.google_event_id),
-        title: String(event.summary ?? "Événement sans titre"),
-        description: String(event.description ?? ""),
-        location: String(event.location ?? ""),
-        startsAt: String(event.starts_at ?? event.start_date ?? ""),
-        endsAt: String(event.ends_at ?? event.end_date ?? ""),
-        allDay: Boolean(event.all_day),
-        sourceCalendarId,
-        sourceCalendarName: String(rule?.label ?? organizer.displayName ?? sourceCalendarId ?? "Calendrier inconnu") || "Calendrier inconnu",
-        sourceCalendarColor: typeof rule?.color === "string" ? rule.color : null,
-      };
+      return eventPayload(event);
     }),
   };
 }
@@ -547,11 +592,12 @@ Deno.serve(async (req) => {
       await refreshCoefficientCalendarMetadata(admin, connection.id, await listGoogleCalendars(token));
       return json({ calendars: await coefficientPayload(admin, connection.id) });
     }
+    if (body.action === "independentEvents") return json(await independentEvents(admin, user.id, body.schoolYear));
     if (body.action === "unassignedEvents") return json(await unassignedEvents(admin, user.id));
     if (body.action === "saveResources") return json(await saveResources(admin, user.id, body.resources));
     if (body.action === "saveCoefficients") return json(await saveCoefficients(admin, user.id, body.calendars));
     if (body.action === "sync") return json(await sync(admin, user.id, body.calendarIds));
-    throw new HttpError(400, "Action attendue: discover, resources, coefficientCalendars, unassignedEvents, saveResources, saveCoefficients ou sync");
+    throw new HttpError(400, "Action attendue: discover, resources, coefficientCalendars, unassignedEvents, independentEvents, saveResources, saveCoefficients ou sync");
   } catch (error) {
     return errorResponse(error);
   }

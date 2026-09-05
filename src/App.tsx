@@ -5,6 +5,7 @@ import { useAuth } from './context/AuthContext'
 import { ConfigurationPage } from './pages/ConfigurationPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
+import { IndependentEventsPage } from './pages/IndependentEventsPage'
 import { UnassignedEventsPage } from './pages/UnassignedEventsPage'
 import { TimeTrackingPage } from './pages/TimeTrackingPage'
 
@@ -27,6 +28,7 @@ export default function App() {
       <Route element={<ProtectedLayout />}>
         <Route index element={<TimeTrackingPage />} />
         <Route path="vue-ensemble" element={<DashboardPage />} />
+        <Route path="independants" element={<AdminRoute><IndependentEventsPage /></AdminRoute>} />
         <Route path="a-determiner" element={<AdminRoute><UnassignedEventsPage /></AdminRoute>} />
         <Route path="configuration" element={<AdminRoute><ConfigurationPage /></AdminRoute>} />
       </Route>
