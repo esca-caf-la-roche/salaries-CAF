@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, ChevronDown, ClipboardCheck, Save, Sigma } from 'lucide-react'
+import { CalendarDays, ChevronDown, ClipboardCheck, RefreshCw, Save, Sigma } from 'lucide-react'
+import { HoursChart } from '../components/HoursChart'
 import {
   calculateAnnualSummary,
   calculateCdiPublicHolidayHours,
@@ -8,12 +9,12 @@ import {
   getFrenchPublicHolidaysForSchoolSeason,
   isWeekday,
 } from '../lib/annualSummary'
-import { monthLabel, schoolMonths, schoolYearForDate } from '../lib/format'
+import { formatSyncDate, monthLabel, schoolMonths, schoolYearForDate } from '../lib/format'
 import { contractTypeLabel } from '../lib/contracts'
 import { calculateRetainedHours } from '../lib/hourTotals'
-import { getEmployeeSummaries, getMonthlyEventHours, saveAnnualTracking } from '../services/api'
+import { getEmployeeSummaries, getMonthlyEventHours, runIncrementalSync, saveAnnualTracking } from '../services/api'
 import { getGovernmentPublicHolidaysForSchoolSeason } from '../services/publicHolidays'
-import type { EmployeeSummary, MonthlyEventHour, MonthlyHours, MonthlyPayrollEntry, SchoolYearSettings } from '../types'
+import type { EmployeeSummary, MonthlyEventHour, MonthlyHours, MonthlyPayrollEntry, SchoolYearSettings, SyncState } from '../types'
 import { useAuth } from '../context/AuthContext'
 
 const now = new Date()
@@ -70,6 +71,7 @@ export function TimeTrackingPage() {
   const [error, setError] = useState('')
   const [saveMessage, setSaveMessage] = useState('')
   const [saving, setSaving] = useState(false)
+  const [sync, setSync] = useState<SyncState>({ status: 'idle', lastSyncedAt: null })
   const [publicHolidays, setPublicHolidays] = useState(() => getFrenchPublicHolidaysForSchoolSeason({ startYear: currentSchoolYear }))
   const [holidaySource, setHolidaySource] = useState<'loading' | 'government' | 'fallback'>('loading')
   const [settingsDraft, setSettingsDraft] = useState({ annual: '', fullTime: '', paidMonths: '12' })
@@ -197,6 +199,23 @@ export function TimeTrackingPage() {
     fullTimeAnnualHours: fullTimeMinutes / 60,
   }) : null
 
+  const synchronize = async () => {
+    setSync({ status: 'syncing', lastSyncedAt: null })
+    try {
+      const result = await runIncrementalSync()
+      setSync(result)
+      try {
+        const items = await getEmployeeSummaries(schoolYear)
+        setEmployees(items)
+        setSelectedEmployeeId((current) => items.some((item) => item.id === current) ? current : (items[0]?.id ?? ''))
+      } catch {
+        setSync({ ...result, status: 'error', message: 'Google a été synchronisé, mais les données du suivi n’ont pas pu être rechargées. Rechargez la page.' })
+      }
+    } catch {
+      setSync({ status: 'error', lastSyncedAt: null, message: 'La synchronisation a échoué. Vérifiez la connexion Google.' })
+    }
+  }
+
   const save = async () => {
     if (!employee || !validDraft || annualMinutes == null || fullTimeMinutes == null) {
       setSaveMessage('Corrigez les durées : utilisez HH:MM ou des heures décimales positives.')
@@ -239,9 +258,13 @@ export function TimeTrackingPage() {
     <div className="page tracking-page">
       <header className="page-heading">
         <div><p className="eyebrow">Suivi des salariés</p><h1>Du calendrier au bulletin</h1><p>Contrôlez chaque mois, puis régularisez la saison de septembre à août sans perdre le détail des heures.</p></div>
-        {canEdit && view === 'annual' && <button className="button button--primary" onClick={() => void save()} disabled={saving || !employee}><Save aria-hidden="true" />{saving ? 'Enregistrement…' : 'Enregistrer la saison'}</button>}
+        {canEdit && <div className="page-heading__actions">
+          <button className="button button--secondary" onClick={() => void synchronize()} disabled={sync.status === 'syncing'}><RefreshCw className={sync.status === 'syncing' ? 'spin' : ''} aria-hidden="true" />{sync.status === 'syncing' ? 'Synchronisation…' : 'Actualiser Google'}</button>
+          {view === 'annual' && <button className="button button--primary" onClick={() => void save()} disabled={saving || !employee}><Save aria-hidden="true" />{saving ? 'Enregistrement…' : 'Enregistrer la saison'}</button>}
+        </div>}
       </header>
 
+      {sync.message && <div className={`alert ${sync.status === 'error' ? 'alert--error' : 'alert--success'}`} role="status">{sync.message}{sync.lastSyncedAt ? ` · ${formatSyncDate(sync.lastSyncedAt)}` : ''}</div>}
       {error && <div className="alert alert--error" role="alert">{error}</div>}
       {saveMessage && <div className={`alert ${saveMessage.includes('enregistré') ? 'alert--success' : 'alert--warning'}`} role="status">{saveMessage}</div>}
       {employee?.contractType === 'CDI' && holidaySource === 'fallback' && <div className="alert alert--warning" role="status">L’API gouvernementale des jours fériés est temporairement indisponible. Le calendrier métropolitain de secours est affiché.</div>}
@@ -292,11 +315,23 @@ export function TimeTrackingPage() {
           {!isIndependent && employee.contractType !== 'CDI' && <label><span>Mois de paie</span><input type="number" min="1" max="12" value={settingsDraft.paidMonths} onChange={(event) => setSettingsDraft((state) => ({ ...state, paidMonths: event.target.value }))} disabled={!canEdit} aria-label="Nombre de mois payés" /></label>}
         </section>
 
+        {!isIndependent && <section className="annual-category-cards" aria-label="Totaux annuels par rubrique">
+          <article><span>Heures contrat</span><strong>{formatHoursMinutes(totals.contract)}</strong><small>Somme des heures classées au contrat</small></article>
+          <article><span>Absences</span><strong>{formatHoursMinutes(totals.absence)}</strong><small>Somme des heures classées en absence</small></article>
+          <article><span>Remplacements</span><strong>{formatHoursMinutes(totals.replacement)}</strong><small>Somme des heures classées en remplacement</small></article>
+          <article><span>Fériés</span><strong>{formatHoursMinutes(totals.holiday)}</strong><small>{employee.contractType === 'CDI' ? 'Jours ouvrés calculés automatiquement' : 'Somme des heures classées en férié'}</small></article>
+        </section>}
+
         <section className="annual-scoreboard" aria-label="Régularisation annuelle">
-          {!isIndependent && <article><span>Reste à réaliser</span><strong>{formatHoursMinutes(annual.remainingToWorkHours)}</strong><small>sur le contrat annuel</small></article>}
+          {!isIndependent && <article className={annual.remainingToWorkHours > 0 ? 'annual-scoreboard__progress--due' : 'annual-scoreboard__progress--complete'}><span>Reste à réaliser</span><strong>{formatHoursMinutes(annual.remainingToWorkHours)}</strong><small>{annual.overtimeHours > 0 ? `${formatHoursMinutes(annual.overtimeHours)} en plus du contrat` : annual.remainingToWorkHours === 0 ? 'contrat atteint exactement' : `${formatHoursMinutes(annual.contractualRealizedHours)} réalisées sur ${formatHoursMinutes(annualMinutes! / 60)}`}</small></article>}
           <article><span>Total dû</span><strong>{formatHoursMinutes(annual.totalDueHours)}</strong><small>{isIndependent ? 'durée réelle des événements' : 'garantie + compléments'}</small></article>
           <article><span>Total bulletins</span><strong>{formatHoursMinutes(annual.payslipTotalHours)}</strong><small>{isIndependent ? 'heures saisies' : 'heures + congés saisis'}</small></article>
           <article className={annual.payBalanceHours > 0 ? 'annual-scoreboard__balance--due' : 'annual-scoreboard__balance--settled'}><span>{annual.payBalanceHours > 0 ? 'Reste à payer' : annual.payBalanceHours < 0 ? 'Avance payée' : 'Solde'}</span><strong>{formatHoursMinutes(Math.abs(annual.payBalanceHours))}</strong><small>{annual.payBalanceHours === 0 ? 'saison équilibrée' : 'écart avec les bulletins'}</small></article>
+        </section>
+
+        <section className="panel chart-panel annual-chart">
+          <div className="panel-heading"><div><p className="eyebrow">Progression de la saison {schoolYear}–{schoolYear + 1}</p><h2>Heures pondérées</h2></div><span className="legend"><i /> Total après coefficient</span></div>
+          <HoursChart data={months} activeMonth="all" />
         </section>
 
         <section className="panel annual-sheet">
@@ -337,11 +372,11 @@ export function TimeTrackingPage() {
                 <i>→</i>
                 <span className="calculation-breakdown__result"><small>Coefficient retenu</small><b>{cdiHolidayCalculation?.basis === 'realized' ? 'heures réelles' : 'contrat annuel'} / 1582 = {cdiHolidayCalculation?.coefficient.toLocaleString('fr-FR', { maximumFractionDigits: 4 })}</b></span>
               </div>
-              <p>Heures réelles = contrat + fériés + remplacements − absences. Ici, {cdiHolidayCalculation?.basis === 'realized'
+              <p>Heures réelles = {formatHoursMinutes(totals.contract)} contrat + {formatHoursMinutes(totals.holiday)} fériés + {formatHoursMinutes(totals.replacement)} remplacements − {formatHoursMinutes(totals.absence)} absences = {formatHoursMinutes(annual.contractualRealizedHours)}. Ici, {cdiHolidayCalculation?.basis === 'realized'
                 ? `les heures réelles atteignent ou dépassent le contrat : le coefficient évolue donc avec le réel (${formatHoursMinutes(cdiHolidayCalculation?.realizedHours ?? 0)} / 1582).`
                 : `les heures réelles restent sous le contrat : le coefficient est donc garanti sur le contrat annuel (${formatHoursMinutes(annualMinutes! / 60)} / 1582).`} Chaque férié du lundi au vendredi vaut 7 h × ce coefficient. Les congés représentent 10 % de la base garantie.</p>
             </>
-            : isIndependent ? <p>Chaque événement horaire compte à sa durée réelle, quel que soit le calendrier. Aucune majoration de préparation, garantie annuelle ou heure de congé ou de férié automatique n’est ajoutée.</p> : <p>Base garantie : maximum entre le contrat et les heures réalisées, absences et fériés du calendrier. Aucun congé supplémentaire. Les remplacements s’ajoutent toujours.</p>}
+            : isIndependent ? <p>Heures réalisées = somme des durées réelles des événements = {formatHoursMinutes(annual.contractualRealizedHours)}. Aucune majoration de préparation, garantie annuelle ou heure de congé ou de férié automatique n’est ajoutée.</p> : <p>Heures réalisées = {formatHoursMinutes(totals.contract)} contrat + {formatHoursMinutes(totals.absence)} absences + {formatHoursMinutes(totals.holiday)} fériés = {formatHoursMinutes(annual.contractualRealizedHours)}. Reste à réaliser = max(0, {formatHoursMinutes(annualMinutes! / 60)} contrat − {formatHoursMinutes(annual.contractualRealizedHours)} réalisées) = {formatHoursMinutes(annual.remainingToWorkHours)}. Total dû = max(contrat, heures réalisées) + {formatHoursMinutes(totals.replacement)} remplacements = {formatHoursMinutes(annual.totalDueHours)}. Aucun congé supplémentaire.</p>}
           </div>
         </section>
       </>}

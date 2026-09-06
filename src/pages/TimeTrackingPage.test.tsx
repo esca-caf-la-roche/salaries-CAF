@@ -6,12 +6,14 @@ import { TimeTrackingPage } from './TimeTrackingPage'
 const getEmployeeSummaries = vi.fn()
 const getMonthlyEventHours = vi.fn()
 const saveAnnualTracking = vi.fn()
+const runIncrementalSync = vi.fn()
 const getGovernmentPublicHolidaysForSchoolSeason = vi.fn()
 
 vi.mock('../services/api', () => ({
   getEmployeeSummaries: (...args: unknown[]) => getEmployeeSummaries(...args),
   getMonthlyEventHours: (...args: unknown[]) => getMonthlyEventHours(...args),
   saveAnnualTracking: (...args: unknown[]) => saveAnnualTracking(...args),
+  runIncrementalSync: (...args: unknown[]) => runIncrementalSync(...args),
 }))
 
 vi.mock('../services/publicHolidays', () => ({
@@ -64,6 +66,7 @@ describe('TimeTrackingPage', () => {
       weightedHours: 2.5, coefficient: 1.25, hourCategory: 'contract', hasPreparation: true,
     }])
     saveAnnualTracking.mockResolvedValue(undefined)
+    runIncrementalSync.mockResolvedValue({ status: 'success', lastSyncedAt: '2026-09-06T08:00:00Z', message: '1 ressource synchronisée.' })
     getGovernmentPublicHolidaysForSchoolSeason.mockResolvedValue([
       { name: 'Férié ouvré test', date: new Date('2026-09-07T00:00:00.000Z') },
       { name: 'Férié week-end test', date: new Date('2026-09-06T00:00:00.000Z') },
@@ -123,6 +126,17 @@ describe('TimeTrackingPage', () => {
     expect(screen.getByText('Férié week-end test').closest('tr')).toHaveTextContent('Non compté · week-end')
   })
 
+  it('refreshes the tracking data after a manual Google synchronization', async () => {
+    render(<TimeTrackingPage />)
+    await screen.findByRole('option', { name: 'Jérôme Test · CDI' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actualiser Google' }))
+
+    await waitFor(() => expect(runIncrementalSync).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(getEmployeeSummaries).toHaveBeenCalledTimes(2))
+    expect(await screen.findByText('1 ressource synchronisée.', { exact: false })).toBeInTheDocument()
+  })
+
   it('switches to the annual sheet, calculates the contract remainder and saves payslips', async () => {
     render(<TimeTrackingPage />)
     await screen.findByRole('option', { name: 'Jérôme Test · CDI' })
@@ -133,6 +147,15 @@ describe('TimeTrackingPage', () => {
     expect(screen.getByText('31:58')).toBeInTheDocument()
     expect(screen.getByText('Référence temps plein')).toBeInTheDocument()
     expect(screen.getByText('Règle appliquée pour CDI')).toBeInTheDocument()
+    const annualCategories = screen.getByRole('region', { name: 'Totaux annuels par rubrique' })
+    expect(annualCategories).toHaveTextContent('Heures contrat887:56')
+    expect(annualCategories).toHaveTextContent('Absences2:00')
+    expect(annualCategories).toHaveTextContent('Remplacements3:00')
+    expect(annualCategories).toHaveTextContent('Fériés4:06')
+    const remainingCard = screen.getByText('Reste à réaliser').closest('article')
+    expect(remainingCard).toHaveClass('annual-scoreboard__progress--due')
+    expect(remainingCard).toHaveTextContent('31:58')
+    expect(screen.getByTitle('Heures pondérées par mois')).toBeInTheDocument()
     expect(screen.getByRole('rowheader', { name: 'Heures du contrat' })).toBeInTheDocument()
     expect(screen.getByRole('rowheader', { name: 'Heures d’absences' })).toBeInTheDocument()
     expect(screen.getByRole('rowheader', { name: 'Heures de remplacements' })).toBeInTheDocument()
@@ -150,5 +173,25 @@ describe('TimeTrackingPage', () => {
       'employee-1', expect.any(Number), expect.objectContaining({ annualContractMinutes: 925 * 60 }), expect.any(Array),
     ))
     expect(await screen.findByText('Suivi de la saison enregistré.')).toBeInTheDocument()
+  })
+
+  it('shows a green zero remainder card and the hours completed above contract', async () => {
+    getEmployeeSummaries.mockResolvedValue([{
+      ...structuredClone(employee),
+      contractType: 'CDII',
+      annualContractHours: 100,
+      settings: { ...employee.settings, contractType: 'CDII', annualContractMinutes: 100 * 60 },
+      monthlyHours: [{ ...employee.monthlyHours[0], contractHours: 110, absenceHours: 2, replacementHours: 3, publicHolidayHours: 5 }],
+    }])
+    render(<TimeTrackingPage />)
+    await screen.findByRole('option', { name: 'Jérôme Test · CDII' })
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Synthèse annuelle' }))
+
+    const remainingCard = screen.getByText('Reste à réaliser').closest('article')
+    expect(remainingCard).toHaveClass('annual-scoreboard__progress--complete')
+    expect(remainingCard).toHaveTextContent('0:00')
+    expect(remainingCard).toHaveTextContent('17:00 en plus du contrat')
+    expect(screen.getByText(/Heures réalisées = 110:00 contrat \+ 2:00 absences \+ 5:00 fériés = 117:00/)).toBeInTheDocument()
   })
 })
