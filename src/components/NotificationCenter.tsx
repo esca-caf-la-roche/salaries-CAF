@@ -9,6 +9,7 @@ export function NotificationCenter({ role }: { role: 'admin' | 'employee' }) {
   const [notifications, setNotifications] = useState<UserNotification[]>([])
 
   useEffect(() => {
+    let active = true
     const load = async () => {
       if (role === 'admin') await dispatchPendingValidationAlerts().catch(() => undefined)
       const items = await getNotifications()
@@ -22,9 +23,10 @@ export function NotificationCenter({ role }: { role: 'admin' | 'employee' }) {
           body: 'Contrôlez et validez les heures du mois terminé.', actionUrl: '/', createdAt: new Date().toISOString(), readAt: null,
         })
       }
-      setNotifications(items)
+      if (active) setNotifications(items)
     }
-    void load().catch(() => setNotifications([]))
+    void load().catch(() => { if (active) setNotifications([]) })
+    return () => { active = false }
   }, [role])
 
   const unread = notifications.filter((notification) => !notification.readAt).length
