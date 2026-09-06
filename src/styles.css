@@ -201,11 +201,23 @@ tbody tr:last-child td { border-bottom: 0; }
 .annual-scoreboard .annual-scoreboard__balance--due { color: white; border-color: var(--rope); background: var(--rope); }
 .annual-scoreboard .annual-scoreboard__balance--settled { color: white; border-color: var(--pine); background: var(--pine); }
 .annual-scoreboard .annual-scoreboard__balance--due > *, .annual-scoreboard .annual-scoreboard__balance--settled > * { color: inherit; }
-.annual-category-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
-.annual-category-cards article { display: grid; gap: 7px; min-width: 0; padding: 16px 18px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); }
-.annual-category-cards article > span { color: var(--muted); font-size: .68rem; font-weight: 700; }
-.annual-category-cards article strong { color: var(--pine); font: 700 clamp(1.15rem, 2vw, 1.55rem) Unbounded, sans-serif; letter-spacing: -.05em; }
-.annual-category-cards article small { color: var(--muted); font-size: .6rem; line-height: 1.45; }
+.annual-breakdown-card { margin-bottom: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); overflow: hidden; }
+.annual-breakdown-card__heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+.annual-breakdown-card__heading .eyebrow { margin-bottom: 4px; }
+.annual-breakdown-card__heading h2 { margin: 0; }
+.annual-breakdown-card__values { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding: 18px 20px; }
+.annual-breakdown-card__values > div { display: grid; gap: 6px; min-width: 0; padding: 0 18px; border-right: 1px solid var(--line); }
+.annual-breakdown-card__values > div:first-child { padding-left: 0; }
+.annual-breakdown-card__values > div:last-child { padding-right: 0; border-right: 0; }
+.annual-breakdown-card__values dt, .annual-breakdown-card__calculations span { color: var(--muted); font-size: .66rem; font-weight: 700; }
+.annual-breakdown-card__values dd { margin: 0; color: var(--pine); font: 700 clamp(1.15rem, 2vw, 1.55rem) Unbounded, sans-serif; letter-spacing: -.05em; }
+.annual-breakdown-card__calculations { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: stretch; gap: 14px; padding: 18px 20px; border-top: 1px solid var(--line); background: #f4f7f5; }
+.annual-breakdown-card__calculations > div { display: grid; align-content: center; gap: 7px; min-width: 0; }
+.annual-breakdown-card__calculations strong { overflow-wrap: anywhere; color: var(--pine); font: 600 clamp(.7rem, 1.1vw, .85rem) "DM Mono", monospace; line-height: 1.55; }
+.annual-breakdown-card__calculations small { color: var(--muted); font-size: .62rem; line-height: 1.45; }
+.annual-breakdown-card__calculations > i { align-self: center; color: var(--rope); font-style: normal; font-weight: 800; }
+.annual-breakdown-card__result { padding: 13px 15px; border-radius: 7px; background: #e7eff0; }
+.annual-breakdown-card__note { margin: 0; padding: 0 20px 17px; color: var(--muted); background: #f4f7f5; font-size: .63rem; }
 .annual-chart { margin-top: 14px; }
 .contract-badge { padding: 6px 10px; color: var(--pine); border-radius: 99px; background: #dceae5; font: 500 .64rem "DM Mono", monospace; }
 .annual-sheet { container-type: inline-size; }
@@ -477,7 +489,7 @@ tbody tr:last-child td { border-bottom: 0; }
   .mobile-nav a { display: grid; justify-items: center; gap: 2px; padding: 5px; color: var(--muted); text-decoration: none; font-size: .63rem; }.mobile-nav a.active { color: var(--pine); }.mobile-nav svg { width: 19px; }
   .page { padding: 35px 24px 100px; }.metric-grid { grid-template-columns: 1fr 1fr; }.metric--lead { grid-column: 1 / -1; }
   .calendar-head { display: none; }.calendar-row { grid-template-columns: 1fr 1fr; padding: 18px; }.calendar-identity, .email-input { grid-column: 1 / -1; }.resource-groups, .unused-resources__cards { grid-template-columns: 1fr; }.kanban-instructions { grid-template-columns: auto 32px auto; }.kanban-instructions p { grid-column: 1 / -1; justify-self: start; }.kanban-stage__grid--categories { grid-template-columns: repeat(2, minmax(0, 1fr)); }.configuration-warning, .unassigned-warning { align-items: flex-start; flex-wrap: wrap; }.configuration-warning > span, .unassigned-warning > span { min-width: calc(100% - 40px); }.configuration-warning .button, .unassigned-warning .button { width: 100%; }
-  .annual-scoreboard, .annual-category-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }.contract-strip { flex-wrap: wrap; }.tracking-filters { grid-template-columns: 1fr 1fr; }.holiday-calendar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .annual-scoreboard { grid-template-columns: repeat(2, minmax(0, 1fr)); }.annual-breakdown-card__calculations { grid-template-columns: 1fr; }.annual-breakdown-card__calculations > i { justify-self: start; transform: rotate(90deg); }.contract-strip { flex-wrap: wrap; }.tracking-filters { grid-template-columns: 1fr 1fr; }.holiday-calendar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 640px) {
@@ -485,7 +497,7 @@ tbody tr:last-child td { border-bottom: 0; }
   .page-heading { align-items: stretch; flex-direction: column; }.page-heading .button { align-self: flex-start; }.page-heading__actions { align-items: flex-start; flex-wrap: wrap; }.filters, .metric-grid { grid-template-columns: 1fr; }.metric--lead { grid-column: auto; }.metric { min-height: 150px; }.unassigned-total { align-self: flex-start; }.calendar-filter__heading { align-items: flex-start; flex-direction: column; }.calendar-filter__actions { width: 100%; justify-content: space-between; }.unassigned-skeleton { grid-template-columns: 1fr; }.event-month { padding-left: 18px; }.event-month__heading::before { left: -18px; }.event-month::before { left: 4px; }.day-card__heading { align-items: flex-start; padding: 14px 16px; }.day-card__heading h3 { line-height: 1.4; }.day-event { grid-template-columns: 1fr; padding: 17px 17px 17px 25px; }.day-event__time { grid-row: auto; margin-bottom: 8px; }.day-event h4, .day-event__meta, .day-event p { grid-column: 1; }
   .panel-heading { align-items: flex-start; flex-direction: column; }.legend { align-self: flex-start; }.setup-note { grid-template-columns: auto 1fr; }.setup-note code { display: none; }
   .configuration-toolbar { align-items: stretch; flex-direction: column; }.search-field { width: 100%; }.resource-shelf { padding: 12px; }.resource-card__heading { align-items: flex-start; }.resource-card__fields { grid-template-columns: 1fr; }.unused-resources summary small { display: none; }.configuration-footer { align-items: stretch; flex-direction: column; }.configuration-footer .button { width: 100%; }
-  .tracking-filters, .annual-scoreboard, .annual-category-cards, .holiday-calendar { grid-template-columns: 1fr; }.view-tabs { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }.contract-strip { align-items: stretch; flex-direction: column; }.contract-strip > div { border-right: 0; border-bottom: 1px solid rgba(255,255,255,.2); padding: 0 0 12px; }.contract-strip input { width: 100%; }.calculation-note { grid-template-columns: 1fr; }.calculation-breakdown { align-items: stretch; flex-direction: column; }.calculation-breakdown > i { align-self: flex-start; transform: rotate(90deg); }.calculation-breakdown > span, .calculation-breakdown .calculation-breakdown__result { min-width: 0; }
+  .tracking-filters, .annual-scoreboard, .holiday-calendar { grid-template-columns: 1fr; }.annual-breakdown-card__heading { align-items: flex-start; flex-direction: column; }.annual-breakdown-card__values { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 0; }.annual-breakdown-card__values > div, .annual-breakdown-card__values > div:first-child, .annual-breakdown-card__values > div:last-child { padding: 0 12px; border-right: 1px solid var(--line); }.annual-breakdown-card__values > div:nth-child(odd) { padding-left: 0; }.annual-breakdown-card__values > div:nth-child(even) { padding-right: 0; border-right: 0; }.view-tabs { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }.contract-strip { align-items: stretch; flex-direction: column; }.contract-strip > div { border-right: 0; border-bottom: 1px solid rgba(255,255,255,.2); padding: 0 0 12px; }.contract-strip input { width: 100%; }.calculation-note { grid-template-columns: 1fr; }.calculation-breakdown { align-items: stretch; flex-direction: column; }.calculation-breakdown > i { align-self: flex-start; transform: rotate(90deg); }.calculation-breakdown > span, .calculation-breakdown .calculation-breakdown__result { min-width: 0; }
   .kanban-shell { padding: 12px; }.kanban-instructions { grid-template-columns: 1fr; }.kanban-instructions > i { display: none; }.kanban-stage { padding: 43px 0 0; }.kanban-stage + .kanban-stage::before { display: none; }.kanban-stage__label { top: 0; width: auto; }.kanban-stage__label span { font-size: .6rem; }.kanban-stage__grid--preparation, .kanban-stage__grid--categories { grid-template-columns: 1fr; }.kanban-lane__heading strong { font-size: .74rem; }.kanban-card__content strong { font-size: .72rem; }
 }
 

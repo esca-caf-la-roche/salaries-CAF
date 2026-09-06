@@ -104,6 +104,7 @@ describe('TimeTrackingPage', () => {
     expect(screen.getByText('Total dû').closest('article')).toHaveTextContent('2:00')
     expect(screen.queryByLabelText('Heures annuelles du contrat')).not.toBeInTheDocument()
     expect(screen.queryByText('Reste à réaliser')).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Calcul annuel des heures' })).not.toBeInTheDocument()
     expect(screen.getByRole('rowheader', { name: 'Heures réalisées' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer la saison' }))
     await waitFor(() => expect(saveAnnualTracking).toHaveBeenCalledWith(
@@ -147,11 +148,17 @@ describe('TimeTrackingPage', () => {
     expect(screen.getByText('31:58')).toBeInTheDocument()
     expect(screen.getByText('Référence temps plein')).toBeInTheDocument()
     expect(screen.getByText('Règle appliquée pour CDI')).toBeInTheDocument()
-    const annualCategories = screen.getByRole('region', { name: 'Totaux annuels par rubrique' })
+    const annualCategories = screen.getByRole('region', { name: 'Calcul annuel des heures' })
+    expect(screen.getAllByRole('region', { name: 'Calcul annuel des heures' })).toHaveLength(1)
     expect(annualCategories).toHaveTextContent('Heures contrat887:56')
     expect(annualCategories).toHaveTextContent('Absences2:00')
     expect(annualCategories).toHaveTextContent('Remplacements3:00')
     expect(annualCategories).toHaveTextContent('Fériés4:06')
+    expect(annualCategories).toHaveTextContent('Coefficients inclus')
+    expect(annualCategories).toHaveTextContent('887:56 contrat + 4:06 fériés + 3:00 remplacements − 2:00 absences = 893:02')
+    expect(annualCategories).toHaveTextContent('max(0, 925:00 contrat − 893:02 réalisées) = 31:58')
+    expect(annualCategories).toHaveTextContent('Les fériés sont calculés séparément avec le coefficient annuel')
+    expect(annualCategories).toHaveTextContent('Valeurs affichées arrondies à la minute.')
     const remainingCard = screen.getByText('Reste à réaliser').closest('article')
     expect(remainingCard).toHaveClass('annual-scoreboard__progress--due')
     expect(remainingCard).toHaveTextContent('31:58')
@@ -161,7 +168,7 @@ describe('TimeTrackingPage', () => {
     expect(screen.getByRole('rowheader', { name: 'Heures de remplacements' })).toBeInTheDocument()
     expect(screen.getByRole('rowheader', { name: 'Heures fériées' })).toBeInTheDocument()
     expect(screen.getByRole('rowheader', { name: 'Heures fériées' }).closest('tr')).toHaveTextContent('4:06')
-    expect(screen.getByRole('rowheader', { name: 'Total du mois' }).closest('tr')).toHaveTextContent('893:02')
+    expect(screen.getByRole('rowheader', { name: 'Heures réalisées' }).closest('tr')).toHaveTextContent('893:02')
     expect(screen.getByRole('region', { name: 'Jours fériés de la saison' })).toHaveTextContent('lundi')
     expect(screen.getByRole('region', { name: 'Jours fériés de la saison' })).toHaveTextContent('dimanche')
     expect(screen.getByRole('region', { name: 'Comparaison entre les heures réelles et le contrat annuel' }))
@@ -175,16 +182,16 @@ describe('TimeTrackingPage', () => {
     expect(await screen.findByText('Suivi de la saison enregistré.')).toBeInTheDocument()
   })
 
-  it('shows a green zero remainder card and the hours completed above contract', async () => {
+  it.each(['CDII', 'CDD'] as const)('shows a green zero remainder card and the hours completed above a %s contract', async (contractType) => {
     getEmployeeSummaries.mockResolvedValue([{
       ...structuredClone(employee),
-      contractType: 'CDII',
+      contractType,
       annualContractHours: 100,
-      settings: { ...employee.settings, contractType: 'CDII', annualContractMinutes: 100 * 60 },
+      settings: { ...employee.settings, contractType, annualContractMinutes: 100 * 60 },
       monthlyHours: [{ ...employee.monthlyHours[0], contractHours: 110, absenceHours: 2, replacementHours: 3, publicHolidayHours: 5 }],
     }])
     render(<TimeTrackingPage />)
-    await screen.findByRole('option', { name: 'Jérôme Test · CDII' })
+    await screen.findByRole('option', { name: `Jérôme Test · ${contractType}` })
 
     fireEvent.click(screen.getByRole('tab', { name: 'Synthèse annuelle' }))
 
@@ -192,6 +199,12 @@ describe('TimeTrackingPage', () => {
     expect(remainingCard).toHaveClass('annual-scoreboard__progress--complete')
     expect(remainingCard).toHaveTextContent('0:00')
     expect(remainingCard).toHaveTextContent('17:00 en plus du contrat')
-    expect(screen.getByText(/Heures réalisées = 110:00 contrat \+ 2:00 absences \+ 5:00 fériés = 117:00/)).toBeInTheDocument()
+    const annualCalculation = screen.getByRole('region', { name: 'Calcul annuel des heures' })
+    expect(annualCalculation).toHaveTextContent('110:00 contrat + 2:00 absences + 5:00 fériés = 117:00')
+    expect(annualCalculation).toHaveTextContent('Les 3:00 de remplacements sont payées en plus et n’entrent pas dans le calcul du reste.')
+    expect(annualCalculation).toHaveTextContent('Total dû = max(100:00 contrat, 117:00 réalisées) + 3:00 remplacements = 120:00.')
+    expect(annualCalculation).toHaveTextContent('max(0, 100:00 contrat − 117:00 réalisées) = 0:00')
+    expect(screen.getByRole('rowheader', { name: 'Heures réalisées' }).closest('tr')).toHaveTextContent('117:00')
+    expect(screen.queryByText(`Règle appliquée pour ${contractType}`)).not.toBeInTheDocument()
   })
 })
