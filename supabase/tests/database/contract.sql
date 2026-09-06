@@ -175,6 +175,26 @@ begin
   ) then
     raise exception 'La règle de coefficient par événement est absente';
   end if;
+  if not exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'monthly_time_validations'
+  ) then
+    raise exception 'Le registre des validations mensuelles est absent';
+  end if;
+  if has_table_privilege('anon', 'public.monthly_time_validations', 'select')
+    or has_table_privilege('authenticated', 'public.monthly_time_validations', 'insert')
+    or has_table_privilege('authenticated', 'public.monthly_time_validations', 'update')
+    or has_table_privilege('authenticated', 'public.monthly_time_validations', 'delete') then
+    raise exception 'Les validations mensuelles ne doivent pas être modifiables directement depuis le client';
+  end if;
+  if not has_function_privilege('authenticated', 'public.validate_time_month(uuid,integer,integer)', 'execute')
+    or not has_function_privilege('authenticated', 'public.approve_time_month_change(uuid,integer,integer)', 'execute') then
+    raise exception 'Les actions mensuelles authentifiées ne sont pas exposées';
+  end if;
+  if has_function_privilege('anon', 'public.validate_time_month(uuid,integer,integer)', 'execute')
+    or has_function_privilege('anon', 'public.approve_time_month_change(uuid,integer,integer)', 'execute') then
+    raise exception 'Les actions mensuelles ne doivent jamais être publiques';
+  end if;
 end
 $$;
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, ChevronDown, ClipboardCheck, RefreshCw, Save, Sigma } from 'lucide-react'
+import { BadgeCheck, CalendarDays, ChevronDown, CircleAlert, ClipboardCheck, RefreshCw, Save, Sigma } from 'lucide-react'
 import { HoursChart } from '../components/HoursChart'
 import {
   calculateAnnualSummary,
@@ -12,13 +12,15 @@ import {
 import { formatSyncDate, monthLabel, schoolMonths, schoolYearForDate } from '../lib/format'
 import { contractTypeLabel } from '../lib/contracts'
 import { calculateRetainedHours } from '../lib/hourTotals'
-import { getEmployeeSummaries, getMonthlyEventHours, runIncrementalSync, saveAnnualTracking } from '../services/api'
+import { completedMonthsForSchoolYear, previousSchoolMonth } from '../lib/monthValidation'
+import { getEmployeeSummaries, getMonthlyEventHours, getMonthlyTimeValidations, runIncrementalSync, saveAnnualTracking, validateTimeMonth } from '../services/api'
 import { getGovernmentPublicHolidaysForSchoolSeason } from '../services/publicHolidays'
-import type { EmployeeSummary, MonthlyEventHour, MonthlyHours, MonthlyPayrollEntry, SchoolYearSettings, SyncState } from '../types'
+import type { EmployeeSummary, MonthlyEventHour, MonthlyHours, MonthlyPayrollEntry, MonthlyTimeValidation, SchoolYearSettings, SyncState } from '../types'
 import { useAuth } from '../context/AuthContext'
 
 const now = new Date()
 const currentSchoolYear = schoolYearForDate(now)
+const previousMonth = previousSchoolMonth(now)
 const emptyMonth = (month: number): MonthlyHours => ({
   month, rawHours: 0, weightedHours: 0, contractHours: 0, absenceHours: 0,
   replacementHours: 0, publicHolidayHours: 0, contractWithPrepHours: 0,
@@ -76,6 +78,9 @@ export function TimeTrackingPage() {
   const [holidaySource, setHolidaySource] = useState<'loading' | 'government' | 'fallback'>('loading')
   const [settingsDraft, setSettingsDraft] = useState({ annual: '', fullTime: '', paidMonths: '12' })
   const [payrollDraft, setPayrollDraft] = useState<Record<number, { paid: string; leave: string }>>({})
+  const [validations, setValidations] = useState<MonthlyTimeValidation[]>([])
+  const [validationMessage, setValidationMessage] = useState('')
+  const [validating, setValidating] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -88,6 +93,10 @@ export function TimeTrackingPage() {
       .catch(() => setError('Le suivi des heures n’a pas pu être chargé.'))
       .finally(() => setLoading(false))
   }, [schoolYear])
+
+  useEffect(() => {
+    void getMonthlyTimeValidations().then(setValidations).catch(() => setValidations([]))
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -107,6 +116,19 @@ export function TimeTrackingPage() {
 
   const employee = employees.find((item) => item.id === selectedEmployeeId)
   const isIndependent = employee?.contractType === 'INDEP'
+  const employeeValidations = validations.filter((item) => item.employeeId === employee?.id)
+  const validationFor = (targetSchoolYear: number, month: number) => employeeValidations.find(
+    (item) => item.schoolYear === targetSchoolYear && item.month === month,
+  )
+  const completedMonths = completedMonthsForSchoolYear(schoolYear, now)
+  const missingValidationMonths = employee?.contractType === 'CDI'
+    ? completedMonths.filter((month) => !validationFor(schoolYear, month))
+    : []
+  const pendingChangeMonths = employee?.contractType === 'CDI'
+    ? employeeValidations.filter((item) => item.schoolYear === schoolYear && item.status === 'changes_pending')
+    : []
+  const firstPendingChange = employeeValidations.find((item) => item.status === 'changes_pending')
+  const selectedValidation = employee ? validationFor(schoolYear, selectedMonth) : undefined
   const calendarMonths = useMemo(() => schoolMonths.map((month) => employee?.monthlyHours.find((item) => item.month === month) ?? emptyMonth(month)), [employee])
 
   useEffect(() => {
@@ -251,6 +273,36 @@ export function TimeTrackingPage() {
     }
   }
 
+  const validateSelectedMonth = async () => {
+    if (!employee) return
+    setValidating(true)
+    setValidationMessage('')
+    try {
+      const validation = await validateTimeMonth(employee.id, schoolYear, selectedMonth)
+      setValidations((items) => [...items.filter((item) => !(
+        item.employeeId === validation.employeeId && item.schoolYear === validation.schoolYear && item.month === validation.month
+      )), validation])
+      setValidationMessage(`${monthLabel(selectedMonth)} a été validé. Toute modification ultérieure devra être approuvée par l’administration.`)
+    } catch {
+      setValidationMessage('La validation du mois a échoué. Rechargez la page puis réessayez.')
+    } finally {
+      setValidating(false)
+    }
+  }
+
+  const openPreviousMonthTask = () => {
+    setSchoolYear(previousMonth.schoolYear)
+    setSelectedMonth(previousMonth.month)
+    setView('monthly')
+  }
+
+  const openPendingChange = () => {
+    if (!firstPendingChange) return
+    setSchoolYear(firstPendingChange.schoolYear)
+    setSelectedMonth(firstPendingChange.month)
+    setView('monthly')
+  }
+
   const monthData = months.find((item) => item.month === selectedMonth) ?? emptyMonth(selectedMonth)
   const monthlyRetained = calculateRetainedHours(monthData)
   const visibleEvents = employee?.contractType === 'CDI'
@@ -273,10 +325,21 @@ export function TimeTrackingPage() {
       {sync.message && <div className={`alert ${sync.status === 'error' ? 'alert--error' : 'alert--success'}`} role="status">{sync.message}{sync.lastSyncedAt ? ` · ${formatSyncDate(sync.lastSyncedAt)}` : ''}</div>}
       {error && <div className="alert alert--error" role="alert">{error}</div>}
       {saveMessage && <div className={`alert ${saveMessage.includes('enregistré') ? 'alert--success' : 'alert--warning'}`} role="status">{saveMessage}</div>}
+      {validationMessage && <div className={`alert ${validationMessage.includes('a été validé') ? 'alert--success' : 'alert--warning'}`} role="status">{validationMessage}</div>}
+      {user?.role === 'employee' && firstPendingChange && <div className="alert alert--urgent validation-warning" role="alert">
+        <CircleAlert aria-hidden="true" />
+        <span><strong>Des heures ont changé après votre validation.</strong> L’administration doit approuver le mois de {monthLabel(firstPendingChange.month)}.</span>
+        <button className="button button--secondary" type="button" onClick={openPendingChange}>Voir la modification</button>
+      </div>}
+      {user?.role === 'employee' && employee?.contractType === 'CDI' && !validationFor(previousMonth.schoolYear, previousMonth.month) && <div className="alert alert--warning validation-warning" role="alert">
+        <CircleAlert aria-hidden="true" />
+        <span><strong>Validation mensuelle à faire.</strong> Contrôlez puis validez les heures de {monthLabel(previousMonth.month)}.</span>
+        <button className="button button--secondary" type="button" onClick={openPreviousMonthTask}>Voir le mois</button>
+      </div>}
       {employee?.contractType === 'CDI' && holidaySource === 'fallback' && <div className="alert alert--warning" role="status">L’API gouvernementale des jours fériés est temporairement indisponible. Le calendrier métropolitain de secours est affiché.</div>}
 
       <section className="filters tracking-filters" aria-label="Filtres du suivi">
-        <label><span>Salarié</span><div className="select-wrap"><select value={selectedEmployeeId} onChange={(event) => { setSelectedEmployeeId(event.target.value); setSaveMessage('') }} disabled={loading}><option value="">Sélectionner</option>{employees.map((item) => <option key={item.id} value={item.id}>{item.name} · {contractTypeLabel(item.contractType)}</option>)}</select><ChevronDown aria-hidden="true" /></div></label>
+        {user?.role === 'admin' && <label><span>Salarié</span><div className="select-wrap"><select value={selectedEmployeeId} onChange={(event) => { setSelectedEmployeeId(event.target.value); setSaveMessage('') }} disabled={loading}><option value="">Sélectionner</option>{employees.map((item) => <option key={item.id} value={item.id}>{item.name} · {contractTypeLabel(item.contractType)}</option>)}</select><ChevronDown aria-hidden="true" /></div></label>}
         <label><span>Saison</span><div className="select-wrap"><select value={schoolYear} onChange={(event) => setSchoolYear(Number(event.target.value))}>{[currentSchoolYear - 2, currentSchoolYear - 1, currentSchoolYear, currentSchoolYear + 1].map((year) => <option key={year} value={year}>{year}–{year + 1}</option>)}</select><ChevronDown aria-hidden="true" /></div></label>
         {view === 'monthly' && <label><span>Mois</span><div className="select-wrap"><select value={selectedMonth} onChange={(event) => setSelectedMonth(Number(event.target.value))}>{schoolMonths.map((month) => <option key={month} value={month}>{monthLabel(month)}</option>)}</select><ChevronDown aria-hidden="true" /></div></label>}
       </section>
@@ -289,6 +352,20 @@ export function TimeTrackingPage() {
       {!loading && !employee && <section className="panel tracking-empty"><ClipboardCheck aria-hidden="true" /><h2>Aucun salarié configuré</h2><p>Activez une ressource et renseignez son contrat dans Configuration.</p></section>}
 
       {employee && view === 'monthly' && <>
+        {employee.contractType === 'CDI' && completedMonths.includes(selectedMonth) && <section className={`panel month-validation-card month-validation-card--${selectedValidation?.status ?? 'missing'}`} aria-label="Validation du mois">
+          <div>
+            <p className="eyebrow">Contrôle mensuel</p>
+            <h2>{selectedValidation?.status === 'changes_pending' ? 'Modification à faire approuver' : selectedValidation ? 'Mois validé' : 'Validation à faire'}</h2>
+            <p>{selectedValidation?.status === 'changes_pending'
+              ? 'Les données Google ont changé depuis votre validation. L’administration doit approuver le nouvel état.'
+              : selectedValidation
+                ? `Validé le ${new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeStyle: 'short' }).format(new Date(selectedValidation.validatedAt))}. Toute modification ultérieure sera signalée.`
+                : 'Vérifiez le détail ci-dessous avant d’attester que ce mois est complet.'}</p>
+          </div>
+          {user?.role === 'employee' && !selectedValidation && <button className="button button--primary" type="button" onClick={() => void validateSelectedMonth()} disabled={validating}>
+            <BadgeCheck aria-hidden="true" />{validating ? 'Validation…' : `Valider ${monthLabel(selectedMonth)}`}
+          </button>}
+        </section>}
         <section className="metric-grid tracking-metrics" aria-label="Totaux du mois">
           <article className="metric metric--lead"><p>Heures retenues</p><strong>{formatHoursMinutes(monthlyRetained)} <small>h</small></strong><span>{monthData.eventCount} événement{monthData.eventCount > 1 ? 's' : ''} calendrier · {selectedMonthHolidays.length} férié{selectedMonthHolidays.length > 1 ? 's' : ''}</span></article>
           <article className="metric"><p>{isIndependent ? 'Heures réalisées' : 'Contrat'}</p><strong>{formatHoursMinutes(monthData.contractHours)} <small>h</small></strong><span>{isIndependent ? 'Temps réel, tous calendriers' : 'Avec et sans préparation'}</span></article>
@@ -314,6 +391,10 @@ export function TimeTrackingPage() {
       </>}
 
       {employee && view === 'annual' && annual && <>
+        {employee.contractType === 'CDI' && (missingValidationMonths.length > 0 || pendingChangeMonths.length > 0) && <div className="alert alert--warning validation-warning" role="alert">
+          <CircleAlert aria-hidden="true" />
+          <span><strong>Validations mensuelles à traiter.</strong> {missingValidationMonths.length > 0 ? `${missingValidationMonths.length} mois terminé${missingValidationMonths.length > 1 ? 's' : ''} non validé${missingValidationMonths.length > 1 ? 's' : ''}` : ''}{missingValidationMonths.length > 0 && pendingChangeMonths.length > 0 ? ' et ' : ''}{pendingChangeMonths.length > 0 ? `${pendingChangeMonths.length} modification${pendingChangeMonths.length > 1 ? 's' : ''} en attente d’approbation` : ''}.</span>
+        </div>}
         <section className="contract-strip" aria-label="Paramètres du contrat">
           <div><span>Contrat</span><strong>{contractTypeLabel(employee.contractType)}</strong></div>
           {!isIndependent && <label><span>Heures annuelles</span><input value={settingsDraft.annual} onChange={(event) => setSettingsDraft((state) => ({ ...state, annual: event.target.value }))} disabled={!canEdit} inputMode="decimal" aria-label="Heures annuelles du contrat" /></label>}

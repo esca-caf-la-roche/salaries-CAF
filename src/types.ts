@@ -81,6 +81,17 @@ export interface MonthlyPayrollEntry {
   paidLeaveMinutes: number
 }
 
+export interface MonthlyTimeValidation {
+  employeeId: string
+  schoolYear: number
+  month: number
+  status: 'validated' | 'changes_pending'
+  validatedAt: string
+  changeDetectedAt: string | null
+  changeCount: number
+  approvedAt: string | null
+}
+
 export interface SchoolYearSettings {
   contractType: ContractType
   annualContractMinutes: number

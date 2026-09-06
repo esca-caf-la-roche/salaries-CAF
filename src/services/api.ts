@@ -8,6 +8,7 @@ import type {
   EmployeeSummary,
   MonthlyEventHour,
   MonthlyPayrollEntry,
+  MonthlyTimeValidation,
   SchoolYearSettings,
   SyncState,
   UnassignedEvent,
@@ -318,6 +319,67 @@ export async function getMonthlyEventHours(employeeId: string, schoolYear: numbe
     hourCategory: row.hour_category,
     hasPreparation: row.has_preparation,
   }))
+}
+
+function mapMonthlyTimeValidation(row: Record<string, unknown>): MonthlyTimeValidation {
+  return {
+    employeeId: String(row.employee_id),
+    schoolYear: Number(row.school_year),
+    month: Number(row.month),
+    status: row.status === 'changes_pending' ? 'changes_pending' : 'validated',
+    validatedAt: String(row.validated_at),
+    changeDetectedAt: row.change_detected_at ? String(row.change_detected_at) : null,
+    changeCount: Number(row.change_count ?? 0),
+    approvedAt: row.approved_at ? String(row.approved_at) : null,
+  }
+}
+
+export async function getMonthlyTimeValidations(): Promise<MonthlyTimeValidation[]> {
+  if (isDemoMode || !supabase) {
+    await pause()
+    return []
+  }
+  const { data, error } = await supabase
+    .from('monthly_time_validations')
+    .select('employee_id, school_year, month, status, validated_at, change_detected_at, change_count, approved_at')
+    .order('school_year')
+    .order('month')
+  if (error) throw error
+  return (data ?? []).map(mapMonthlyTimeValidation)
+}
+
+export async function validateTimeMonth(employeeId: string, schoolYear: number, month: number): Promise<MonthlyTimeValidation> {
+  if (isDemoMode || !supabase) {
+    await pause()
+    return {
+      employeeId, schoolYear, month, status: 'validated', validatedAt: new Date().toISOString(),
+      changeDetectedAt: null, changeCount: 0, approvedAt: null,
+    }
+  }
+  const { data, error } = await supabase.rpc('validate_time_month', {
+    p_employee_id: employeeId,
+    p_school_year: schoolYear,
+    p_month: month,
+  })
+  if (error) throw error
+  return mapMonthlyTimeValidation(data as Record<string, unknown>)
+}
+
+export async function approveTimeMonthChange(employeeId: string, schoolYear: number, month: number): Promise<MonthlyTimeValidation> {
+  if (isDemoMode || !supabase) {
+    await pause()
+    return {
+      employeeId, schoolYear, month, status: 'validated', validatedAt: new Date().toISOString(),
+      changeDetectedAt: null, changeCount: 1, approvedAt: new Date().toISOString(),
+    }
+  }
+  const { data, error } = await supabase.rpc('approve_time_month_change', {
+    p_employee_id: employeeId,
+    p_school_year: schoolYear,
+    p_month: month,
+  })
+  if (error) throw error
+  return mapMonthlyTimeValidation(data as Record<string, unknown>)
 }
 
 export async function saveAnnualTracking(

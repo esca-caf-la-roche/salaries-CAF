@@ -8,6 +8,8 @@ const getEmployeeSummaries = vi.fn()
 const getCoefficientCalendars = vi.fn()
 const getUnassignedEvents = vi.fn()
 const runIncrementalSync = vi.fn()
+const getMonthlyTimeValidations = vi.fn()
+const approveTimeMonthChange = vi.fn()
 
 const trackedEmployee: EmployeeSummary = {
   id: 'employee-1',
@@ -44,6 +46,8 @@ vi.mock('../services/api', () => ({
   getCoefficientCalendars: (...args: unknown[]) => getCoefficientCalendars(...args),
   getUnassignedEvents: (...args: unknown[]) => getUnassignedEvents(...args),
   runIncrementalSync: (...args: unknown[]) => runIncrementalSync(...args),
+  getMonthlyTimeValidations: (...args: unknown[]) => getMonthlyTimeValidations(...args),
+  approveTimeMonthChange: (...args: unknown[]) => approveTimeMonthChange(...args),
 }))
 
 vi.mock('../context/AuthContext', () => ({
@@ -61,6 +65,11 @@ describe('DashboardPage', () => {
     getCoefficientCalendars.mockResolvedValue([
       { googleCalendarId: 'unknown@group.calendar.google.com', name: 'Nouveau calendrier', coefficient: null, hourCategory: null, eventCount: 3 },
     ])
+    getMonthlyTimeValidations.mockResolvedValue([])
+    approveTimeMonthChange.mockImplementation(async (employeeId: string, schoolYear: number, month: number) => ({
+      employeeId, schoolYear, month, status: 'validated', validatedAt: '2026-08-31T10:00:00Z',
+      changeDetectedAt: null, changeCount: 1, approvedAt: '2026-09-06T10:00:00Z',
+    }))
   })
 
   it('warns admins when a used calendar still needs configuration', async () => {
@@ -109,5 +118,22 @@ describe('DashboardPage', () => {
 
     await waitFor(() => expect(runIncrementalSync).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(getUnassignedEvents).toHaveBeenCalledTimes(2))
+  })
+
+  it('notifies the admin and approves a change made after monthly validation', async () => {
+    getEmployeeSummaries.mockResolvedValue([structuredClone(trackedEmployee)])
+    getMonthlyTimeValidations.mockResolvedValue([{
+      employeeId: 'employee-1', schoolYear: 2025, month: 8, status: 'changes_pending',
+      validatedAt: '2026-08-31T10:00:00Z', changeDetectedAt: '2026-09-06T09:00:00Z',
+      changeCount: 1, approvedAt: null,
+    }])
+    render(<MemoryRouter><DashboardPage /></MemoryRouter>)
+
+    const review = await screen.findByRole('region', { name: 'Modifications d’heures à approuver' })
+    expect(review).toHaveTextContent('Salarié Test · Aoû 2026')
+    fireEvent.click(within(review).getByRole('button', { name: 'Approuver' }))
+
+    await waitFor(() => expect(approveTimeMonthChange).toHaveBeenCalledWith('employee-1', 2025, 8))
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Modifications d’heures à approuver' })).not.toBeInTheDocument())
   })
 })

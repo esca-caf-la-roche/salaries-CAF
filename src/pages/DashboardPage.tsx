@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, ChevronDown, CircleAlert, Clock3, RefreshCw, TrendingUp } from 'lucide-react'
+import { BadgeCheck, CalendarDays, ChevronDown, CircleAlert, Clock3, RefreshCw, TrendingUp } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { HoursChart } from '../components/HoursChart'
 import { formatHours, formatSyncDate, monthLabel, schoolMonths, schoolYearForDate } from '../lib/format'
 import { calculateRetainedHours } from '../lib/hourTotals'
-import { getCoefficientCalendars, getEmployeeSummaries, getUnassignedEvents, runIncrementalSync } from '../services/api'
-import type { EmployeeSummary, SyncState, UnassignedEvent, UsedCalendarCoefficient } from '../types'
+import { approveTimeMonthChange, getCoefficientCalendars, getEmployeeSummaries, getMonthlyTimeValidations, getUnassignedEvents, runIncrementalSync } from '../services/api'
+import type { EmployeeSummary, MonthlyTimeValidation, SyncState, UnassignedEvent, UsedCalendarCoefficient } from '../types'
 import { useAuth } from '../context/AuthContext'
 import { eventStart, formatEventDate, isEventWithinNextDays } from '../lib/unassignedEvents'
 
@@ -23,6 +23,9 @@ export function DashboardPage() {
   const [sync, setSync] = useState<SyncState>({ status: 'idle', lastSyncedAt: null })
   const [usedCalendars, setUsedCalendars] = useState<UsedCalendarCoefficient[]>([])
   const [unassignedEvents, setUnassignedEvents] = useState<UnassignedEvent[]>([])
+  const [validations, setValidations] = useState<MonthlyTimeValidation[]>([])
+  const [approvingValidation, setApprovingValidation] = useState('')
+  const [validationError, setValidationError] = useState('')
 
   useEffect(() => {
     setLoading(true)
@@ -37,6 +40,7 @@ export function DashboardPage() {
     if (user?.role !== 'admin') return
     void getCoefficientCalendars().then(setUsedCalendars).catch(() => setUsedCalendars([]))
     void getUnassignedEvents().then(setUnassignedEvents).catch(() => setUnassignedEvents([]))
+    void getMonthlyTimeValidations().then(setValidations).catch(() => setValidations([]))
   }, [user?.role])
 
   const visible = useMemo(() => selectedEmployee === 'all' ? employees : employees.filter((item) => item.id === selectedEmployee), [employees, selectedEmployee])
@@ -77,6 +81,7 @@ export function DashboardPage() {
   const urgentUnassignedEvents = unassignedEvents
     .filter((event) => isEventWithinNextDays(event, new Date(), 7))
     .sort((a, b) => eventStart(a).getTime() - eventStart(b).getTime())
+  const pendingValidationChanges = validations.filter((validation) => validation.status === 'changes_pending')
 
   const synchronize = async () => {
     setSync((state) => ({ ...state, status: 'syncing' }))
@@ -87,8 +92,25 @@ export function DashboardPage() {
       catch { /* The synchronization result remains valid if the status refresh fails. */ }
       try { setUnassignedEvents(await getUnassignedEvents()) }
       catch { /* The synchronization result remains valid if the unassigned-event refresh fails. */ }
+      try { setValidations(await getMonthlyTimeValidations()) }
+      catch { /* The synchronization result remains valid if the validation status refresh fails. */ }
     }
     catch { setSync((state) => ({ ...state, status: 'error', message: 'La synchronisation a échoué. Vérifiez la connexion Google.' })) }
+  }
+
+  const approveValidation = async (validation: MonthlyTimeValidation) => {
+    const key = `${validation.employeeId}-${validation.schoolYear}-${validation.month}`
+    setApprovingValidation(key)
+    setValidationError('')
+    try {
+      const approved = await approveTimeMonthChange(validation.employeeId, validation.schoolYear, validation.month)
+      setValidations((items) => items.map((item) => item.employeeId === approved.employeeId
+        && item.schoolYear === approved.schoolYear && item.month === approved.month ? approved : item))
+    } catch {
+      setValidationError('La modification n’a pas pu être approuvée. Rechargez la page puis réessayez.')
+    } finally {
+      setApprovingValidation('')
+    }
   }
 
   return (
@@ -101,6 +123,23 @@ export function DashboardPage() {
       </header>
       {sync.message && <div className={`alert ${sync.status === 'error' ? 'alert--error' : 'alert--success'}`} role="status">{sync.message} · {formatSyncDate(sync.lastSyncedAt)}</div>}
       {error && <div className="alert alert--error" role="alert">{error}</div>}
+      {validationError && <div className="alert alert--error" role="alert">{validationError}</div>}
+      {pendingValidationChanges.length > 0 && <section className="alert alert--urgent validation-review" aria-label="Modifications d’heures à approuver">
+        <CircleAlert aria-hidden="true" />
+        <div className="validation-review__content">
+          <strong>{pendingValidationChanges.length} modification{pendingValidationChanges.length > 1 ? 's' : ''} après validation à approuver.</strong>
+          <ul>{pendingValidationChanges.map((validation) => {
+            const employee = employees.find((item) => item.id === validation.employeeId)
+            const key = `${validation.employeeId}-${validation.schoolYear}-${validation.month}`
+            return <li key={key}>
+              <span>{employee?.name ?? 'Salarié'} · {monthLabel(validation.month)} {validation.month >= 9 ? validation.schoolYear : validation.schoolYear + 1}</span>
+              <button className="button button--secondary" type="button" onClick={() => void approveValidation(validation)} disabled={approvingValidation === key}>
+                <BadgeCheck aria-hidden="true" />{approvingValidation === key ? 'Approbation…' : 'Approuver'}
+              </button>
+            </li>
+          })}</ul>
+        </div>
+      </section>}
       {user?.role === 'admin' && urgentUnassignedEvents.length > 0 && <div className="alert alert--urgent unassigned-warning" role="alert">
         <CircleAlert aria-hidden="true" />
         <span><strong>{urgentUnassignedEvents.length} événement{urgentUnassignedEvents.length > 1 ? 's' : ''} à attribuer dans moins de 7 jours.</strong><small>Le prochain : {urgentUnassignedEvents[0].title} · {formatEventDate(urgentUnassignedEvents[0])}</small></span>

@@ -414,6 +414,22 @@ tbody tr:last-child td { border-bottom: 0; }
 .unassigned-warning > span { display: grid; flex: 1; gap: 3px; }
 .unassigned-warning small { color: #873b32; }
 .unassigned-warning .button { min-height: 36px; padding: 7px 12px; color: #6f2019; border-color: #d89890; background: rgba(255,255,255,.55); }
+.validation-warning { display: flex; align-items: center; gap: 12px; }
+.validation-warning > svg { flex: 0 0 auto; width: 21px; }
+.validation-warning > span { flex: 1; }
+.validation-warning .button { min-height: 36px; padding: 7px 12px; background: rgba(255,255,255,.55); }
+.validation-review { display: flex; align-items: flex-start; gap: 12px; }
+.validation-review > svg { flex: 0 0 auto; width: 21px; }
+.validation-review__content { display: grid; flex: 1; gap: 8px; }
+.validation-review__content ul { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.validation-review__content li { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.validation-review__content .button { min-height: 34px; padding: 6px 11px; color: #6f2019; border-color: #d89890; background: rgba(255,255,255,.55); }
+.month-validation-card { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 20px 24px; overflow: visible; }
+.month-validation-card h2 { margin: 3px 0 7px; font-size: 1rem; }
+.month-validation-card p:last-child { margin: 0; color: var(--muted); font-size: .72rem; line-height: 1.55; }
+.month-validation-card--validated { border-color: #bad3ca; background: #edf5f1; }
+.month-validation-card--missing { border-color: #e4c98f; background: #fff8e8; }
+.month-validation-card--changes_pending { border-color: #d89890; background: #fae5e2; }
 
 .unassigned-total { display: grid; flex: 0 0 auto; min-width: 142px; padding: 16px 18px; color: var(--chalk); border-radius: 9px; background: var(--pine); }
 .unassigned-total strong { font: 700 1.65rem Unbounded, sans-serif; letter-spacing: -.05em; }
@@ -488,7 +504,7 @@ tbody tr:last-child td { border-bottom: 0; }
   .mobile-nav--admin a { min-width: 0; font-size: .57rem; }
   .mobile-nav a { display: grid; justify-items: center; gap: 2px; padding: 5px; color: var(--muted); text-decoration: none; font-size: .63rem; }.mobile-nav a.active { color: var(--pine); }.mobile-nav svg { width: 19px; }
   .page { padding: 35px 24px 100px; }.metric-grid { grid-template-columns: 1fr 1fr; }.metric--lead { grid-column: 1 / -1; }
-  .calendar-head { display: none; }.calendar-row { grid-template-columns: 1fr 1fr; padding: 18px; }.calendar-identity, .email-input { grid-column: 1 / -1; }.resource-groups, .unused-resources__cards { grid-template-columns: 1fr; }.kanban-instructions { grid-template-columns: auto 32px auto; }.kanban-instructions p { grid-column: 1 / -1; justify-self: start; }.kanban-stage__grid--categories { grid-template-columns: repeat(2, minmax(0, 1fr)); }.configuration-warning, .unassigned-warning { align-items: flex-start; flex-wrap: wrap; }.configuration-warning > span, .unassigned-warning > span { min-width: calc(100% - 40px); }.configuration-warning .button, .unassigned-warning .button { width: 100%; }
+  .calendar-head { display: none; }.calendar-row { grid-template-columns: 1fr 1fr; padding: 18px; }.calendar-identity, .email-input { grid-column: 1 / -1; }.resource-groups, .unused-resources__cards { grid-template-columns: 1fr; }.kanban-instructions { grid-template-columns: auto 32px auto; }.kanban-instructions p { grid-column: 1 / -1; justify-self: start; }.kanban-stage__grid--categories { grid-template-columns: repeat(2, minmax(0, 1fr)); }.configuration-warning, .unassigned-warning, .validation-warning { align-items: flex-start; flex-wrap: wrap; }.configuration-warning > span, .unassigned-warning > span, .validation-warning > span { min-width: calc(100% - 40px); }.configuration-warning .button, .unassigned-warning .button, .validation-warning .button { width: 100%; }.month-validation-card { align-items: stretch; flex-direction: column; }.validation-review__content li { align-items: stretch; flex-direction: column; }.validation-review__content .button { width: 100%; }
   .annual-scoreboard { grid-template-columns: repeat(2, minmax(0, 1fr)); }.annual-breakdown-card__calculations { grid-template-columns: 1fr; }.annual-breakdown-card__calculations > i { justify-self: start; transform: rotate(90deg); }.contract-strip { flex-wrap: wrap; }.tracking-filters { grid-template-columns: 1fr 1fr; }.holiday-calendar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 

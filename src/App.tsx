@@ -27,7 +27,7 @@ export default function App() {
       <Route path="/connexion" element={<LoginPage />} />
       <Route element={<ProtectedLayout />}>
         <Route index element={<TimeTrackingPage />} />
-        <Route path="vue-ensemble" element={<DashboardPage />} />
+        <Route path="vue-ensemble" element={<AdminRoute><DashboardPage /></AdminRoute>} />
         <Route path="independants" element={<AdminRoute><IndependentEventsPage /></AdminRoute>} />
         <Route path="a-determiner" element={<AdminRoute><UnassignedEventsPage /></AdminRoute>} />
         <Route path="configuration" element={<AdminRoute><ConfigurationPage /></AdminRoute>} />

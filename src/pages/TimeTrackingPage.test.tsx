@@ -5,6 +5,8 @@ import { TimeTrackingPage } from './TimeTrackingPage'
 
 const getEmployeeSummaries = vi.fn()
 const getMonthlyEventHours = vi.fn()
+const getMonthlyTimeValidations = vi.fn()
+const validateTimeMonth = vi.fn()
 const saveAnnualTracking = vi.fn()
 const runIncrementalSync = vi.fn()
 const getGovernmentPublicHolidaysForSchoolSeason = vi.fn()
@@ -12,6 +14,8 @@ const getGovernmentPublicHolidaysForSchoolSeason = vi.fn()
 vi.mock('../services/api', () => ({
   getEmployeeSummaries: (...args: unknown[]) => getEmployeeSummaries(...args),
   getMonthlyEventHours: (...args: unknown[]) => getMonthlyEventHours(...args),
+  getMonthlyTimeValidations: (...args: unknown[]) => getMonthlyTimeValidations(...args),
+  validateTimeMonth: (...args: unknown[]) => validateTimeMonth(...args),
   saveAnnualTracking: (...args: unknown[]) => saveAnnualTracking(...args),
   runIncrementalSync: (...args: unknown[]) => runIncrementalSync(...args),
 }))
@@ -20,9 +24,8 @@ vi.mock('../services/publicHolidays', () => ({
   getGovernmentPublicHolidaysForSchoolSeason: (...args: unknown[]) => getGovernmentPublicHolidaysForSchoolSeason(...args),
 }))
 
-vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'admin', role: 'admin', displayName: 'Admin', email: 'admin@example.fr' } }),
-}))
+let currentUser = { id: 'admin', role: 'admin', displayName: 'Admin', email: 'admin@example.fr' }
+vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ user: currentUser }) }))
 
 const employee: EmployeeSummary = {
   id: 'employee-1',
@@ -71,6 +74,12 @@ describe('TimeTrackingPage', () => {
       { name: 'Férié ouvré test', date: new Date('2026-09-07T00:00:00.000Z') },
       { name: 'Férié week-end test', date: new Date('2026-09-06T00:00:00.000Z') },
     ])
+    getMonthlyTimeValidations.mockResolvedValue([])
+    validateTimeMonth.mockImplementation(async (employeeId: string, schoolYear: number, month: number) => ({
+      employeeId, schoolYear, month, status: 'validated', validatedAt: '2026-09-06T10:00:00Z',
+      changeDetectedAt: null, changeCount: 0, approvedAt: null,
+    }))
+    currentUser = { id: 'admin', role: 'admin', displayName: 'Admin', email: 'admin@example.fr' }
   })
 
   it('shows the event-level monthly ledger with weighted duration and category', async () => {
@@ -136,6 +145,37 @@ describe('TimeTrackingPage', () => {
     await waitFor(() => expect(runIncrementalSync).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(getEmployeeSummaries).toHaveBeenCalledTimes(2))
     expect(await screen.findByText('1 ressource synchronisée.', { exact: false })).toBeInTheDocument()
+  })
+
+  it('limits an employee to their own read-only tracking and lets a CDI validate the previous month', async () => {
+    currentUser = { id: 'employee-user', role: 'employee', displayName: 'Jérôme', email: 'jerome@example.fr' }
+    render(<TimeTrackingPage />)
+
+    expect(await screen.findByText('Validation mensuelle à faire.', { exact: false })).toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: 'Salarié' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Actualiser Google' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Voir le mois' }))
+    const validateButton = await screen.findByRole('button', { name: 'Valider Aoû' })
+    fireEvent.click(validateButton)
+
+    await waitFor(() => expect(validateTimeMonth).toHaveBeenCalledWith('employee-1', 2025, 8))
+    expect(await screen.findByText('Aoû a été validé.', { exact: false })).toBeInTheDocument()
+  })
+
+  it('notifies the employee when a validated month changed', async () => {
+    currentUser = { id: 'employee-user', role: 'employee', displayName: 'Jérôme', email: 'jerome@example.fr' }
+    getMonthlyTimeValidations.mockResolvedValue([{
+      employeeId: 'employee-1', schoolYear: 2025, month: 8, status: 'changes_pending',
+      validatedAt: '2026-08-31T10:00:00Z', changeDetectedAt: '2026-09-06T09:00:00Z',
+      changeCount: 1, approvedAt: null,
+    }])
+    render(<TimeTrackingPage />)
+
+    expect(await screen.findByText('Des heures ont changé après votre validation.', { exact: false })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Voir la modification' }))
+    expect(await screen.findByText('Modification à faire approuver')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Valider Aoû' })).not.toBeInTheDocument()
   })
 
   it('switches to the annual sheet, calculates the contract remainder and saves payslips', async () => {

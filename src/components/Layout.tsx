@@ -12,7 +12,7 @@ export function Layout() {
         <Logo />
         <nav className="main-nav" aria-label="Navigation principale">
           <NavLink to="/" end><Sigma aria-hidden="true" /> <span>Suivi des heures</span></NavLink>
-          <NavLink to="/vue-ensemble"><Gauge aria-hidden="true" /> <span>Vue d'ensemble</span></NavLink>
+          {user?.role === 'admin' && <NavLink to="/vue-ensemble"><Gauge aria-hidden="true" /> <span>Vue d'ensemble</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/a-determiner"><CalendarClock aria-hidden="true" /> <span>À déterminer</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/independants"><BriefcaseBusiness aria-hidden="true" /><span>Indépendants</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/configuration"><Settings aria-hidden="true" /> <span>Configuration</span></NavLink>}
@@ -37,7 +37,7 @@ export function Layout() {
         <main id="main-content"><Outlet /></main>
         <nav className={`mobile-nav${user?.role === 'admin' ? ' mobile-nav--admin' : ''}`} aria-label="Navigation mobile">
           <NavLink to="/" end><Sigma aria-hidden="true" /><span>Suivi</span></NavLink>
-          <NavLink to="/vue-ensemble"><Gauge aria-hidden="true" /><span>Vue</span></NavLink>
+          {user?.role === 'admin' && <NavLink to="/vue-ensemble"><Gauge aria-hidden="true" /><span>Vue</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/a-determiner"><CalendarClock aria-hidden="true" /><span>À déterminer</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/independants"><BriefcaseBusiness aria-hidden="true" /><span>Indépendants</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/configuration"><CalendarRange aria-hidden="true" /><span>Ressources</span></NavLink>}
