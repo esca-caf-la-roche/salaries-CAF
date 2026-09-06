@@ -212,6 +212,8 @@ describe('TimeTrackingPage', () => {
     expect(screen.getByRole('rowheader', { name: 'Heures fériées' })).toBeInTheDocument()
     expect(screen.getByRole('rowheader', { name: 'Heures fériées' }).closest('tr')).toHaveTextContent('4:06')
     expect(screen.getByRole('rowheader', { name: 'Heures réalisées' }).closest('tr')).toHaveTextContent('893:02')
+    expect(screen.getByRole('cell', { name: 'Sep : Pas encore validable' })).toHaveTextContent('À venir')
+    expect(screen.getByRole('cell', { name: 'Oct : Pas encore validable' })).toHaveAttribute('title', 'Pas encore validable')
     expect(screen.getByRole('region', { name: 'Jours fériés de la saison' })).toHaveTextContent('lundi')
     expect(screen.getByRole('region', { name: 'Jours fériés de la saison' })).toHaveTextContent('dimanche')
     expect(screen.getByRole('region', { name: 'Comparaison entre les heures réelles et le contrat annuel' }))

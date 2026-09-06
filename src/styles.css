@@ -427,9 +427,10 @@ tbody tr:last-child td { border-bottom: 0; }
 .month-validation-card { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 20px 24px; overflow: visible; }
 .month-validation-card h2 { margin: 3px 0 7px; font-size: 1rem; }
 .month-validation-card p:last-child { margin: 0; color: var(--muted); font-size: .72rem; line-height: 1.55; }
-.month-validation-card--validated { border-color: #bad3ca; background: #edf5f1; }
-.month-validation-card--missing { border-color: #e4c98f; background: #fff8e8; }
+.month-validation-card--employee_validated { border-color: #bad3ca; background: #edf5f1; }
+.month-validation-card--to_validate { border-color: #e4c98f; background: #fff8e8; }
 .month-validation-card--changes_pending { border-color: #d89890; background: #fae5e2; }
+.month-validation-card--admin_approved { border-color: #9abfce; background: #e9f3f7; }
 .validation-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0 0 12px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
 .annual-sheet > .validation-legend { margin: 0 24px; }
 .validation-legend span { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: .66rem; font-weight: 700; }
@@ -440,7 +441,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .validation-tone--changes_pending, .validation-cell--changes_pending { background: #f8d9d5; border-color: #d68d84; }
 .validation-tone--admin_approved, .validation-cell--admin_approved { background: #dcecf4; border-color: #83afc1; }
 .annual-validation-row th { background: #f3f0e8; }
-.annual-validation-row .validation-cell { padding: 9px 5px; font-size: .58rem; font-weight: 800; line-height: 1.25; text-align: center; }
+.annual-validation-row .validation-cell { padding: 9px 4px; overflow-wrap: anywhere; font-size: .58rem; font-weight: 800; line-height: 1.25; text-align: center; white-space: normal; }
 .validation-history { margin-top: 14px; }
 .validation-history > p { padding: 0 24px 20px; color: var(--muted); }
 .validation-history ol { display: grid; gap: 0; margin: 0; padding: 0 24px 22px; list-style: none; }

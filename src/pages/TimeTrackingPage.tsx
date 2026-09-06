@@ -41,6 +41,11 @@ const validationLabels = {
   changes_pending: 'Modification à approuver', admin_approved: 'Approuvé par l’administration',
 }
 
+const annualValidationLabels = {
+  not_due: 'À venir', to_validate: 'À valider', employee_validated: 'Validé',
+  changes_pending: 'À approuver', admin_approved: 'Approuvé',
+}
+
 function parseDuration(value: string): number | null {
   const normalized = value.trim().replace(',', '.')
   if (!normalized) return 0
@@ -485,7 +490,7 @@ export function TimeTrackingPage() {
           <div className="panel-heading"><div><p className="eyebrow">Saison {schoolYear}–{schoolYear + 1}</p><h2>Lecture annuelle, mois par mois</h2></div><span className="contract-badge">{contractTypeLabel(employee.contractType)} · {isIndependent ? 'Temps réel' : `${formatHoursMinutes(annualMinutes! / 60)} h`}</span></div>
           {employee.contractType === 'CDI' && <div className="validation-legend" aria-label="Légende des validations">{Object.entries(validationLabels).map(([tone, label]) => <span key={tone}><i className={`validation-tone validation-tone--${tone}`} />{label}</span>)}</div>}
           <div className="annual-table-scroll"><table><thead><tr><th>Désignation</th>{schoolMonths.map((month) => <th key={month}>{monthLabel(month)}</th>)}<th>Total</th></tr></thead><tbody>
-            {employee.contractType === 'CDI' && <tr className="annual-validation-row"><th scope="row">Statut de validation</th>{schoolMonths.map((month) => { const tone = validationToneFor(month); return <td className={`validation-cell validation-cell--${tone}`} data-label={monthLabel(month)} key={month}>{validationLabels[tone]}</td> })}<td data-label="Total">—</td></tr>}
+            {employee.contractType === 'CDI' && <tr className="annual-validation-row"><th scope="row">Statut de validation</th>{schoolMonths.map((month) => { const tone = validationToneFor(month); const label = validationLabels[tone]; return <td className={`validation-cell validation-cell--${tone}`} data-label={monthLabel(month)} aria-label={`${monthLabel(month)} : ${label}`} title={label} key={month}>{annualValidationLabels[tone]}</td> })}<td data-label="Total">—</td></tr>}
             <AnnualRow label={isIndependent ? 'Heures réalisées' : 'Heures du contrat'} months={months} value={(month) => month.contractHours} tone="work" />
             {!isIndependent && <><AnnualRow label="Heures d’absences" months={months} value={(month) => month.absenceHours} tone="absence" />
             <AnnualRow label="Heures de remplacements" months={months} value={(month) => month.replacementHours} tone="replacement" />
