@@ -339,7 +339,14 @@ export function TimeTrackingPage() {
               {employee.contractType !== 'CDI' && <small>Les {formatHoursMinutes(totals.replacement)} de remplacements sont payées en plus et n’entrent pas dans le calcul du reste. Total dû = max({formatHoursMinutes(annualMinutes! / 60)} contrat, {formatHoursMinutes(annual.contractualRealizedHours)} réalisées) + {formatHoursMinutes(totals.replacement)} remplacements = {formatHoursMinutes(annual.totalDueHours)}.</small>}
             </div>
             <i aria-hidden="true">→</i>
-            <div className="annual-breakdown-card__result"><span>Calcul du reste à réaliser</span><strong>max(0, {formatHoursMinutes(annualMinutes! / 60)} contrat − {formatHoursMinutes(annual.contractualRealizedHours)} réalisées) = {formatHoursMinutes(annual.remainingToWorkHours)}</strong></div>
+            <div className="annual-breakdown-card__result">
+              <span>{annual.remainingToWorkHours > 0 ? 'Calcul du reste à réaliser' : annual.overtimeHours > 0 ? 'Calcul des heures en plus du contrat' : 'Contrat annuel atteint'}</span>
+              <strong>{annual.remainingToWorkHours > 0
+                ? `${formatHoursMinutes(annualMinutes! / 60)} contrat − ${formatHoursMinutes(annual.contractualRealizedHours)} réalisées = ${formatHoursMinutes(annual.remainingToWorkHours)} à réaliser`
+                : annual.overtimeHours > 0
+                  ? `${formatHoursMinutes(annual.contractualRealizedHours)} réalisées − ${formatHoursMinutes(annualMinutes! / 60)} contrat = +${formatHoursMinutes(annual.overtimeHours)} en plus du contrat`
+                  : `${formatHoursMinutes(annual.contractualRealizedHours)} réalisées = ${formatHoursMinutes(annualMinutes! / 60)} contrat · 0:00 à réaliser`}</strong>
+            </div>
           </div>
           <p className="annual-breakdown-card__note">Les heures issues des calendriers sont déjà pondérées par les coefficients configurés (×1 ou ×1,25).{employee.contractType === 'CDI' ? ' Les fériés sont calculés séparément avec le coefficient annuel détaillé plus bas.' : ''} Valeurs affichées arrondies à la minute.</p>
         </section>}
