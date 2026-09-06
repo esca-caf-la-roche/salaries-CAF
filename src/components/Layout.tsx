@@ -2,6 +2,7 @@ import { BriefcaseBusiness, CalendarClock, CalendarRange, Gauge, LogOut, Setting
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { Logo } from './Logo'
+import { NotificationCenter } from './NotificationCenter'
 
 export function Layout() {
   const { user, signOut, isDemo } = useAuth()
@@ -18,6 +19,7 @@ export function Layout() {
           {user?.role === 'admin' && <NavLink to="/configuration"><Settings aria-hidden="true" /> <span>Configuration</span></NavLink>}
         </nav>
         <div className="sidebar__foot">
+          {user && <NotificationCenter role={user.role} />}
           <div className="user-chip">
             <span className="user-chip__avatar">{user?.displayName.charAt(0)}</span>
             <span><strong>{user?.displayName}</strong><small>{user?.role === 'admin' ? 'Administrateur' : 'Salarié'}</small></span>

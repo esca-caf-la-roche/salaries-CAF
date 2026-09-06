@@ -31,6 +31,7 @@ begin
   );
 
   update public.employees set user_id = fixture_user where id = fixture_employee;
+  update public.app_settings set validation_alert_email = 'validation-alert@example.test' where singleton;
   insert into public.google_connections (id, owner_id) values (fixture_connection, fixture_admin);
   insert into public.calendars (
     id, connection_id, google_calendar_id, name, enabled, is_resource
@@ -44,6 +45,21 @@ begin
   set local role authenticated;
   perform public.validate_time_month(fixture_employee, 2025, 8);
   reset role;
+
+  if not exists (
+    select 1 from public.monthly_validation_events
+    where employee_id = fixture_employee and school_year = 2025 and month = 8 and event_type = 'employee_validated'
+  ) then raise exception 'La validation salarié doit être historisée'; end if;
+  if not exists (
+    select 1 from public.user_notifications notification
+    join public.monthly_validation_events history on history.id = notification.validation_event_id
+    where notification.recipient_user_id = fixture_admin and history.employee_id = fixture_employee and history.event_type = 'employee_validated'
+  ) then raise exception 'L''administrateur doit recevoir une notification persistante'; end if;
+  if not exists (
+    select 1 from public.validation_email_outbox outbox
+    join public.monthly_validation_events history on history.id = outbox.validation_event_id
+    where history.employee_id = fixture_employee and outbox.recipient_email = 'validation-alert@example.test'
+  ) then raise exception 'La validation doit alimenter l''outbox mail configurée'; end if;
 
   insert into public.calendar_events (
     id, calendar_id, google_event_id, status, summary, starts_at, ends_at, all_day
@@ -78,6 +94,11 @@ begin
   ) then
     raise exception 'L''approbation admin doit refermer l''alerte';
   end if;
+  if not exists (
+    select 1 from public.user_notifications notification
+    join public.monthly_validation_events history on history.id = notification.validation_event_id
+    where notification.recipient_user_id = fixture_user and history.employee_id = fixture_employee and history.event_type = 'admin_approved'
+  ) then raise exception 'Le salarié doit être notifié de l''approbation'; end if;
 end
 $$;
 

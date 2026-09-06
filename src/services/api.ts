@@ -9,6 +9,8 @@ import type {
   MonthlyEventHour,
   MonthlyPayrollEntry,
   MonthlyTimeValidation,
+  UserNotification,
+  ValidationHistoryEvent,
   SchoolYearSettings,
   SyncState,
   UnassignedEvent,
@@ -182,23 +184,26 @@ export async function startGoogleConnection(): Promise<void> {
   window.location.assign(data.authorizationUrl)
 }
 
-export async function runIncrementalSync(): Promise<SyncState> {
+export async function runIncrementalSync(mode: 'automatic' | 'manual' = 'manual'): Promise<SyncState> {
   if (isDemoMode || !supabase) {
     await pause(850)
     return { ...demoSyncState, lastSyncedAt: new Date().toISOString() }
   }
   const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
-    body: { action: 'sync' },
+    body: { action: 'sync', mode },
   })
   if (error) throw error
   const results = Array.isArray(data?.results) ? data.results : []
   const failed = results.filter((result: { error?: string }) => result.error)
   const synced = results.length - failed.length
   const unmapped = results.reduce((total: number, result: { unmappedEvents?: number }) => total + Number(result.unmappedEvents ?? 0), 0)
+  const recentlySynced = results.length > 0 && results.every((result: { skipped?: string }) => result.skipped === 'recently_synced')
   return {
     status: failed.length ? 'error' : 'success',
     lastSyncedAt: new Date().toISOString(),
-    message: failed.length
+    message: recentlySynced
+      ? 'Données Google déjà actualisées depuis moins d’une heure.'
+      : failed.length
       ? `${synced} calendrier(s) synchronisé(s), ${failed.length} en erreur.`
       : `${synced} ressource(s) synchronisée(s).${unmapped ? ` ${unmapped} événement(s) ignoré(s) car leur calendrier d'origine n'a pas de catégorie d'heures et de coefficient définis.` : ''}`,
   }
@@ -362,7 +367,56 @@ export async function validateTimeMonth(employeeId: string, schoolYear: number, 
     p_month: month,
   })
   if (error) throw error
+  void supabase.functions.invoke('validation-alert-email', {
+    body: { employeeId, schoolYear, month },
+  }).catch(() => undefined)
   return mapMonthlyTimeValidation(data as Record<string, unknown>)
+}
+
+export async function getValidationHistory(employeeId: string, schoolYear: number): Promise<ValidationHistoryEvent[]> {
+  if (isDemoMode || !supabase) { await pause(); return [] }
+  const { data, error } = await supabase.from('monthly_validation_events')
+    .select('id, employee_id, school_year, month, event_type, occurred_at, change_count')
+    .eq('employee_id', employeeId).eq('school_year', schoolYear)
+    .order('occurred_at', { ascending: false }).limit(100)
+  if (error) throw error
+  return (data ?? []).map((row) => ({
+    id: row.id, employeeId: row.employee_id, schoolYear: row.school_year, month: row.month,
+    eventType: row.event_type, occurredAt: row.occurred_at, changeCount: row.change_count,
+  }))
+}
+
+export async function dispatchPendingValidationAlerts(): Promise<void> {
+  if (isDemoMode || !supabase) return
+  const { error } = await supabase.functions.invoke('validation-alert-email', { body: { dispatchPending: true } })
+  if (error) throw error
+}
+
+export async function getNotifications(): Promise<UserNotification[]> {
+  if (isDemoMode || !supabase) { await pause(); return [] }
+  const { data, error } = await supabase.from('user_notifications')
+    .select('id, title, body, action_url, created_at, read_at').order('created_at', { ascending: false }).limit(50)
+  if (error) throw error
+  return (data ?? []).map((row) => ({ id: row.id, title: row.title, body: row.body, actionUrl: row.action_url, createdAt: row.created_at, readAt: row.read_at }))
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+  if (isDemoMode || !supabase) return
+  const { error } = await supabase.rpc('mark_notification_read', { p_notification_id: id })
+  if (error) throw error
+}
+
+export async function getValidationAlertEmail(): Promise<string> {
+  if (isDemoMode || !supabase) return ''
+  const { data, error } = await supabase.from('app_settings').select('validation_alert_email').eq('singleton', true).single()
+  if (error) throw error
+  return data.validation_alert_email ?? ''
+}
+
+export async function saveValidationAlertEmail(email: string): Promise<void> {
+  if (isDemoMode || !supabase) { await pause(); return }
+  const { error } = await supabase.from('app_settings').update({ validation_alert_email: email.trim() || null }).eq('singleton', true)
+  if (error) throw error
 }
 
 export async function approveTimeMonthChange(employeeId: string, schoolYear: number, month: number): Promise<MonthlyTimeValidation> {

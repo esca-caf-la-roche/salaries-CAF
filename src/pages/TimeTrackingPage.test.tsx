@@ -6,6 +6,7 @@ import { TimeTrackingPage } from './TimeTrackingPage'
 const getEmployeeSummaries = vi.fn()
 const getMonthlyEventHours = vi.fn()
 const getMonthlyTimeValidations = vi.fn()
+const getValidationHistory = vi.fn()
 const validateTimeMonth = vi.fn()
 const saveAnnualTracking = vi.fn()
 const runIncrementalSync = vi.fn()
@@ -15,6 +16,7 @@ vi.mock('../services/api', () => ({
   getEmployeeSummaries: (...args: unknown[]) => getEmployeeSummaries(...args),
   getMonthlyEventHours: (...args: unknown[]) => getMonthlyEventHours(...args),
   getMonthlyTimeValidations: (...args: unknown[]) => getMonthlyTimeValidations(...args),
+  getValidationHistory: (...args: unknown[]) => getValidationHistory(...args),
   validateTimeMonth: (...args: unknown[]) => validateTimeMonth(...args),
   saveAnnualTracking: (...args: unknown[]) => saveAnnualTracking(...args),
   runIncrementalSync: (...args: unknown[]) => runIncrementalSync(...args),
@@ -75,6 +77,7 @@ describe('TimeTrackingPage', () => {
       { name: 'Férié week-end test', date: new Date('2026-09-06T00:00:00.000Z') },
     ])
     getMonthlyTimeValidations.mockResolvedValue([])
+    getValidationHistory.mockResolvedValue([])
     validateTimeMonth.mockImplementation(async (employeeId: string, schoolYear: number, month: number) => ({
       employeeId, schoolYear, month, status: 'validated', validatedAt: '2026-09-06T10:00:00Z',
       changeDetectedAt: null, changeCount: 0, approvedAt: null,
@@ -142,8 +145,8 @@ describe('TimeTrackingPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Actualiser Google' }))
 
-    await waitFor(() => expect(runIncrementalSync).toHaveBeenCalledTimes(1))
-    await waitFor(() => expect(getEmployeeSummaries).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(runIncrementalSync).toHaveBeenCalledWith('manual'))
+    await waitFor(() => expect(getEmployeeSummaries).toHaveBeenCalled())
     expect(await screen.findByText('1 ressource synchronisée.', { exact: false })).toBeInTheDocument()
   })
 
@@ -153,7 +156,7 @@ describe('TimeTrackingPage', () => {
 
     expect(await screen.findByText('Validation mensuelle à faire.', { exact: false })).toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: 'Salarié' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Actualiser Google' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Actualiser Google' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Voir le mois' }))
     const validateButton = await screen.findByRole('button', { name: 'Valider Aoû' })

@@ -2,7 +2,7 @@ import { corsHeaders, errorResponse, HttpError, json } from "../_shared/http.ts"
 import { independentSeasonBounds, clipIndependentEvent } from "../_shared/independentEvents.ts";
 import { detectContractType } from "../_shared/contracts.ts";
 import { getAccessToken, googleFetch } from "../_shared/google.ts";
-import { requireAdmin } from "../_shared/supabase.ts";
+import { requireActiveUser } from "../_shared/supabase.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.112.4";
 
 type GoogleCalendar = {
@@ -435,6 +435,10 @@ async function executeSync(admin: SupabaseClient, calendar: Record<string, unkno
 
 async function sync(admin: SupabaseClient, ownerId: string, calendarIds?: string[]) {
   const connection = await connectionFor(admin, ownerId);
+  return syncConnection(admin, connection, calendarIds);
+}
+
+async function syncConnection(admin: SupabaseClient, connection: Record<string, unknown>, calendarIds?: string[]) {
   let query = admin.from("calendars").select("id,google_calendar_id,sync_token,employees!employees_resource_calendar_id_fkey(contract_type)")
     .eq("connection_id", connection.id).eq("is_resource", true).eq("enabled", true);
   if (calendarIds?.length) query = query.in("id", calendarIds);
@@ -468,6 +472,21 @@ async function sync(admin: SupabaseClient, ownerId: string, calendarIds?: string
     }
   }
   return { results };
+}
+
+async function syncEmployeeCalendar(admin: SupabaseClient, userId: string, mode: unknown) {
+  const { data: employee, error } = await admin.from("employees")
+    .select("id,contract_type,resource_calendar_id,calendars!employees_resource_calendar_id_fkey(id,connection_id,last_synced_at,enabled,is_resource)")
+    .eq("user_id", userId).eq("active", true).single();
+  if (error || !employee) throw new HttpError(403, "Aucune ressource salariée active n’est associée à ce compte");
+  const calendar = Array.isArray(employee.calendars) ? employee.calendars[0] : employee.calendars;
+  if (!calendar?.id || !calendar.enabled || !calendar.is_resource) throw new HttpError(409, "Calendrier salarié indisponible");
+  const manual = mode === "manual";
+  if (manual && employee.contract_type !== "CDI") throw new HttpError(403, "L’actualisation manuelle est réservée aux salariés CDI");
+  if (!manual && calendar.last_synced_at && Date.now() - new Date(calendar.last_synced_at).getTime() < 60 * 60_000) {
+    return { results: [{ calendarId: calendar.id, skipped: "recently_synced" }] };
+  }
+  return syncConnection(admin, { id: calendar.connection_id }, [String(calendar.id)]);
 }
 
 function eventPayload(event: Record<string, unknown>) {
@@ -580,7 +599,13 @@ Deno.serve(async (req) => {
   try {
     if (req.method !== "POST") throw new HttpError(405, "Méthode non autorisée");
     const body = await req.json().catch(() => ({}));
-    const { user, admin } = await requireAdmin(req);
+    const { user, role, admin } = await requireActiveUser(req);
+    if (body.action === "sync") {
+      return json(role === "admin"
+        ? await sync(admin, user.id, body.calendarIds)
+        : await syncEmployeeCalendar(admin, user.id, body.mode));
+    }
+    if (role !== "admin") throw new HttpError(403, "Accès administrateur requis");
     if (body.action === "discover") return json(await discover(admin, user.id));
     if (body.action === "resources") {
       const connection = await connectionFor(admin, user.id);
@@ -596,7 +621,6 @@ Deno.serve(async (req) => {
     if (body.action === "unassignedEvents") return json(await unassignedEvents(admin, user.id));
     if (body.action === "saveResources") return json(await saveResources(admin, user.id, body.resources));
     if (body.action === "saveCoefficients") return json(await saveCoefficients(admin, user.id, body.calendars));
-    if (body.action === "sync") return json(await sync(admin, user.id, body.calendarIds));
     throw new HttpError(400, "Action attendue: discover, resources, coefficientCalendars, unassignedEvents, independentEvents, saveResources, saveCoefficients ou sync");
   } catch (error) {
     return errorResponse(error);

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, ChevronDown, CircleAlert, GripVertical, Mail, RefreshCw, Search } from 'lucide-react'
-import { discoverResources, getCoefficientCalendars, getResources, saveCoefficientCalendars, saveResources, startGoogleConnection } from '../services/api'
+import { discoverResources, getCoefficientCalendars, getResources, getValidationAlertEmail, saveCoefficientCalendars, saveResources, saveValidationAlertEmail, startGoogleConnection } from '../services/api'
 import type { ContractType, EmployeeResource, HourCategory, PreparationCoefficient, UsedCalendarCoefficient } from '../types'
 import { contractTypeLabel } from '../lib/contracts'
 
@@ -192,9 +192,13 @@ export function ConfigurationPage() {
   const [kanbanAnnouncement, setKanbanAnnouncement] = useState('')
   const [message, setMessage] = useState('')
   const [resourceMessage, setResourceMessage] = useState('')
+  const [validationAlertEmail, setValidationAlertEmail] = useState('')
+  const [alertEmailMessage, setAlertEmailMessage] = useState('')
+  const [savingAlertEmail, setSavingAlertEmail] = useState(false)
 
   useEffect(() => { void getResources().then(setResources).catch(() => setMessage('Les ressources n\'ont pas pu être chargées.')).finally(() => setLoading(false)) }, [])
   useEffect(() => { void getCoefficientCalendars().then(setCoefficientCalendars).catch(() => setMessage('Les calendriers utilisés n\'ont pas pu être chargés.')).finally(() => setCoefficientsLoading(false)) }, [])
+  useEffect(() => { void getValidationAlertEmail().then(setValidationAlertEmail).catch(() => setAlertEmailMessage('Le destinataire des alertes n’a pas pu être chargé.')) }, [])
   useEffect(() => {
     if (!movedCalendarId) return
     const movedCard = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-calendar-id]'))
@@ -337,6 +341,19 @@ export function ConfigurationPage() {
     finally { setCoefficientsSaving(false) }
   }
 
+  const saveAlertEmail = async () => {
+    if (validationAlertEmail.trim() && !/^\S+@\S+\.\S+$/.test(validationAlertEmail.trim())) {
+      setAlertEmailMessage('Saisissez une adresse e-mail valide.')
+      return
+    }
+    setSavingAlertEmail(true)
+    try {
+      await saveValidationAlertEmail(validationAlertEmail)
+      setAlertEmailMessage(validationAlertEmail.trim() ? 'Destinataire des alertes enregistré.' : 'Alerte mail désactivée.')
+    } catch { setAlertEmailMessage('Le destinataire n’a pas pu être enregistré.') }
+    finally { setSavingAlertEmail(false) }
+  }
+
   return (
     <div className="page">
       <header className="page-heading">
@@ -355,6 +372,12 @@ export function ConfigurationPage() {
         <span><CircleAlert aria-hidden="true" /></span>
         <div><strong>Comment fonctionne le calcul ?</strong><p>Les heures annuelles fixent l'objectif du salarié. Chaque calendrier choisit d'abord son niveau de préparation, puis son type d'heures. Pour une ressource marquée (Indep), tous les événements horaires comptent au temps réel, même sans règle de calendrier. Une saison va du 1er septembre au 31 août.</p></div>
         <code>calendrier → prépa → type d'heures</code>
+      </section>
+      <section className="panel alert-email-panel" aria-labelledby="validation-alert-email-title">
+        <div><p className="eyebrow">Workflow de validation</p><h2 id="validation-alert-email-title">Alerte mail à l’administration</h2><p>Cette adresse reçoit un message lorsqu’un salarié CDI valide son mois.</p></div>
+        <label><span>Adresse destinataire</span><span className="email-input"><Mail aria-hidden="true" /><input type="email" value={validationAlertEmail} onChange={(event) => setValidationAlertEmail(event.target.value)} placeholder="validation@association.fr" /></span></label>
+        <button className="button button--primary" type="button" onClick={() => void saveAlertEmail()} disabled={savingAlertEmail}>{savingAlertEmail ? 'Enregistrement…' : 'Enregistrer l’alerte'}</button>
+        {alertEmailMessage && <span role="status">{alertEmailMessage}</span>}
       </section>
       <section className="panel configuration-panel">
         <div className="configuration-toolbar">

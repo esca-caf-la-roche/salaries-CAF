@@ -24,7 +24,7 @@ export function adminClient(): SupabaseClient {
   );
 }
 
-export async function requireAdmin(req: Request): Promise<{ user: User; admin: SupabaseClient }> {
+export async function requireActiveUser(req: Request): Promise<{ user: User; role: "admin" | "employee"; admin: SupabaseClient }> {
   const authorization = req.headers.get("Authorization");
   if (!authorization?.startsWith("Bearer ")) throw new HttpError(401, "Authentification requise");
   const admin = adminClient();
@@ -32,7 +32,15 @@ export async function requireAdmin(req: Request): Promise<{ user: User; admin: S
   if (error || !user) throw new HttpError(401, "Session invalide");
   const { data: profile, error: profileError } = await admin
     .from("profiles").select("role,active").eq("id", user.id).single();
-  if (profileError || profile?.role !== "admin" || !profile.active) {
+  if (profileError || !profile?.active || !["admin", "employee"].includes(profile.role)) {
+    throw new HttpError(403, "Compte inactif ou non autorisé");
+  }
+  return { user, role: profile.role, admin };
+}
+
+export async function requireAdmin(req: Request): Promise<{ user: User; admin: SupabaseClient }> {
+  const { user, role, admin } = await requireActiveUser(req);
+  if (role !== "admin") {
     throw new HttpError(403, "Accès administrateur requis");
   }
   return { user, admin };

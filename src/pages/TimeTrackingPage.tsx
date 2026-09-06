@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { BadgeCheck, CalendarDays, ChevronDown, CircleAlert, ClipboardCheck, RefreshCw, Save, Sigma } from 'lucide-react'
 import { HoursChart } from '../components/HoursChart'
 import {
@@ -13,9 +13,9 @@ import { formatSyncDate, monthLabel, schoolMonths, schoolYearForDate } from '../
 import { contractTypeLabel } from '../lib/contracts'
 import { calculateRetainedHours } from '../lib/hourTotals'
 import { completedMonthsForSchoolYear, previousSchoolMonth } from '../lib/monthValidation'
-import { getEmployeeSummaries, getMonthlyEventHours, getMonthlyTimeValidations, runIncrementalSync, saveAnnualTracking, validateTimeMonth } from '../services/api'
+import { getEmployeeSummaries, getMonthlyEventHours, getMonthlyTimeValidations, getValidationHistory, runIncrementalSync, saveAnnualTracking, validateTimeMonth } from '../services/api'
 import { getGovernmentPublicHolidaysForSchoolSeason } from '../services/publicHolidays'
-import type { EmployeeSummary, MonthlyEventHour, MonthlyHours, MonthlyPayrollEntry, MonthlyTimeValidation, SchoolYearSettings, SyncState } from '../types'
+import type { EmployeeSummary, MonthlyEventHour, MonthlyHours, MonthlyPayrollEntry, MonthlyTimeValidation, SchoolYearSettings, SyncState, ValidationHistoryEvent } from '../types'
 import { useAuth } from '../context/AuthContext'
 
 const now = new Date()
@@ -34,6 +34,11 @@ const categoryLabels = {
   absence: 'Absence',
   replacement: 'Remplacement',
   public_holiday: 'Jour férié',
+}
+
+const validationLabels = {
+  not_due: 'Pas encore validable', to_validate: 'À valider', employee_validated: 'Validé par le salarié',
+  changes_pending: 'Modification à approuver', admin_approved: 'Approuvé par l’administration',
 }
 
 function parseDuration(value: string): number | null {
@@ -81,6 +86,8 @@ export function TimeTrackingPage() {
   const [validations, setValidations] = useState<MonthlyTimeValidation[]>([])
   const [validationMessage, setValidationMessage] = useState('')
   const [validating, setValidating] = useState(false)
+  const [validationHistory, setValidationHistory] = useState<ValidationHistoryEvent[]>([])
+  const automaticSyncStarted = useRef(false)
 
   useEffect(() => {
     setLoading(true)
@@ -97,6 +104,19 @@ export function TimeTrackingPage() {
   useEffect(() => {
     void getMonthlyTimeValidations().then(setValidations).catch(() => setValidations([]))
   }, [])
+
+  useEffect(() => {
+    if (user?.role !== 'employee' || automaticSyncStarted.current) return
+    automaticSyncStarted.current = true
+    setSync({ status: 'syncing', lastSyncedAt: null })
+    void runIncrementalSync('automatic').then(async (result) => {
+      setSync(result)
+      const [items, updatedValidations] = await Promise.all([
+        getEmployeeSummaries(schoolYear), getMonthlyTimeValidations(),
+      ])
+      setEmployees(items); setValidations(updatedValidations)
+    }).catch(() => setSync({ status: 'error', lastSyncedAt: null, message: 'La synchronisation automatique n’a pas pu aboutir. Les dernières données disponibles restent affichées.' }))
+  }, [user, schoolYear])
 
   useEffect(() => {
     let active = true
@@ -130,6 +150,11 @@ export function TimeTrackingPage() {
   const firstPendingChange = employeeValidations.find((item) => item.status === 'changes_pending')
   const selectedValidation = employee ? validationFor(schoolYear, selectedMonth) : undefined
   const calendarMonths = useMemo(() => schoolMonths.map((month) => employee?.monthlyHours.find((item) => item.month === month) ?? emptyMonth(month)), [employee])
+
+  useEffect(() => {
+    if (!employee) { setValidationHistory([]); return }
+    void getValidationHistory(employee.id, schoolYear).then(setValidationHistory).catch(() => setValidationHistory([]))
+  }, [employee, schoolYear])
 
   useEffect(() => {
     if (!employee) return
@@ -230,7 +255,7 @@ export function TimeTrackingPage() {
   const synchronize = async () => {
     setSync({ status: 'syncing', lastSyncedAt: null })
     try {
-      const result = await runIncrementalSync()
+      const result = await runIncrementalSync('manual')
       setSync(result)
       try {
         const items = await getEmployeeSummaries(schoolYear)
@@ -282,6 +307,8 @@ export function TimeTrackingPage() {
       setValidations((items) => [...items.filter((item) => !(
         item.employeeId === validation.employeeId && item.schoolYear === validation.schoolYear && item.month === validation.month
       )), validation])
+      const history = await getValidationHistory(employee.id, schoolYear).catch(() => validationHistory)
+      setValidationHistory(history)
       setValidationMessage(`${monthLabel(selectedMonth)} a été validé. Toute modification ultérieure devra être approuvée par l’administration.`)
     } catch {
       setValidationMessage('La validation du mois a échoué. Rechargez la page puis réessayez.')
@@ -311,12 +338,21 @@ export function TimeTrackingPage() {
   const selectedMonthHolidays = employee?.contractType === 'CDI'
     ? publicHolidays.filter(({ date }) => date.getUTCMonth() + 1 === selectedMonth)
     : []
+  const validationToneFor = (month: number) => {
+    if (!completedMonths.includes(month)) return 'not_due'
+    const validation = validationFor(schoolYear, month)
+    if (!validation) return 'to_validate'
+    if (validation.status === 'changes_pending') return 'changes_pending'
+    return validation.approvedAt ? 'admin_approved' : 'employee_validated'
+  }
+  const canManualSync = canEdit || (user?.role === 'employee' && employee?.contractType === 'CDI')
+  const visibleHistory = validationHistory.filter((event) => event.employeeId === employee?.id)
 
   return (
     <div className="page tracking-page">
       <header className="page-heading">
         <div><p className="eyebrow">Suivi des salariés</p><h1>Du calendrier au bulletin</h1><p>Contrôlez chaque mois, puis régularisez la saison de septembre à août sans perdre le détail des heures.</p></div>
-        {canEdit && <div className="page-heading__actions">
+        {canManualSync && <div className="page-heading__actions">
           <button className="button button--secondary" onClick={() => void synchronize()} disabled={sync.status === 'syncing'}><RefreshCw className={sync.status === 'syncing' ? 'spin' : ''} aria-hidden="true" />{sync.status === 'syncing' ? 'Synchronisation…' : 'Actualiser Google'}</button>
           {view === 'annual' && <button className="button button--primary" onClick={() => void save()} disabled={saving || !employee}><Save aria-hidden="true" />{saving ? 'Enregistrement…' : 'Enregistrer la saison'}</button>}
         </div>}
@@ -352,10 +388,11 @@ export function TimeTrackingPage() {
       {!loading && !employee && <section className="panel tracking-empty"><ClipboardCheck aria-hidden="true" /><h2>Aucun salarié configuré</h2><p>Activez une ressource et renseignez son contrat dans Configuration.</p></section>}
 
       {employee && view === 'monthly' && <>
-        {employee.contractType === 'CDI' && completedMonths.includes(selectedMonth) && <section className={`panel month-validation-card month-validation-card--${selectedValidation?.status ?? 'missing'}`} aria-label="Validation du mois">
+        {employee.contractType === 'CDI' && <div className="validation-legend" aria-label="Légende des validations">{Object.entries(validationLabels).map(([tone, label]) => <span key={tone}><i className={`validation-tone validation-tone--${tone}`} />{label}</span>)}</div>}
+        {employee.contractType === 'CDI' && completedMonths.includes(selectedMonth) && <section className={`panel month-validation-card month-validation-card--${validationToneFor(selectedMonth)}`} aria-label="Validation du mois">
           <div>
             <p className="eyebrow">Contrôle mensuel</p>
-            <h2>{selectedValidation?.status === 'changes_pending' ? 'Modification à faire approuver' : selectedValidation ? 'Mois validé' : 'Validation à faire'}</h2>
+            <h2>{selectedValidation?.status === 'changes_pending' ? 'Modification à faire approuver' : selectedValidation?.approvedAt ? 'Mois approuvé par l’administration' : selectedValidation ? 'Mois validé par le salarié' : 'Validation à faire'}</h2>
             <p>{selectedValidation?.status === 'changes_pending'
               ? 'Les données Google ont changé depuis votre validation. L’administration doit approuver le nouvel état.'
               : selectedValidation
@@ -446,7 +483,9 @@ export function TimeTrackingPage() {
 
         <section className="panel annual-sheet">
           <div className="panel-heading"><div><p className="eyebrow">Saison {schoolYear}–{schoolYear + 1}</p><h2>Lecture annuelle, mois par mois</h2></div><span className="contract-badge">{contractTypeLabel(employee.contractType)} · {isIndependent ? 'Temps réel' : `${formatHoursMinutes(annualMinutes! / 60)} h`}</span></div>
+          {employee.contractType === 'CDI' && <div className="validation-legend" aria-label="Légende des validations">{Object.entries(validationLabels).map(([tone, label]) => <span key={tone}><i className={`validation-tone validation-tone--${tone}`} />{label}</span>)}</div>}
           <div className="annual-table-scroll"><table><thead><tr><th>Désignation</th>{schoolMonths.map((month) => <th key={month}>{monthLabel(month)}</th>)}<th>Total</th></tr></thead><tbody>
+            {employee.contractType === 'CDI' && <tr className="annual-validation-row"><th scope="row">Statut de validation</th>{schoolMonths.map((month) => { const tone = validationToneFor(month); return <td className={`validation-cell validation-cell--${tone}`} data-label={monthLabel(month)} key={month}>{validationLabels[tone]}</td> })}<td data-label="Total">—</td></tr>}
             <AnnualRow label={isIndependent ? 'Heures réalisées' : 'Heures du contrat'} months={months} value={(month) => month.contractHours} tone="work" />
             {!isIndependent && <><AnnualRow label="Heures d’absences" months={months} value={(month) => month.absenceHours} tone="absence" />
             <AnnualRow label="Heures de remplacements" months={months} value={(month) => month.replacementHours} tone="replacement" />
@@ -457,6 +496,10 @@ export function TimeTrackingPage() {
             {employee.contractType === 'CDI' && <tr className="annual-row annual-row--input"><th scope="row">Congés payés au bulletin</th>{schoolMonths.map((month) => <td key={month} data-label={monthLabel(month)}><input value={payrollDraft[month]?.leave ?? ''} onChange={(event) => setPayrollDraft((state) => ({ ...state, [month]: { ...state[month], leave: event.target.value } }))} disabled={!canEdit} aria-label={`Congés payés de ${monthLabel(month)}`} /></td>)}<td data-label="Total"><strong>{formatHoursMinutes(payslipLeaveHours)}</strong></td></tr>}
           </tbody></table></div>
         </section>
+        {employee.contractType === 'CDI' && <section className="panel validation-history" aria-label="Historique des validations">
+          <div className="panel-heading"><div><p className="eyebrow">Traçabilité</p><h2>Historique des validations</h2></div></div>
+          {!visibleHistory.length ? <p>Aucune validation enregistrée pour ce salarié.</p> : <ol>{visibleHistory.map((event) => <li key={event.id}><strong>{event.eventType === 'employee_validated' ? 'Validé par le salarié' : event.eventType === 'source_changed' ? 'Modification Google détectée' : 'Approuvé par l’administration'}</strong><span>{monthLabel(event.month)} {event.month >= 9 ? event.schoolYear : event.schoolYear + 1}</span><time dateTime={event.occurredAt}>{new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(event.occurredAt))}</time></li>)}</ol>}
+        </section>}
 
         {employee.contractType === 'CDI' && <section className="panel annual-holidays" aria-label="Jours fériés de la saison">
           <div className="panel-heading"><div><p className="eyebrow">Source · API du gouvernement</p><h2>Jours fériés de la saison</h2></div><span className="contract-badge">{weekdayHolidayCount} comptés sur {publicHolidays.length}</span></div>

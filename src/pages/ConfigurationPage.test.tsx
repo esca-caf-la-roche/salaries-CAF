@@ -37,6 +37,8 @@ const discoverResources = vi.fn()
 const saveResources = vi.fn()
 const saveCoefficientCalendars = vi.fn()
 const startGoogleConnection = vi.fn()
+const getValidationAlertEmail = vi.fn()
+const saveValidationAlertEmail = vi.fn()
 
 vi.mock('../services/api', () => ({
   getResources: (...args: unknown[]) => getResources(...args),
@@ -45,6 +47,8 @@ vi.mock('../services/api', () => ({
   saveResources: (...args: unknown[]) => saveResources(...args),
   saveCoefficientCalendars: (...args: unknown[]) => saveCoefficientCalendars(...args),
   startGoogleConnection: (...args: unknown[]) => startGoogleConnection(...args),
+  getValidationAlertEmail: (...args: unknown[]) => getValidationAlertEmail(...args),
+  saveValidationAlertEmail: (...args: unknown[]) => saveValidationAlertEmail(...args),
 }))
 
 describe('ConfigurationPage', () => {
@@ -57,6 +61,8 @@ describe('ConfigurationPage', () => {
     discoverResources.mockResolvedValue([structuredClone(resource)])
     saveResources.mockImplementation(async (resources: EmployeeResource[]) => resources)
     saveCoefficientCalendars.mockImplementation(async (calendars: UsedCalendarCoefficient[]) => calendars)
+    getValidationAlertEmail.mockResolvedValue('')
+    saveValidationAlertEmail.mockResolvedValue(undefined)
   })
 
   it('shows employee resources and the seven Kanban destinations without dropdowns', async () => {

@@ -18,6 +18,6 @@ export function completedMonthsForSchoolYear(schoolYear: number, date: Date): nu
   const currentMonthStart = new Date(date.getFullYear(), date.getMonth(), 1)
   return schoolMonths.filter((month) => {
     const calendarYear = month >= 9 ? schoolYear : schoolYear + 1
-    return new Date(calendarYear, month, 1) <= currentMonthStart
+    return new Date(calendarYear, month - 1, 1) < currentMonthStart
   })
 }

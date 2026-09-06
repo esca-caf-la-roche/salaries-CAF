@@ -92,6 +92,25 @@ export interface MonthlyTimeValidation {
   approvedAt: string | null
 }
 
+export interface ValidationHistoryEvent {
+  id: string
+  employeeId: string
+  schoolYear: number
+  month: number
+  eventType: 'employee_validated' | 'source_changed' | 'admin_approved'
+  occurredAt: string
+  changeCount: number
+}
+
+export interface UserNotification {
+  id: string
+  title: string
+  body: string
+  actionUrl: string
+  createdAt: string
+  readAt: string | null
+}
+
 export interface SchoolYearSettings {
   contractType: ContractType
   annualContractMinutes: number
