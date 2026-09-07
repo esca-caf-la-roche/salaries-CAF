@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
@@ -32,5 +32,16 @@ describe('role-based routes', () => {
 
     expect(await screen.findByRole('heading', { name: 'Vue admin' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: "Vue d'ensemble" })).toBeInTheDocument()
+  })
+
+  it('orders the administrator sidebar from overview to configuration', async () => {
+    currentUser = { id: 'admin-1', role: 'admin', displayName: 'Admin', email: 'admin@example.fr' }
+    render(<MemoryRouter initialEntries={['/vue-ensemble']}><App /></MemoryRouter>)
+
+    await screen.findByRole('heading', { name: 'Vue admin' })
+    const navigation = screen.getByRole('navigation', { name: 'Navigation principale' })
+    expect(within(navigation).getAllByRole('link').map((link) => link.textContent?.trim())).toEqual([
+      "Vue d'ensemble", 'Suivi des heures', 'Indépendants', 'À déterminer', 'Configuration',
+    ])
   })
 })

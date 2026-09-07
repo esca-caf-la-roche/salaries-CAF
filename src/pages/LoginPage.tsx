@@ -12,7 +12,7 @@ export function LoginPage() {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  if (user) return <Navigate to="/" replace />
+  if (user) return <Navigate to={user.role === 'admin' ? '/vue-ensemble' : '/'} replace />
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
