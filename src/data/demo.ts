@@ -10,6 +10,7 @@ export const demoUser: AppUser = {
 export const demoResources: EmployeeResource[] = [
   { id: 'employee-1', calendarId: 'cal-1', googleCalendarId: 'demo-beatrice@resource.calendar.google.com', name: '(CDI)-Béatrice Martin', color: '#e26d3f', enabled: true, loginEmail: 'beatrice@example.fr', contractType: 'CDI', annualContractHours: 1607, isUnassignedResource: false, eventCount: 42, lastSyncedAt: '2026-08-31T08:45:00Z' },
   { id: 'employee-2', calendarId: 'cal-2', googleCalendarId: 'demo-paul@resource.calendar.google.com', name: '(CDII)-Paul Renaud', color: '#3f7f73', enabled: true, loginEmail: 'paul@example.fr', contractType: 'CDII', annualContractHours: 820, isUnassignedResource: false, eventCount: 36, lastSyncedAt: '2026-08-31T08:45:00Z' },
+  { id: 'employee-4', calendarId: 'cal-4', googleCalendarId: 'demo-alex@resource.calendar.google.com', name: '(Indep)-Alex Morel', color: '#805f89', enabled: true, loginEmail: 'alex@example.fr', contractType: 'INDEP', annualContractHours: null, isUnassignedResource: false, eventCount: 24, lastSyncedAt: '2026-08-31T08:45:00Z' },
   { id: 'employee-3', calendarId: 'cal-3', googleCalendarId: 'demo-indetermine@resource.calendar.google.com', name: '(CDII)-A DETERMINER', color: '#4d6f8a', enabled: true, loginEmail: '', contractType: null, annualContractHours: null, isUnassignedResource: true, eventCount: 18, lastSyncedAt: null },
 ]
 
@@ -47,6 +48,7 @@ export const demoUnassignedEvents: UnassignedEvent[] = [
 
 const seriesA = [62, 71, 68, 74, 79, 66, 42, 38, 72, 76, 69, 55]
 const seriesB = [48, 51, 58, 61, 55, 63, 36, 31, 57, 60, 54, 44]
+const seriesIndependent = [12, 18, 15, 22, 14, 20, 8, 6, 17, 21, 13, 9]
 
 export const demoEmployees: EmployeeSummary[] = [
   {
@@ -70,6 +72,17 @@ export const demoEmployees: EmployeeSummary[] = [
     settings: { contractType: 'CDII', annualContractMinutes: 820 * 60, fullTimeAnnualMinutes: 1582 * 60, paidMonths: 12 },
     payroll: schoolPayroll(Math.round(820 * 60 / 12)),
     monthlyHours: seriesB.map((hours, index) => monthlyDemoHours(hours, index, 1.25)),
+  },
+  {
+    id: 'employee-4',
+    name: 'Alex Morel',
+    calendarName: 'Alex · Interventions',
+    contractType: 'INDEP',
+    annualContractHours: 0,
+    annualWorkedWeeks: 0,
+    settings: { contractType: 'INDEP', annualContractMinutes: 0, fullTimeAnnualMinutes: 1582 * 60, paidMonths: 12 },
+    payroll: [],
+    monthlyHours: seriesIndependent.map((hours, index) => monthlyDemoHours(hours, index)),
   },
 ]
 
