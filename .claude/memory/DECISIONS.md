@@ -13,3 +13,5 @@
 | Use `calculateAnnualSummary().contractualRealizedHours` for actual hours | It preserves the already-tested CDI, CDII/CDD, and independent business rules. | 2026-09-07 |
 | Show no contract variance for independents | Independent workers have no annual guarantee; comparing their time with zero would create a false surplus. | 2026-09-07 |
 | Keep J-7 as a rolling, client-side seven-day window | This matches the existing `isEventWithinNextDays` behavior and avoids a database migration for the overview redesign. | 2026-09-07 |
+| Let CDI users choose the paid-leave source applied to the total due | The total from payslips remains factual; selecting theoretical or payslip leave changes only the leave included in the amount due and makes the balance understandable. | 2026-09-07 |
+| Default the CDI paid-leave selector to theoretical leave | This preserves the previous total-due and balance behavior while exposing the choice explicitly. | 2026-09-07 |

@@ -76,6 +76,7 @@ export function TimeTrackingPage() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('')
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1)
   const [view, setView] = useState<'monthly' | 'annual'>('monthly')
+  const [paidLeaveSource, setPaidLeaveSource] = useState<'theoretical' | 'payslip'>('theoretical')
   const [employees, setEmployees] = useState<EmployeeSummary[]>([])
   const [events, setEvents] = useState<MonthlyEventHour[]>([])
   const [loading, setLoading] = useState(true)
@@ -250,6 +251,13 @@ export function TimeTrackingPage() {
     schoolSeason: { startYear: schoolYear },
     fullTimeAnnualHours: fullTimeMinutes / 60,
   }) : null
+  const selectedPaidLeaveHours = paidLeaveSource === 'theoretical'
+    ? (annual?.paidLeaveDueHours ?? 0)
+    : payslipLeaveHours
+  const selectedTotalDueHours = annual && employee?.contractType === 'CDI'
+    ? annual.guaranteedBaseHours + selectedPaidLeaveHours
+    : (annual?.totalDueHours ?? 0)
+  const selectedPayBalanceHours = annual ? selectedTotalDueHours - annual.payslipTotalHours : 0
 
   const monthlyRealizedHours = (month: MonthlyHours) => employee?.contractType === 'CDI'
     ? calculateRetainedHours(month)
@@ -474,11 +482,29 @@ export function TimeTrackingPage() {
           <p className="annual-breakdown-card__note">Les heures issues des calendriers sont déjà pondérées par les coefficients configurés (×1 ou ×1,25).{employee.contractType === 'CDI' ? ' Les fériés sont calculés séparément avec le coefficient annuel détaillé plus bas.' : ''} Valeurs affichées arrondies à la minute.</p>
         </section>}
 
+        {employee.contractType === 'CDI' && <section className="paid-leave-choice" aria-labelledby="paid-leave-choice-title">
+          <header>
+            <div><p className="eyebrow">Congés payés</p><h2 id="paid-leave-choice-title">Quel montant compter dans la synthèse ?</h2></div>
+            <span className="paid-leave-choice__selection">Source retenue : {paidLeaveSource === 'theoretical' ? 'théorique' : 'bulletins'}</span>
+          </header>
+          <div className="paid-leave-switch" role="radiogroup" aria-label="Source des congés payés comptabilisés">
+            <label>
+              <input type="radio" name="paid-leave-source" value="theoretical" checked={paidLeaveSource === 'theoretical'} onChange={() => setPaidLeaveSource('theoretical')} />
+              <span><small>Congés théoriques</small><strong>{formatHoursMinutes(annual.paidLeaveDueHours)}</strong><em>10 % de la base garantie</em></span>
+            </label>
+            <label>
+              <input type="radio" name="paid-leave-source" value="payslip" checked={paidLeaveSource === 'payslip'} onChange={() => setPaidLeaveSource('payslip')} />
+              <span><small>Congés des bulletins</small><strong>{formatHoursMinutes(payslipLeaveHours)}</strong><em>Somme des congés saisis mois par mois</em></span>
+            </label>
+          </div>
+          <p className="paid-leave-choice__formula"><strong>Calcul du théorique :</strong> 10 % × max({formatHoursMinutes(annualMinutes! / 60)} de contrat, {formatHoursMinutes(annual.contractualRealizedHours)} réalisées) = {formatHoursMinutes(annual.paidLeaveDueHours)}.</p>
+        </section>}
+
         <section className="annual-scoreboard" aria-label="Régularisation annuelle">
           {!isIndependent && <article className={annual.remainingToWorkHours > 0 ? 'annual-scoreboard__progress--due' : 'annual-scoreboard__progress--complete'}><span>Reste à réaliser</span><strong>{formatHoursMinutes(annual.remainingToWorkHours)}</strong><small>{annual.overtimeHours > 0 ? `${formatHoursMinutes(annual.overtimeHours)} en plus du contrat` : annual.remainingToWorkHours === 0 ? 'contrat atteint exactement' : `${formatHoursMinutes(annual.contractualRealizedHours)} réalisées sur ${formatHoursMinutes(annualMinutes! / 60)}`}</small></article>}
-          <article><span>Total dû</span><strong>{formatHoursMinutes(annual.totalDueHours)}</strong><small>{isIndependent ? 'durée réelle des événements' : 'garantie + compléments'}</small></article>
+          <article><span>Total dû</span><strong>{formatHoursMinutes(selectedTotalDueHours)}</strong><small>{employee.contractType === 'CDI' ? `base garantie + congés ${paidLeaveSource === 'theoretical' ? 'théoriques' : 'des bulletins'}` : isIndependent ? 'durée réelle des événements' : 'garantie + compléments'}</small></article>
           <article><span>Total bulletins</span><strong>{formatHoursMinutes(annual.payslipTotalHours)}</strong><small>{isIndependent ? 'heures saisies' : 'heures + congés saisis'}</small></article>
-          <article className={annual.payBalanceHours > 0 ? 'annual-scoreboard__balance--due' : 'annual-scoreboard__balance--settled'}><span>{annual.payBalanceHours > 0 ? 'Reste à payer' : annual.payBalanceHours < 0 ? 'Avance payée' : 'Solde'}</span><strong>{formatHoursMinutes(Math.abs(annual.payBalanceHours))}</strong><small>{annual.payBalanceHours === 0 ? 'saison équilibrée' : 'écart avec les bulletins'}</small></article>
+          <article className={selectedPayBalanceHours > 0 ? 'annual-scoreboard__balance--due' : 'annual-scoreboard__balance--settled'}><span>{selectedPayBalanceHours > 0 ? 'Reste à payer' : selectedPayBalanceHours < 0 ? 'Avance payée' : 'Solde'}</span><strong>{formatHoursMinutes(Math.abs(selectedPayBalanceHours))}</strong><small>{selectedPayBalanceHours === 0 ? 'saison équilibrée' : employee.contractType === 'CDI' ? `total dû avec congés ${paidLeaveSource === 'theoretical' ? 'théoriques' : 'des bulletins'} − bulletins` : 'écart avec les bulletins'}</small></article>
         </section>
 
         <section className="panel chart-panel annual-chart">

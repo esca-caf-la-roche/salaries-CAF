@@ -2,8 +2,8 @@
 
 ## Immediate
 
-- [ ] Commit and push `main`.
-- [ ] Verify the GitHub Pages workflow and live overview.
+- [ ] Commit and push the CDI paid-leave selector to `main`.
+- [ ] Verify the GitHub Pages workflow and the live annual CDI summary.
 
 ## Backlog
 

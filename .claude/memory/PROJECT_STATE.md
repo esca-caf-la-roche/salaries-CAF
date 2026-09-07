@@ -12,6 +12,7 @@
 - Added contract-specific actual-hour calculations, accessible red/green variance states, and compact absence/replacement/holiday details.
 - Consolidated pending validations, incomplete calendar configuration, and every unassigned session within the rolling J-7 window into one task board.
 - Added responsive styling, an independent worker to demo data, and focused regression tests.
+- Clarified CDI paid-leave accounting with an accessible theoretical/payslip selector, both leave totals, and the explicit theoretical formula.
 - Annual tracking summaries and calculations.
 - Independent-worker event and actual-hour views.
 - Monthly CDI validation and validation notifications.
@@ -22,4 +23,5 @@
 - Supabase provides authentication, data, synchronization, and notifications.
 - School years run from September 1 to August 31.
 - The user authorized direct work on `main` and production deployment for the overview redesign.
-- Verification completed locally: lint, TypeScript, 83 unit tests, production build, and browser visual review.
+- The user authorized direct work on `main` and production deployment for the CDI paid-leave selector.
+- Verification completed locally: lint, TypeScript, 86 unit tests, production build, and browser visual review.
