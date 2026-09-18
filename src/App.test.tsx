@@ -11,6 +11,7 @@ vi.mock('./context/AuthContext', () => ({
 vi.mock('./pages/TimeTrackingPage', () => ({ TimeTrackingPage: () => <h1>Suivi personnel</h1> }))
 vi.mock('./pages/TimeConversionPage', () => ({ TimeConversionPage: () => <h1>Conversion des heures</h1> }))
 vi.mock('./pages/DashboardPage', () => ({ DashboardPage: () => <h1>Vue admin</h1> }))
+vi.mock('./pages/ReplacementAbsencePage', () => ({ ReplacementAbsencePage: () => <h1>Absences admin</h1> }))
 vi.mock('./pages/ConfigurationPage', () => ({ ConfigurationPage: () => null }))
 vi.mock('./pages/IndependentEventsPage', () => ({ IndependentEventsPage: () => null }))
 vi.mock('./pages/UnassignedEventsPage', () => ({ UnassignedEventsPage: () => null }))
@@ -25,6 +26,7 @@ describe('role-based routes', () => {
 
     expect(await screen.findByRole('heading', { name: 'Suivi personnel' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: "Vue d'ensemble" })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Absences & remplacements' })).not.toBeInTheDocument()
   })
 
   it('keeps the overview available to an administrator', async () => {
@@ -33,6 +35,13 @@ describe('role-based routes', () => {
 
     expect(await screen.findByRole('heading', { name: 'Vue admin' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: "Vue d'ensemble" })).toBeInTheDocument()
+  })
+
+  it('keeps the replacement and absence report restricted to administrators', async () => {
+    currentUser = { id: 'employee-1', role: 'employee', displayName: 'Salarié', email: 'employee@example.fr' }
+    render(<MemoryRouter initialEntries={['/absences-remplacements']}><App /></MemoryRouter>)
+
+    expect(await screen.findByRole('heading', { name: 'Suivi personnel' })).toBeInTheDocument()
   })
 
   it('makes conversion available to every authenticated role', async () => {
@@ -50,7 +59,7 @@ describe('role-based routes', () => {
     await screen.findByRole('heading', { name: 'Vue admin' })
     const navigation = screen.getByRole('navigation', { name: 'Navigation principale' })
     expect(within(navigation).getAllByRole('link').map((link) => link.textContent?.trim())).toEqual([
-      "Vue d'ensemble", 'Suivi des heures', 'Indépendants', 'À déterminer', 'Conversion', 'Configuration',
+      "Vue d'ensemble", 'Absences & remplacements', 'Suivi des heures', 'Indépendants', 'À déterminer', 'Conversion', 'Configuration',
     ])
   })
 })

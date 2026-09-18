@@ -304,6 +304,14 @@ tbody tr:last-child td { border-bottom: 0; }
 .annual-row--work td, .annual-row--work th { background: #e4f2f5; }
 .annual-row--absence td, .annual-row--absence th { background: #f0f6f4; }
 .annual-row--replacement td, .annual-row--replacement th { background: #fae2c8; }
+.season-select { min-width: 145px; }
+.season-select > span { display: block; margin: 0 0 7px 2px; color: var(--muted); font: 500 .65rem "DM Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+.replacement-absence-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.replacement-absence-summary article:first-child { border-top-color: #4f8b77; }
+.replacement-absence-summary article:nth-child(2) { border-top-color: var(--rope); }
+.replacement-absence-summary article:last-child { border-top-color: var(--glacier); }
+.replacement-absence-sheet .contract-badge { display: inline-flex; align-items: center; gap: 6px; }
+.replacement-absence-sheet .contract-badge svg { width: 15px; }
 .annual-row--total td, .annual-row--total th { color: var(--pine); border-top: 2px solid var(--pine); background: #d7e9e3; font-weight: 700; }
 .annual-row--weeks td, .annual-row--weeks th { background: #fff1df; }
 .annual-row--input td, .annual-row--input th { background: #f7d3aa; }
@@ -609,8 +617,8 @@ tbody tr:last-child td { border-bottom: 0; }
   .login-page { grid-template-columns: 1fr; }.login-story { min-height: 45vh; }.login-story > small { display: none; }.login-panel { padding: 50px 24px; }
   .app-shell { display: block; }.sidebar { display: none; }.mobile-header { display: flex; align-items: center; gap: 10px; padding: 12px 20px; color: var(--chalk); background: var(--pine); font-family: Unbounded, sans-serif; font-size: .82rem; }.mobile-header .brand__mark { width: 32px; height: 32px; }
   .mobile-nav { position: fixed; z-index: 20; inset: auto 0 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 6px 12px max(6px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: rgba(255,254,250,.96); backdrop-filter: blur(10px); }
-  .mobile-nav.mobile-nav--admin { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .mobile-nav--admin a { min-width: 0; font-size: .57rem; }
+  .mobile-nav.mobile-nav--admin { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .mobile-nav--admin a { min-width: 0; font-size: .53rem; }
   .mobile-nav a { display: grid; justify-items: center; gap: 2px; padding: 5px; color: var(--muted); text-decoration: none; font-size: .63rem; }.mobile-nav a.active { color: var(--pine); }.mobile-nav svg { width: 19px; }
   .page { padding: 35px 24px 100px; }.metric-grid { grid-template-columns: 1fr 1fr; }.metric--lead { grid-column: 1 / -1; }
   .calendar-head { display: none; }.calendar-row { grid-template-columns: 1fr 1fr; padding: 18px; }.calendar-identity, .email-input { grid-column: 1 / -1; }.resource-groups, .unused-resources__cards { grid-template-columns: 1fr; }.kanban-instructions { grid-template-columns: auto 32px auto; }.kanban-instructions p { grid-column: 1 / -1; justify-self: start; }.kanban-stage__grid--categories { grid-template-columns: repeat(2, minmax(0, 1fr)); }.configuration-warning, .unassigned-warning, .validation-warning { align-items: flex-start; flex-wrap: wrap; }.configuration-warning > span, .unassigned-warning > span, .validation-warning > span { min-width: calc(100% - 40px); }.configuration-warning .button, .unassigned-warning .button, .validation-warning .button { width: 100%; }.month-validation-card { align-items: stretch; flex-direction: column; }.validation-review__content li { align-items: stretch; flex-direction: column; }.validation-review__content .button { width: 100%; }
