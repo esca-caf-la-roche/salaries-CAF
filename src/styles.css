@@ -678,11 +678,18 @@ tbody tr:last-child td { border-bottom: 0; }
 }
 .independent-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .independent-context { margin: 0 0 24px; color: var(--muted); font-size: .75rem; line-height: 1.7; overflow-wrap: anywhere; }
+.independent-invoice { margin: 0 0 24px; padding: 18px; border: 1px solid #bed0c6; border-radius: 10px; background: #f0f6f2; }
+.independent-invoice > div:first-child { display: flex; gap: 11px; align-items: flex-start; }.independent-invoice svg { flex: 0 0 auto; width: 19px; color: var(--pine-2); }
+.independent-invoice h2 { margin: 0; font-size: .9rem; }.independent-invoice p { margin: 4px 0 0; color: var(--muted); font-size: .68rem; line-height: 1.55; }
+.independent-invoice__fields { display: grid; grid-template-columns: minmax(160px, 1fr) 150px auto; gap: 12px; align-items: end; margin-top: 15px; }.independent-invoice__fields label { display: grid; gap: 5px; color: var(--muted); font-size: .61rem; font-weight: 700; }.independent-invoice__fields input { min-width: 0; padding: 9px 10px; border: 1px solid var(--line); border-radius: 5px; background: white; color: var(--ink); font: inherit; }
+.independent-invoice__total { display: grid; justify-items: end; gap: 7px; }.independent-invoice__total strong { font: 600 .69rem "DM Mono", monospace; white-space: nowrap; }.independent-invoice__total .button { padding: 9px 12px; font-size: .65rem; white-space: nowrap; }
+.independent-event-select { position: absolute; top: 14px; right: 18px; display: inline-flex; align-items: center; gap: 5px; color: var(--pine-2); font-size: .58rem; font-weight: 700; cursor: pointer; }.independent-event-select input { accent-color: var(--pine-2); }.independent-event-select:has(input:disabled) { color: var(--muted); cursor: default; }
 .independent-page .event-month__heading > span, .independent-page .day-card__heading > span { text-align: right; }
 @media (max-width: 760px) {
   .independent-filters { grid-template-columns: 1fr; }
+  .independent-invoice__fields { grid-template-columns: 1fr; }.independent-invoice__total { justify-items: start; }.independent-event-select { position: static; grid-column: 1; justify-self: start; margin-bottom: 8px; }
 }
 @media print {
-  .independent-filters { display: none !important; }
+  .independent-filters, .independent-invoice, .independent-event-select { display: none !important; }
   .independent-context { margin-bottom: 3mm; font-size: 7pt; }
 }

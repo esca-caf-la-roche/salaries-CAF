@@ -502,6 +502,9 @@ function eventPayload(event: Record<string, unknown>) {
     ? event.coefficient_rules[0] as Record<string, unknown> | undefined
     : event.coefficient_rules as Record<string, unknown> | null;
   const sourceCalendarId = String(event.source_google_calendar_id ?? "");
+  const invoiceEvent = Array.isArray(event.independent_invoice_events)
+    ? event.independent_invoice_events[0] as Record<string, unknown> | undefined
+    : event.independent_invoice_events as Record<string, unknown> | null;
   return {
     id: String(event.id),
     googleEventId: String(event.google_event_id),
@@ -514,6 +517,7 @@ function eventPayload(event: Record<string, unknown>) {
     sourceCalendarId,
     sourceCalendarName: String(rule?.label ?? organizer.displayName ?? sourceCalendarId ?? "Calendrier inconnu") || "Calendrier inconnu",
     sourceCalendarColor: typeof rule?.color === "string" ? rule.color : null,
+    invoiceId: invoiceEvent?.invoice_id ? String(invoiceEvent.invoice_id) : null,
   };
 }
 
@@ -542,19 +546,54 @@ async function independentEvents(admin: SupabaseClient, ownerId: string, schoolY
     const pageSize = 1000;
     for (let from = 0; ; from += pageSize) {
       const { data, error } = await admin.from("calendar_events")
-        .select("id,google_event_id,summary,description,location,starts_at,ends_at,all_day,source_google_calendar_id,raw,coefficient_rules(label,color)")
+        .select("id,google_event_id,summary,description,location,starts_at,ends_at,all_day,source_google_calendar_id,raw,coefficient_rules(label,color),independent_invoice_events(invoice_id)")
         .eq("calendar_id", calendar.id).eq("all_day", false).neq("status", "cancelled")
         .lt("starts_at", bounds.endsAt).gt("ends_at", bounds.startsAt)
         .order("starts_at").order("id").range(from, from + pageSize - 1);
       if (error) throw error;
+      const googleEventIds = (data ?? []).map((event) => String(event.google_event_id));
+      const { data: billedRows, error: billedError } = googleEventIds.length
+        ? await admin.from("independent_invoice_events").select("google_event_id,invoice_id")
+          .eq("resource_calendar_id", calendar.id).in("google_event_id", googleEventIds)
+        : { data: [], error: null };
+      if (billedError) throw billedError;
+      const invoiceByGoogleEventId = new Map((billedRows ?? []).map((row) => [String(row.google_event_id), String(row.invoice_id)]));
       for (const event of data ?? []) {
         const clipped = clipIndependentEvent(event.starts_at, event.ends_at, bounds);
-        if (clipped) events.push({ ...eventPayload(event), ...clipped, employeeId: String(employee.id), employeeName: String(employee.display_name) });
+        if (clipped) events.push({ ...eventPayload(event), ...clipped, invoiceId: invoiceByGoogleEventId.get(String(event.google_event_id)) ?? null, employeeId: String(employee.id), employeeName: String(employee.display_name) });
       }
       if ((data ?? []).length < pageSize) break;
     }
   }
   return { events };
+}
+
+async function createIndependentInvoice(admin: SupabaseClient, ownerId: string, body: Record<string, unknown>) {
+  const eventIds = body.eventIds;
+  const schoolYear = body.schoolYear;
+  if (typeof body.employeeId !== "string" || !Array.isArray(eventIds) || eventIds.some((id) => typeof id !== "string")
+    || typeof schoolYear !== "number" || !Number.isInteger(schoolYear)
+    || typeof body.invoiceNumber !== "string" || typeof body.receivedOn !== "string") {
+    throw new HttpError(400, "Données de facture invalides");
+  }
+  const { data, error } = await admin.rpc("internal_create_independent_invoice", {
+    p_owner_id: ownerId,
+    p_employee_id: body.employeeId,
+    p_event_ids: eventIds,
+    p_school_year: schoolYear,
+    p_invoice_number: body.invoiceNumber,
+    p_received_on: body.receivedOn,
+  });
+  if (error) {
+    if (error.code === "23505" && error.message.includes("independent_invoices_employee_number_unique")) {
+      throw new HttpError(409, "Cette référence de facture existe déjà pour cet indépendant");
+    }
+    if (error.code === "23505") throw new HttpError(409, "Un des événements sélectionnés est déjà dans une facture");
+    throw error;
+  }
+  const invoice = Array.isArray(data) ? data[0] : data;
+  if (!invoice?.invoice_id) throw new Error("La facture n’a pas été créée");
+  return { invoiceId: String(invoice.invoice_id), totalMinutes: Number(invoice.total_minutes) };
 }
 
 async function unassignedEvents(admin: SupabaseClient, ownerId: string) {
@@ -624,10 +663,11 @@ Deno.serve(async (req) => {
       return json({ calendars: await coefficientPayload(admin, connection.id) });
     }
     if (body.action === "independentEvents") return json(await independentEvents(admin, user.id, body.schoolYear));
+    if (body.action === "createIndependentInvoice") return json(await createIndependentInvoice(admin, user.id, body));
     if (body.action === "unassignedEvents") return json(await unassignedEvents(admin, user.id));
     if (body.action === "saveResources") return json(await saveResources(admin, user.id, body.resources));
     if (body.action === "saveCoefficients") return json(await saveCoefficients(admin, user.id, body.calendars));
-    throw new HttpError(400, "Action attendue: discover, resources, coefficientCalendars, unassignedEvents, independentEvents, saveResources, saveCoefficients ou sync");
+    throw new HttpError(400, "Action attendue: discover, resources, coefficientCalendars, unassignedEvents, independentEvents, createIndependentInvoice, saveResources, saveCoefficients ou sync");
   } catch (error) {
     return errorResponse(error);
   }

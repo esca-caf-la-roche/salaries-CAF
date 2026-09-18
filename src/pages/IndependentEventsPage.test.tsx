@@ -4,9 +4,11 @@ import type { IndependentEvent } from '../types'
 import { IndependentEventsPage } from './IndependentEventsPage'
 
 const getIndependentEvents = vi.fn()
+const createIndependentInvoice = vi.fn()
 
 vi.mock('../services/api', () => ({
   getIndependentEvents: (...args: unknown[]) => getIndependentEvents(...args),
+  createIndependentInvoice: (...args: unknown[]) => createIndependentInvoice(...args),
 }))
 
 const events: IndependentEvent[] = [
@@ -33,6 +35,7 @@ describe('IndependentEventsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getIndependentEvents.mockResolvedValue(events)
+    createIndependentInvoice.mockResolvedValue({ invoiceId: 'invoice-1', totalMinutes: 120 })
   })
 
   it('groups events from the same day into one daily card', async () => {
@@ -92,6 +95,22 @@ describe('IndependentEventsPage', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Stages' }))
     expect(screen.getByText('2:00 h', { selector: '.unassigned-total strong' })).toBeInTheDocument()
     expect(screen.getByText(/Calendriers : Cours avec prépa · Total réel : 2:00 h/)).toHaveTextContent('Alice')
+  })
+
+  it('creates an invoice from selected events and makes them unavailable afterwards', async () => {
+    render(<IndependentEventsPage />)
+    await screen.findByRole('heading', { name: 'Septembre 2026' })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Indépendant' }), { target: { value: 'indep-1' } })
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ajouter Cours enfants à la facture' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ajouter Stage automne à la facture' }))
+    expect(screen.getByText('2 événements · 5:00 h')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Référence de facture (facultative)'), { target: { value: 'FAC-42' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Valider la facture' }))
+    expect(createIndependentInvoice).toHaveBeenCalledWith(expect.objectContaining({
+      employeeId: 'indep-1', eventIds: ['event-1', 'event-2'], invoiceNumber: 'FAC-42', schoolYear: 2026,
+    }))
+    expect(await screen.findAllByText('Déjà facturé')).toHaveLength(2)
+    expect(screen.getByRole('button', { name: 'Valider la facture' })).toBeDisabled()
   })
 
   it('loads the selected season and clears stale events on a failed load', async () => {

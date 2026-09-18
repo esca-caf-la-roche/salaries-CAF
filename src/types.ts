@@ -54,6 +54,7 @@ export interface UnassignedEvent {
 export interface IndependentEvent extends UnassignedEvent {
   employeeId: string
   employeeName: string
+  invoiceId?: string | null
 }
 
 export interface MonthlyHours {

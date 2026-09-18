@@ -8,6 +8,9 @@ declare
   fixture_employee_id uuid := gen_random_uuid();
   source_prefix text := 'independent-test-' || gen_random_uuid()::text;
   summary_row record;
+  invoice_row record;
+  invoice_event_ids uuid[];
+  duplicate_rejected boolean := false;
 begin
   insert into auth.users (id, email) values (owner_id, source_prefix || '@example.test');
   insert into public.google_connections (id, owner_id) values (connection_id, owner_id);
@@ -42,6 +45,24 @@ begin
   end if;
   if exists (select 1 from public.internal_used_coefficient_calendars(connection_id)) then
     raise exception 'Independent-only source calendars must not require coefficient configuration';
+  end if;
+  select array_agg(id order by google_event_id) into invoice_event_ids
+  from public.calendar_events where calendar_id = resource_id and google_event_id in ('-prep', '-missing');
+  select * into strict invoice_row from public.internal_create_independent_invoice(
+    owner_id, fixture_employee_id, invoice_event_ids, 2026, 'FACTURE-TEST', '2026-09-18'
+  );
+  if invoice_row.total_minutes <> 240
+    or (select count(*) from public.independent_invoice_events where invoice_id = invoice_row.invoice_id) <> 2 then
+    raise exception 'Independent invoice must snapshot its selected event durations';
+  end if;
+  begin
+    perform public.internal_create_independent_invoice(
+      owner_id, fixture_employee_id, invoice_event_ids[1:1], 2026, 'FACTURE-TEST-2', '2026-09-18'
+    );
+  exception when unique_violation then duplicate_rejected := true;
+  end;
+  if not duplicate_rejected then
+    raise exception 'An independent event must not be billable twice';
   end if;
   update public.employees set contract_type = 'CDI' where id = fixture_employee_id;
   if (select count(*) from public.internal_used_coefficient_calendars(connection_id)) <> 4 then

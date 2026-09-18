@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarClock, CheckCheck, MapPin, Printer, SlidersHorizontal, X } from 'lucide-react'
+import { CalendarClock, CheckCheck, FilePlus2, MapPin, Printer, SlidersHorizontal, X } from 'lucide-react'
 import { eventDayKey, eventDayLabel, eventMonthKey, eventMonthLabel, eventStart, formatEventTime } from '../lib/unassignedEvents'
-import { getIndependentEvents } from '../services/api'
+import { createIndependentInvoice, getIndependentEvents } from '../services/api'
 import { schoolYearForDate } from '../lib/format'
 import { formatHoursMinutes } from '../lib/annualSummary'
 import type { IndependentEvent } from '../types'
@@ -23,6 +23,10 @@ export function IndependentEventsPage() {
   const [employeeId, setEmployeeId] = useState('')
   const [events, setEvents] = useState<IndependentEvent[]>([])
   const [selectedCalendars, setSelectedCalendars] = useState<Set<string>>(new Set())
+  const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set())
+  const [invoiceNumber, setInvoiceNumber] = useState('')
+  const [receivedOn, setReceivedOn] = useState(() => new Date().toISOString().slice(0, 10))
+  const [savingInvoice, setSavingInvoice] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -32,7 +36,7 @@ export function IndependentEventsPage() {
       .then((items) => {
         if (!active) return
         setEvents(items)
-        setSelectedCalendars(new Set(items.map(calendarKey)))
+        setSelectedCalendars(new Set(items.map(calendarKey))); setSelectedEventIds(new Set())
       })
       .catch(() => { if (active) setError('Les événements des indépendants n’ont pas pu être chargés. Relancez la page.') })
       .finally(() => { if (active) setLoading(false) })
@@ -43,6 +47,7 @@ export function IndependentEventsPage() {
     .sort((a, b) => a[1].localeCompare(b[1], 'fr')), [events])
   const employeeEvents = useMemo(() => events.filter((event) => !employeeId || event.employeeId === employeeId), [events, employeeId])
   const visibleEvents = useMemo(() => employeeEvents.filter((event) => selectedCalendars.has(calendarKey(event))), [employeeEvents, selectedCalendars])
+  const selectedEvents = useMemo(() => employeeEvents.filter((event) => !event.invoiceId && selectedEventIds.has(event.id)), [employeeEvents, selectedEventIds])
 
   const calendars = useMemo(() => {
     const unique = new Map<string, SourceCalendar>()
@@ -84,6 +89,28 @@ export function IndependentEventsPage() {
     })
   }
 
+  const toggleEvent = (id: string) => {
+    setSelectedEventIds((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const submitInvoice = async () => {
+    if (!employeeId || !selectedEvents.length || savingInvoice) return
+    setSavingInvoice(true); setError('')
+    try {
+      await createIndependentInvoice({ employeeId, eventIds: selectedEvents.map((event) => event.id), schoolYear, invoiceNumber, receivedOn })
+      const billedIds = new Set(selectedEvents.map((event) => event.id))
+      setEvents((current) => current.map((event) => billedIds.has(event.id) ? { ...event, invoiceId: 'created' } : event))
+      setSelectedEventIds(new Set()); setInvoiceNumber('')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'La facture n’a pas pu être enregistrée.')
+    } finally { setSavingInvoice(false) }
+  }
+
   return (
     <div className="page unassigned-page independent-page">
       <header className="page-heading">
@@ -102,13 +129,24 @@ export function IndependentEventsPage() {
 
       <section className="filters independent-filters" aria-label="Filtres des indépendants">
         <label><span>Saison</span><div className="select-wrap"><select value={schoolYear} onChange={(event) => {
-          setSchoolYear(Number(event.target.value)); setLoading(true); setError(''); setEvents([]); setEmployeeId(''); setSelectedCalendars(new Set())
+          setSchoolYear(Number(event.target.value)); setLoading(true); setError(''); setEvents([]); setEmployeeId(''); setSelectedCalendars(new Set()); setSelectedEventIds(new Set())
         }}>{Array.from({ length: 5 }, (_, index) => currentYear - 2 + index).map((year) => <option key={year} value={year}>{year}–{year + 1}</option>)}</select></div></label>
-        <label><span>Indépendant</span><div className="select-wrap"><select value={employeeId} disabled={loading} onChange={(event) => { setEmployeeId(event.target.value); setSelectedCalendars(new Set(events.map(calendarKey))) }}>
+        <label><span>Indépendant</span><div className="select-wrap"><select value={employeeId} disabled={loading} onChange={(event) => { setEmployeeId(event.target.value); setSelectedCalendars(new Set(events.map(calendarKey))); setSelectedEventIds(new Set()) }}>
           <option value="">Tous les indépendants</option>{employees.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
         </select></div></label>
       </section>
       {!loading && !error && <p className="independent-context">Saison {schoolYear}–{schoolYear + 1} · {employeeId ? employees.find(([id]) => id === employeeId)?.[1] : 'Tous les indépendants'} · Calendriers : {calendars.filter((calendar) => selectedCalendars.has(calendar.id)).map((calendar) => calendar.name).join(', ') || 'aucun'} · Total réel : {totalHours(visibleEvents)} h</p>}
+
+      {!loading && employeeId && (
+        <section className="independent-invoice" aria-labelledby="invoice-title">
+          <div><FilePlus2 aria-hidden="true" /><div><h2 id="invoice-title">Ajouter une facture</h2><p>Sélectionnez les événements de la facture. Les événements déjà facturés restent visibles mais ne peuvent pas être sélectionnés.</p></div></div>
+          <div className="independent-invoice__fields">
+            <label><span>Référence de facture (facultative)</span><input value={invoiceNumber} onChange={(event) => setInvoiceNumber(event.target.value)} /></label>
+            <label><span>Date de réception</span><input type="date" value={receivedOn} onChange={(event) => setReceivedOn(event.target.value)} /></label>
+            <div className="independent-invoice__total"><strong>{selectedEvents.length} événement{selectedEvents.length > 1 ? 's' : ''} · {totalHours(selectedEvents)} h</strong><button className="button" type="button" disabled={!selectedEvents.length || savingInvoice} onClick={() => void submitInvoice()}>{savingInvoice ? 'Enregistrement…' : 'Valider la facture'}</button></div>
+          </div>
+        </section>
+      )}
 
       {error && <div className="alert alert--error" role="alert">{error}</div>}
 
@@ -159,6 +197,10 @@ export function IndependentEventsPage() {
                 <div className="day-card__events">
                   {dayEvents.map((event) => (
                     <section className="day-event" key={`${event.employeeId}-${event.id}`}>
+                      {employeeId && <label className="independent-event-select">
+                        <input type="checkbox" checked={selectedEventIds.has(event.id)} disabled={Boolean(event.invoiceId)} onChange={() => toggleEvent(event.id)} aria-label={`Ajouter ${event.title} à la facture`} />
+                        <span>{event.invoiceId ? 'Déjà facturé' : 'Facturer'}</span>
+                      </label>}
                       <i className="day-event__calendar-line" style={{ backgroundColor: event.sourceCalendarColor ?? '#83918c' }} />
                       <time className="day-event__time" dateTime={event.startsAt}>{formatEventTime(event)}<br /><strong>{formatHoursMinutes(duration(event))} h</strong></time>
                       <h4>{event.title}</h4>

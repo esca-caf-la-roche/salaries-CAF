@@ -1,0 +1,1 @@
+create index independent_invoices_created_by_idx on public.independent_invoices(created_by);

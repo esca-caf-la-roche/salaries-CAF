@@ -143,6 +143,7 @@ export async function getIndependentEvents(schoolYear: number): Promise<Independ
       id: `independent-${event.id}`,
       employeeId: index === 1 ? 'independent-2' : 'independent-1',
       employeeName: index === 1 ? '(Indep)-Alex Exemple' : '(Indep)-Camille Démo',
+      invoiceId: null,
       startsAt: `${schoolYear}-10-${index === 2 ? '19' : '12'}T${index === 1 ? '15' : '08'}:00:00+02:00`,
       endsAt: `${schoolYear}-10-${index === 2 ? '19' : '12'}T${index === 1 ? '17' : '10'}:00:00+02:00`,
     }))
@@ -152,6 +153,24 @@ export async function getIndependentEvents(schoolYear: number): Promise<Independ
   })
   if (error) await throwFunctionError(error, 'Les événements des indépendants n’ont pas pu être chargés.')
   return (data?.events ?? []) as IndependentEvent[]
+}
+
+export async function createIndependentInvoice(input: {
+  employeeId: string
+  eventIds: string[]
+  schoolYear: number
+  invoiceNumber: string
+  receivedOn: string
+}): Promise<{ invoiceId: string; totalMinutes: number }> {
+  if (isDemoMode || !supabase) {
+    await pause()
+    return { invoiceId: `demo-invoice-${Date.now()}`, totalMinutes: 0 }
+  }
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: { action: 'createIndependentInvoice', ...input },
+  })
+  if (error) await throwFunctionError(error, 'La facture n’a pas pu être enregistrée.')
+  return { invoiceId: String(data?.invoiceId), totalMinutes: Number(data?.totalMinutes) }
 }
 
 export async function saveCoefficientCalendars(calendars: UsedCalendarCoefficient[]): Promise<UsedCalendarCoefficient[]> {
