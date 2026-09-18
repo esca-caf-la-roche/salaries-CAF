@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, CalendarClock, CalendarRange, Gauge, LogOut, Settings, Sigma } from 'lucide-react'
+import { ArrowLeftRight, BriefcaseBusiness, CalendarClock, CalendarRange, Gauge, LogOut, Settings, Sigma } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { Logo } from './Logo'
@@ -14,6 +14,7 @@ export function Layout() {
         <nav className="main-nav" aria-label="Navigation principale">
           {user?.role === 'admin' && <NavLink to="/vue-ensemble"><Gauge aria-hidden="true" /> <span>Vue d'ensemble</span></NavLink>}
           <NavLink to="/" end><Sigma aria-hidden="true" /> <span>Suivi des heures</span></NavLink>
+          <NavLink to="/conversion"><ArrowLeftRight aria-hidden="true" /> <span>Conversion</span></NavLink>
           {user?.role === 'admin' && <NavLink to="/independants"><BriefcaseBusiness aria-hidden="true" /><span>Indépendants</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/a-determiner"><CalendarClock aria-hidden="true" /> <span>À déterminer</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/configuration"><Settings aria-hidden="true" /> <span>Configuration</span></NavLink>}
@@ -40,6 +41,7 @@ export function Layout() {
         <nav className={`mobile-nav${user?.role === 'admin' ? ' mobile-nav--admin' : ''}`} aria-label="Navigation mobile">
           {user?.role === 'admin' && <NavLink to="/vue-ensemble"><Gauge aria-hidden="true" /><span>Vue</span></NavLink>}
           <NavLink to="/" end><Sigma aria-hidden="true" /><span>Suivi</span></NavLink>
+          <NavLink to="/conversion"><ArrowLeftRight aria-hidden="true" /><span>Conversion</span></NavLink>
           {user?.role === 'admin' && <NavLink to="/independants"><BriefcaseBusiness aria-hidden="true" /><span>Indépendants</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/a-determiner"><CalendarClock aria-hidden="true" /><span>À déterminer</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/configuration"><CalendarRange aria-hidden="true" /><span>Ressources</span></NavLink>}

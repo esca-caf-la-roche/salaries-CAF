@@ -8,6 +8,7 @@ import { LoginPage } from './pages/LoginPage'
 import { IndependentEventsPage } from './pages/IndependentEventsPage'
 import { UnassignedEventsPage } from './pages/UnassignedEventsPage'
 import { TimeTrackingPage } from './pages/TimeTrackingPage'
+import { TimeConversionPage } from './pages/TimeConversionPage'
 
 function ProtectedLayout() {
   const { user, loading } = useAuth()
@@ -27,6 +28,7 @@ export default function App() {
       <Route path="/connexion" element={<LoginPage />} />
       <Route element={<ProtectedLayout />}>
         <Route index element={<TimeTrackingPage />} />
+        <Route path="conversion" element={<TimeConversionPage />} />
         <Route path="vue-ensemble" element={<AdminRoute><DashboardPage /></AdminRoute>} />
         <Route path="independants" element={<AdminRoute><IndependentEventsPage /></AdminRoute>} />
         <Route path="a-determiner" element={<AdminRoute><UnassignedEventsPage /></AdminRoute>} />

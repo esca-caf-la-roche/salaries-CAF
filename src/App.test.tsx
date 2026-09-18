@@ -9,6 +9,7 @@ vi.mock('./context/AuthContext', () => ({
   useAuth: () => ({ user: currentUser, loading: false, isDemo: false, signOut: vi.fn() }),
 }))
 vi.mock('./pages/TimeTrackingPage', () => ({ TimeTrackingPage: () => <h1>Suivi personnel</h1> }))
+vi.mock('./pages/TimeConversionPage', () => ({ TimeConversionPage: () => <h1>Conversion des heures</h1> }))
 vi.mock('./pages/DashboardPage', () => ({ DashboardPage: () => <h1>Vue admin</h1> }))
 vi.mock('./pages/ConfigurationPage', () => ({ ConfigurationPage: () => null }))
 vi.mock('./pages/IndependentEventsPage', () => ({ IndependentEventsPage: () => null }))
@@ -34,6 +35,14 @@ describe('role-based routes', () => {
     expect(screen.getByRole('link', { name: "Vue d'ensemble" })).toBeInTheDocument()
   })
 
+  it('makes conversion available to every authenticated role', async () => {
+    currentUser = { id: 'employee-1', role: 'employee', displayName: 'Salarié', email: 'employee@example.fr' }
+    render(<MemoryRouter initialEntries={['/conversion']}><App /></MemoryRouter>)
+
+    expect(await screen.findByRole('heading', { name: 'Conversion des heures' })).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: 'Conversion' })).toHaveLength(2)
+  })
+
   it('orders the administrator sidebar from overview to configuration', async () => {
     currentUser = { id: 'admin-1', role: 'admin', displayName: 'Admin', email: 'admin@example.fr' }
     render(<MemoryRouter initialEntries={['/vue-ensemble']}><App /></MemoryRouter>)
@@ -41,7 +50,7 @@ describe('role-based routes', () => {
     await screen.findByRole('heading', { name: 'Vue admin' })
     const navigation = screen.getByRole('navigation', { name: 'Navigation principale' })
     expect(within(navigation).getAllByRole('link').map((link) => link.textContent?.trim())).toEqual([
-      "Vue d'ensemble", 'Suivi des heures', 'Indépendants', 'À déterminer', 'Configuration',
+      "Vue d'ensemble", 'Suivi des heures', 'Conversion', 'Indépendants', 'À déterminer', 'Configuration',
     ])
   })
 })
