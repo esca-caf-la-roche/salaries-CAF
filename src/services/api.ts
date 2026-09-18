@@ -181,7 +181,7 @@ export async function getIndependentInvoices(employeeId: string): Promise<Indepe
   return (data?.invoices ?? []) as IndependentInvoice[]
 }
 
-export async function updateIndependentInvoice(input: { invoiceId: string; invoiceNumber: string; receivedOn: string }): Promise<void> {
+export async function updateIndependentInvoice(input: { invoiceId: string; invoiceNumber: string; receivedOn: string; eventIds: string[]; schoolYear: number }): Promise<void> {
   if (isDemoMode || !supabase) { await pause(); return }
   const { error } = await supabase.functions.invoke('google-calendar-sync', { body: { action: 'updateIndependentInvoice', ...input } })
   if (error) await throwFunctionError(error, 'La facture n’a pas pu être modifiée.')

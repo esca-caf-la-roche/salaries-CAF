@@ -607,10 +607,15 @@ async function independentInvoices(admin: SupabaseClient, ownerId: string, emplo
 }
 
 async function updateIndependentInvoice(admin: SupabaseClient, ownerId: string, body: Record<string, unknown>) {
-  if (typeof body.invoiceId !== "string" || typeof body.invoiceNumber !== "string" || typeof body.receivedOn !== "string") throw new HttpError(400, "Données de facture invalides");
+  if (typeof body.invoiceId !== "string" || typeof body.invoiceNumber !== "string" || typeof body.receivedOn !== "string" || !Array.isArray(body.eventIds) || body.eventIds.some((id) => typeof id !== "string") || typeof body.schoolYear !== "number") throw new HttpError(400, "Données de facture invalides");
   const { error } = await admin.rpc("internal_update_independent_invoice", { p_owner_id: ownerId, p_invoice_id: body.invoiceId, p_invoice_number: body.invoiceNumber, p_received_on: body.receivedOn });
   if (error) throw error;
-  return { ok: true };
+  const { data: totalMinutes, error: eventsError } = await admin.rpc("internal_replace_independent_invoice_events", { p_owner_id: ownerId, p_invoice_id: body.invoiceId, p_event_ids: body.eventIds, p_school_year: body.schoolYear });
+  if (eventsError) {
+    if (eventsError.code === "23505") throw new HttpError(409, "Un des événements sélectionnés est déjà dans une autre facture");
+    throw eventsError;
+  }
+  return { ok: true, totalMinutes: Number(totalMinutes) };
 }
 
 async function deleteIndependentInvoice(admin: SupabaseClient, ownerId: string, body: Record<string, unknown>) {
