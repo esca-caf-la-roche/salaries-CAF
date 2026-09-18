@@ -596,6 +596,30 @@ async function createIndependentInvoice(admin: SupabaseClient, ownerId: string, 
   return { invoiceId: String(invoice.invoice_id), totalMinutes: Number(invoice.total_minutes) };
 }
 
+async function independentInvoices(admin: SupabaseClient, ownerId: string, employeeId: unknown) {
+  if (typeof employeeId !== "string") throw new HttpError(400, "Indépendant invalide");
+  const { data, error } = await admin.from("independent_invoices")
+    .select("id,invoice_number,received_on,total_minutes,independent_invoice_events(count),employees!inner(resource_calendar_id,calendars!employees_resource_calendar_id_fkey!inner(connection_id))")
+    .eq("employee_id", employeeId).eq("employees.calendars.connection_id", (await connectionFor(admin, ownerId)).id)
+    .order("received_on", { ascending: false }).order("created_at", { ascending: false });
+  if (error) throw error;
+  return { invoices: (data ?? []).map((invoice) => ({ id: String(invoice.id), invoiceNumber: invoice.invoice_number ? String(invoice.invoice_number) : null, receivedOn: String(invoice.received_on), totalMinutes: Number(invoice.total_minutes), eventCount: Array.isArray(invoice.independent_invoice_events) ? Number(invoice.independent_invoice_events[0]?.count ?? 0) : 0 })) };
+}
+
+async function updateIndependentInvoice(admin: SupabaseClient, ownerId: string, body: Record<string, unknown>) {
+  if (typeof body.invoiceId !== "string" || typeof body.invoiceNumber !== "string" || typeof body.receivedOn !== "string") throw new HttpError(400, "Données de facture invalides");
+  const { error } = await admin.rpc("internal_update_independent_invoice", { p_owner_id: ownerId, p_invoice_id: body.invoiceId, p_invoice_number: body.invoiceNumber, p_received_on: body.receivedOn });
+  if (error) throw error;
+  return { ok: true };
+}
+
+async function deleteIndependentInvoice(admin: SupabaseClient, ownerId: string, body: Record<string, unknown>) {
+  if (typeof body.invoiceId !== "string") throw new HttpError(400, "Facture invalide");
+  const { error } = await admin.rpc("internal_delete_independent_invoice", { p_owner_id: ownerId, p_invoice_id: body.invoiceId });
+  if (error) throw error;
+  return { ok: true };
+}
+
 async function unassignedEvents(admin: SupabaseClient, ownerId: string) {
   const connection = await connectionFor(admin, ownerId);
   const { data: calendars, error: calendarsError } = await admin.from("calendars")
@@ -664,6 +688,9 @@ Deno.serve(async (req) => {
     }
     if (body.action === "independentEvents") return json(await independentEvents(admin, user.id, body.schoolYear));
     if (body.action === "createIndependentInvoice") return json(await createIndependentInvoice(admin, user.id, body));
+    if (body.action === "independentInvoices") return json(await independentInvoices(admin, user.id, body.employeeId));
+    if (body.action === "updateIndependentInvoice") return json(await updateIndependentInvoice(admin, user.id, body));
+    if (body.action === "deleteIndependentInvoice") return json(await deleteIndependentInvoice(admin, user.id, body));
     if (body.action === "unassignedEvents") return json(await unassignedEvents(admin, user.id));
     if (body.action === "saveResources") return json(await saveResources(admin, user.id, body.resources));
     if (body.action === "saveCoefficients") return json(await saveCoefficients(admin, user.id, body.calendars));

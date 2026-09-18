@@ -4,6 +4,7 @@ import { isDemoMode, supabase } from '../lib/supabase'
 import { detectContractType } from '../lib/contracts'
 import type {
   IndependentEvent,
+  IndependentInvoice,
   EmployeeResource,
   EmployeeSummary,
   MonthlyEventHour,
@@ -171,6 +172,25 @@ export async function createIndependentInvoice(input: {
   })
   if (error) await throwFunctionError(error, 'La facture n’a pas pu être enregistrée.')
   return { invoiceId: String(data?.invoiceId), totalMinutes: Number(data?.totalMinutes) }
+}
+
+export async function getIndependentInvoices(employeeId: string): Promise<IndependentInvoice[]> {
+  if (isDemoMode || !supabase) return []
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', { body: { action: 'independentInvoices', employeeId } })
+  if (error) await throwFunctionError(error, 'Les factures n’ont pas pu être chargées.')
+  return (data?.invoices ?? []) as IndependentInvoice[]
+}
+
+export async function updateIndependentInvoice(input: { invoiceId: string; invoiceNumber: string; receivedOn: string }): Promise<void> {
+  if (isDemoMode || !supabase) { await pause(); return }
+  const { error } = await supabase.functions.invoke('google-calendar-sync', { body: { action: 'updateIndependentInvoice', ...input } })
+  if (error) await throwFunctionError(error, 'La facture n’a pas pu être modifiée.')
+}
+
+export async function deleteIndependentInvoice(invoiceId: string): Promise<void> {
+  if (isDemoMode || !supabase) { await pause(); return }
+  const { error } = await supabase.functions.invoke('google-calendar-sync', { body: { action: 'deleteIndependentInvoice', invoiceId } })
+  if (error) await throwFunctionError(error, 'La facture n’a pas pu être supprimée.')
 }
 
 export async function saveCoefficientCalendars(calendars: UsedCalendarCoefficient[]): Promise<UsedCalendarCoefficient[]> {

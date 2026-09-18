@@ -5,10 +5,14 @@ import { IndependentEventsPage } from './IndependentEventsPage'
 
 const getIndependentEvents = vi.fn()
 const createIndependentInvoice = vi.fn()
+const getIndependentInvoices = vi.fn()
 
 vi.mock('../services/api', () => ({
   getIndependentEvents: (...args: unknown[]) => getIndependentEvents(...args),
   createIndependentInvoice: (...args: unknown[]) => createIndependentInvoice(...args),
+  getIndependentInvoices: (...args: unknown[]) => getIndependentInvoices(...args),
+  updateIndependentInvoice: vi.fn(),
+  deleteIndependentInvoice: vi.fn(),
 }))
 
 const events: IndependentEvent[] = [
@@ -35,6 +39,7 @@ describe('IndependentEventsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getIndependentEvents.mockResolvedValue(events)
+    getIndependentInvoices.mockResolvedValue([])
     createIndependentInvoice.mockResolvedValue({ invoiceId: 'invoice-1', totalMinutes: 120 })
   })
 

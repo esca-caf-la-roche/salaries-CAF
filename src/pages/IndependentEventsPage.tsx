@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarClock, CheckCheck, FilePlus2, MapPin, Printer, SlidersHorizontal, X } from 'lucide-react'
+import { CalendarClock, CheckCheck, FilePlus2, MapPin, Pencil, Printer, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { eventDayKey, eventDayLabel, eventMonthKey, eventMonthLabel, eventStart, formatEventTime } from '../lib/unassignedEvents'
-import { createIndependentInvoice, getIndependentEvents } from '../services/api'
+import { createIndependentInvoice, deleteIndependentInvoice, getIndependentEvents, getIndependentInvoices, updateIndependentInvoice } from '../services/api'
 import { schoolYearForDate } from '../lib/format'
 import { formatHoursMinutes } from '../lib/annualSummary'
-import type { IndependentEvent } from '../types'
+import type { IndependentEvent, IndependentInvoice } from '../types'
 
 interface SourceCalendar {
   id: string
@@ -27,6 +27,8 @@ export function IndependentEventsPage() {
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [receivedOn, setReceivedOn] = useState(() => new Date().toISOString().slice(0, 10))
   const [savingInvoice, setSavingInvoice] = useState(false)
+  const [invoices, setInvoices] = useState<IndependentInvoice[]>([])
+  const [editingInvoice, setEditingInvoice] = useState<IndependentInvoice | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -42,6 +44,11 @@ export function IndependentEventsPage() {
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [schoolYear])
+
+  useEffect(() => {
+    if (!employeeId) { setInvoices([]); setEditingInvoice(null); return }
+    void getIndependentInvoices(employeeId).then(setInvoices).catch(() => setError('Les factures n’ont pas pu être chargées.'))
+  }, [employeeId])
 
   const employees = useMemo(() => [...new Map(events.map((event) => [event.employeeId, event.employeeName])).entries()]
     .sort((a, b) => a[1].localeCompare(b[1], 'fr')), [events])
@@ -106,6 +113,7 @@ export function IndependentEventsPage() {
       const billedIds = new Set(selectedEvents.map((event) => event.id))
       setEvents((current) => current.map((event) => billedIds.has(event.id) ? { ...event, invoiceId: 'created' } : event))
       setSelectedEventIds(new Set()); setInvoiceNumber('')
+      if (employeeId) setInvoices(await getIndependentInvoices(employeeId))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'La facture n’a pas pu être enregistrée.')
     } finally { setSavingInvoice(false) }
@@ -147,6 +155,14 @@ export function IndependentEventsPage() {
           </div>
         </section>
       )}
+      {!loading && employeeId && <section className="independent-invoices" aria-labelledby="invoices-title">
+        <h2 id="invoices-title">Factures enregistrées</h2>
+        {invoices.length === 0 ? <p>Aucune facture enregistrée pour cet indépendant.</p> : <div className="independent-invoices__list">{invoices.map((invoice) => <article key={invoice.id}>
+          <div><strong>{invoice.invoiceNumber || 'Sans référence'}</strong><span>Reçue le {new Date(`${invoice.receivedOn}T12:00:00`).toLocaleDateString('fr-FR')} · {invoice.eventCount} événement{invoice.eventCount > 1 ? 's' : ''} · {formatHoursMinutes(invoice.totalMinutes / 60)} h</span></div>
+          <div><button type="button" onClick={() => setEditingInvoice(invoice)}><Pencil aria-hidden="true" /> Modifier</button><button type="button" onClick={() => { if (window.confirm('Supprimer cette facture ? Les événements seront de nouveau disponibles.')) void (async () => { await deleteIndependentInvoice(invoice.id); setInvoices((current) => current.filter((item) => item.id !== invoice.id)); setEvents((current) => current.map((event) => event.invoiceId === invoice.id ? { ...event, invoiceId: null } : event)) })() }}><Trash2 aria-hidden="true" /> Supprimer</button></div>
+        </article>)}</div>}
+      </section>}
+      {editingInvoice && <section className="independent-invoice" aria-label="Modifier la facture"><div><h2>Modifier la facture</h2></div><div className="independent-invoice__fields"><label><span>Référence de facture</span><input value={editingInvoice.invoiceNumber ?? ''} onChange={(event) => setEditingInvoice({ ...editingInvoice, invoiceNumber: event.target.value || null })} /></label><label><span>Date de réception</span><input type="date" value={editingInvoice.receivedOn} onChange={(event) => setEditingInvoice({ ...editingInvoice, receivedOn: event.target.value })} /></label><div className="independent-invoice__total"><button className="button" type="button" onClick={() => void (async () => { await updateIndependentInvoice({ invoiceId: editingInvoice.id, invoiceNumber: editingInvoice.invoiceNumber ?? '', receivedOn: editingInvoice.receivedOn }); setInvoices((current) => current.map((item) => item.id === editingInvoice.id ? editingInvoice : item)); setEditingInvoice(null) })()}>Enregistrer</button><button type="button" onClick={() => setEditingInvoice(null)}>Annuler</button></div></div></section>}
 
       {error && <div className="alert alert--error" role="alert">{error}</div>}
 

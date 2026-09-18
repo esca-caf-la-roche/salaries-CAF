@@ -57,6 +57,14 @@ export interface IndependentEvent extends UnassignedEvent {
   invoiceId?: string | null
 }
 
+export interface IndependentInvoice {
+  id: string
+  invoiceNumber: string | null
+  receivedOn: string
+  totalMinutes: number
+  eventCount: number
+}
+
 export interface MonthlyHours {
   month: number
   rawHours: number
