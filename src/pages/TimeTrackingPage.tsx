@@ -55,6 +55,22 @@ function parseDuration(value: string): number | null {
   return Number.isFinite(decimal) && decimal >= 0 ? Math.round(decimal * 60) : null
 }
 
+function parseHundredthHours(value: string): number | null {
+  const normalized = value.trim().replace(',', '.')
+  if (!normalized) return 0
+  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) return null
+  const hundredths = Math.round(Number(normalized) * 100)
+  return Number.isSafeInteger(hundredths) && hundredths >= 0 ? hundredths : null
+}
+
+function formatHundredthHours(hundredths: number): string {
+  return (hundredths / 100).toFixed(2).replace('.', ',')
+}
+
+function formatDecimalHours(hours: number): string {
+  return formatHundredthHours(Math.round(hours * 100))
+}
+
 function eventTime(iso: string) {
   return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
 }
@@ -88,7 +104,7 @@ export function TimeTrackingPage() {
   const [publicHolidays, setPublicHolidays] = useState(() => getFrenchPublicHolidaysForSchoolSeason({ startYear: currentSchoolYear }))
   const [holidaySource, setHolidaySource] = useState<'loading' | 'government' | 'fallback'>('loading')
   const [settingsDraft, setSettingsDraft] = useState({ annual: '', fullTime: '', paidMonths: '12' })
-  const [payrollDraft, setPayrollDraft] = useState<Record<number, { paid: string; leave: string }>>({})
+  const [payrollDraft, setPayrollDraft] = useState<Record<number, { paid: string; leave: string; sickLeave: string }>>({})
   const [validations, setValidations] = useState<MonthlyTimeValidation[]>([])
   const [validationMessage, setValidationMessage] = useState('')
   const [validating, setValidating] = useState(false)
@@ -172,8 +188,9 @@ export function TimeTrackingPage() {
     setPayrollDraft(Object.fromEntries(schoolMonths.map((month) => {
       const entry = employee.payroll.find((item) => item.month === month)
       return [month, {
-        paid: formatHoursMinutes((entry?.paidMinutes ?? 0) / 60),
-        leave: formatHoursMinutes((entry?.paidLeaveMinutes ?? 0) / 60),
+        paid: formatHundredthHours(entry?.paidHundredthHours ?? 0),
+        leave: formatHundredthHours(entry?.paidLeaveHundredthHours ?? 0),
+        sickLeave: formatHundredthHours(entry?.sickLeaveHundredthHours ?? 0),
       }]
     })))
   }, [employee])
@@ -197,25 +214,27 @@ export function TimeTrackingPage() {
 
   const payrollEntries = useMemo<MonthlyPayrollEntry[]>(() => schoolMonths.map((month) => ({
     month,
-    paidMinutes: parseDuration(payrollDraft[month]?.paid ?? '') ?? 0,
-    paidLeaveMinutes: isIndependent ? 0 : parseDuration(payrollDraft[month]?.leave ?? '') ?? 0,
+    paidHundredthHours: parseHundredthHours(payrollDraft[month]?.paid ?? '') ?? 0,
+    paidLeaveHundredthHours: isIndependent ? 0 : parseHundredthHours(payrollDraft[month]?.leave ?? '') ?? 0,
+    sickLeaveHundredthHours: !isIndependent ? (parseHundredthHours(payrollDraft[month]?.sickLeave ?? '') ?? 0) : 0,
   })), [payrollDraft, isIndependent])
-  const payslipHours = payrollEntries.reduce((sum, entry) => sum + entry.paidMinutes, 0) / 60
-  const payslipLeaveHours = payrollEntries.reduce((sum, entry) => sum + entry.paidLeaveMinutes, 0) / 60
+  const payslipHours = payrollEntries.reduce((sum, entry) => sum + entry.paidHundredthHours, 0) / 100
+  const payslipLeaveHours = payrollEntries.reduce((sum, entry) => sum + entry.paidLeaveHundredthHours, 0) / 100
+  const sickLeaveHours = payrollEntries.reduce((sum, entry) => sum + entry.sickLeaveHundredthHours, 0) / 100
   const annualMinutes = isIndependent ? 0 : parseDuration(settingsDraft.annual)
   const fullTimeMinutes = CDI_FULL_TIME_ANNUAL_HOURS * 60
   const paidMonths = Number(settingsDraft.paidMonths)
   const validContractDraft = annualMinutes != null && (isIndependent || annualMinutes > 0) && fullTimeMinutes != null && fullTimeMinutes > 0
   const validDraft = validContractDraft
     && Number.isInteger(paidMonths) && paidMonths >= 1 && paidMonths <= 12
-    && schoolMonths.every((month) => parseDuration(payrollDraft[month]?.paid ?? '') != null && parseDuration(payrollDraft[month]?.leave ?? '') != null)
+    && schoolMonths.every((month) => parseHundredthHours(payrollDraft[month]?.paid ?? '') != null && parseHundredthHours(payrollDraft[month]?.leave ?? '') != null && (isIndependent || parseHundredthHours(payrollDraft[month]?.sickLeave ?? '') != null))
 
   const weekdayHolidayCount = publicHolidays.filter(({ date }) => isWeekday(date)).length
   const cdiHolidayCalculation = employee?.contractType === 'CDI' && validContractDraft
     ? calculateCdiPublicHolidayHours({
       annualContractHours: annualMinutes! / 60,
       fullTimeAnnualHours: fullTimeMinutes! / 60,
-      realizedHoursExcludingHolidays: calendarTotals.contract + calendarTotals.replacement - calendarTotals.absence,
+      realizedHoursExcludingHolidays: calendarTotals.contract + calendarTotals.replacement - calendarTotals.absence + sickLeaveHours,
       weekdayHolidayCount,
     })
     : null
@@ -248,6 +267,7 @@ export function TimeTrackingPage() {
     calendarPublicHolidayHours: totals.holiday,
     payslipHours,
     payslipPaidLeaveHours: payslipLeaveHours,
+    sickLeaveHours,
     schoolSeason: { startYear: schoolYear },
     fullTimeAnnualHours: fullTimeMinutes / 60,
   }) : null
@@ -260,10 +280,10 @@ export function TimeTrackingPage() {
   const selectedPayBalanceHours = annual ? selectedTotalDueHours - annual.payslipTotalHours : 0
 
   const monthlyRealizedHours = (month: MonthlyHours) => employee?.contractType === 'CDI'
-    ? calculateRetainedHours(month)
+    ? calculateRetainedHours(month) + (payrollEntries.find((entry) => entry.month === month.month)?.sickLeaveHundredthHours ?? 0) / 100
     : employee?.contractType === 'INDEP'
       ? month.contractHours
-      : month.contractHours + month.absenceHours + month.publicHolidayHours
+      : month.contractHours + month.absenceHours + month.publicHolidayHours + (payrollEntries.find((entry) => entry.month === month.month)?.sickLeaveHundredthHours ?? 0) / 100
 
   const synchronize = async () => {
     setSync({ status: 'syncing', lastSyncedAt: null })
@@ -465,8 +485,8 @@ export function TimeTrackingPage() {
           </dl>
           <div className="annual-breakdown-card__calculations">
             <div><span>Calcul des heures réalisées</span><strong>{employee.contractType === 'CDI'
-              ? `${formatHoursMinutes(totals.contract)} contrat + ${formatHoursMinutes(totals.holiday)} fériés + ${formatHoursMinutes(totals.replacement)} remplacements − ${formatHoursMinutes(totals.absence)} absences = ${formatHoursMinutes(annual.contractualRealizedHours)}`
-              : `${formatHoursMinutes(totals.contract)} contrat + ${formatHoursMinutes(totals.absence)} absences + ${formatHoursMinutes(totals.holiday)} fériés = ${formatHoursMinutes(annual.contractualRealizedHours)}`}</strong>
+              ? `${formatHoursMinutes(totals.contract)} contrat + ${formatHoursMinutes(totals.holiday)} fériés + ${formatHoursMinutes(totals.replacement)} remplacements − ${formatHoursMinutes(totals.absence)} absences + ${formatHoursMinutes(sickLeaveHours)} arrêt maladie = ${formatHoursMinutes(annual.contractualRealizedHours)}`
+              : `${formatHoursMinutes(totals.contract)} contrat + ${formatHoursMinutes(totals.absence)} absences + ${formatHoursMinutes(totals.holiday)} fériés + ${formatHoursMinutes(sickLeaveHours)} arrêt maladie = ${formatHoursMinutes(annual.contractualRealizedHours)}`}</strong>
               {employee.contractType !== 'CDI' && <small>Les {formatHoursMinutes(totals.replacement)} de remplacements sont payées en plus et n’entrent pas dans le calcul du reste. Total dû = max({formatHoursMinutes(annualMinutes! / 60)} contrat, {formatHoursMinutes(annual.contractualRealizedHours)} réalisées) + {formatHoursMinutes(totals.replacement)} remplacements = {formatHoursMinutes(annual.totalDueHours)}.</small>}
             </div>
             <i aria-hidden="true">→</i>
@@ -494,7 +514,7 @@ export function TimeTrackingPage() {
             </label>
             <label>
               <input type="radio" name="paid-leave-source" value="payslip" checked={paidLeaveSource === 'payslip'} onChange={() => setPaidLeaveSource('payslip')} />
-              <span><small>Congés des bulletins</small><strong>{formatHoursMinutes(payslipLeaveHours)}</strong><em>Somme des congés saisis mois par mois</em></span>
+              <span><small>Congés des bulletins</small><strong>{formatDecimalHours(payslipLeaveHours)}</strong><em>Somme des congés saisis mois par mois</em></span>
             </label>
           </div>
           <p className="paid-leave-choice__formula"><strong>Calcul du théorique :</strong> 10 % × max({formatHoursMinutes(annualMinutes! / 60)} de contrat, {formatHoursMinutes(annual.contractualRealizedHours)} réalisées) = {formatHoursMinutes(annual.paidLeaveDueHours)}.</p>
@@ -503,7 +523,7 @@ export function TimeTrackingPage() {
         <section className="annual-scoreboard" aria-label="Régularisation annuelle">
           {!isIndependent && <article className={annual.remainingToWorkHours > 0 ? 'annual-scoreboard__progress--due' : 'annual-scoreboard__progress--complete'}><span>Reste à réaliser</span><strong>{formatHoursMinutes(annual.remainingToWorkHours)}</strong><small>{annual.overtimeHours > 0 ? `${formatHoursMinutes(annual.overtimeHours)} en plus du contrat` : annual.remainingToWorkHours === 0 ? 'contrat atteint exactement' : `${formatHoursMinutes(annual.contractualRealizedHours)} réalisées sur ${formatHoursMinutes(annualMinutes! / 60)}`}</small></article>}
           <article><span>Total dû</span><strong>{formatHoursMinutes(selectedTotalDueHours)}</strong><small>{employee.contractType === 'CDI' ? `base garantie + congés ${paidLeaveSource === 'theoretical' ? 'théoriques' : 'des bulletins'}` : isIndependent ? 'durée réelle des événements' : 'garantie + compléments'}</small></article>
-          <article><span>Total bulletins</span><strong>{formatHoursMinutes(annual.payslipTotalHours)}</strong><small>{isIndependent ? 'heures saisies' : 'heures + congés saisis'}</small></article>
+          <article><span>Total bulletins</span><strong>{formatDecimalHours(annual.payslipTotalHours)}</strong><small>{isIndependent ? 'heures saisies' : 'heures + congés saisis'}</small></article>
           <article className={selectedPayBalanceHours > 0 ? 'annual-scoreboard__balance--due' : 'annual-scoreboard__balance--settled'}><span>{selectedPayBalanceHours > 0 ? 'Reste à payer' : selectedPayBalanceHours < 0 ? 'Avance payée' : 'Solde'}</span><strong>{formatHoursMinutes(Math.abs(selectedPayBalanceHours))}</strong><small>{selectedPayBalanceHours === 0 ? 'saison équilibrée' : employee.contractType === 'CDI' ? `total dû avec congés ${paidLeaveSource === 'theoretical' ? 'théoriques' : 'des bulletins'} − bulletins` : 'écart avec les bulletins'}</small></article>
         </section>
 
@@ -523,8 +543,9 @@ export function TimeTrackingPage() {
             <AnnualRow label="Heures fériées" months={months} value={(month) => month.publicHolidayHours} /></>}
             {!isIndependent && <AnnualRow label="Heures réalisées" months={months} value={monthlyRealizedHours} strong />}
             {employee.contractType === 'CDII' && <tr className="annual-row annual-row--weeks"><th scope="row">Semaines travaillées</th>{months.map((month) => <td key={month.month} data-label={monthLabel(month.month)}>{month.workedWeeks || '—'}</td>)}<td data-label="Total"><strong>{employee.annualWorkedWeeks}</strong></td></tr>}
-            <tr className="annual-row annual-row--input"><th scope="row">Bulletin</th>{schoolMonths.map((month) => <td key={month} data-label={monthLabel(month)}><input value={payrollDraft[month]?.paid ?? ''} onChange={(event) => setPayrollDraft((state) => ({ ...state, [month]: { ...state[month], paid: event.target.value } }))} disabled={!canEdit} aria-label={`Heures du bulletin de ${monthLabel(month)}`} /></td>)}<td data-label="Total"><strong>{formatHoursMinutes(payslipHours)}</strong></td></tr>
-            {employee.contractType === 'CDI' && <tr className="annual-row annual-row--input"><th scope="row">Congés payés au bulletin</th>{schoolMonths.map((month) => <td key={month} data-label={monthLabel(month)}><input value={payrollDraft[month]?.leave ?? ''} onChange={(event) => setPayrollDraft((state) => ({ ...state, [month]: { ...state[month], leave: event.target.value } }))} disabled={!canEdit} aria-label={`Congés payés de ${monthLabel(month)}`} /></td>)}<td data-label="Total"><strong>{formatHoursMinutes(payslipLeaveHours)}</strong></td></tr>}
+            <tr className="annual-row annual-row--input"><th scope="row">Bulletin</th>{schoolMonths.map((month) => <td key={month} data-label={monthLabel(month)}><input value={payrollDraft[month]?.paid ?? ''} onChange={(event) => setPayrollDraft((state) => ({ ...state, [month]: { ...state[month], paid: event.target.value } }))} disabled={!canEdit} inputMode="decimal" aria-label={`Heures du bulletin de ${monthLabel(month)} (heures au centième)`} /></td>)}<td data-label="Total"><strong>{formatDecimalHours(payslipHours)}</strong></td></tr>
+            {!isIndependent && <tr className="annual-row annual-row--input"><th scope="row">Arrêt maladie</th>{schoolMonths.map((month) => <td key={month} data-label={monthLabel(month)}><input value={payrollDraft[month]?.sickLeave ?? ''} onChange={(event) => setPayrollDraft((state) => ({ ...state, [month]: { ...state[month], sickLeave: event.target.value } }))} disabled={!canEdit} inputMode="decimal" aria-label={`Arrêt maladie de ${monthLabel(month)} (heures au centième)`} /></td>)}<td data-label="Total"><strong>{formatDecimalHours(sickLeaveHours)}</strong></td></tr>}
+            {employee.contractType === 'CDI' && <tr className="annual-row annual-row--input"><th scope="row">Congés payés au bulletin</th>{schoolMonths.map((month) => <td key={month} data-label={monthLabel(month)}><input value={payrollDraft[month]?.leave ?? ''} onChange={(event) => setPayrollDraft((state) => ({ ...state, [month]: { ...state[month], leave: event.target.value } }))} disabled={!canEdit} inputMode="decimal" aria-label={`Congés payés de ${monthLabel(month)} (heures au centième)`} /></td>)}<td data-label="Total"><strong>{formatDecimalHours(payslipLeaveHours)}</strong></td></tr>}
           </tbody></table></div>
         </section>
         {employee.contractType === 'CDI' && <section className="panel validation-history" aria-label="Historique des validations">

@@ -229,7 +229,7 @@ export async function getEmployeeSummaries(schoolYear: number): Promise<Employee
       .select('employee_id, contract_type, annual_contract_minutes, full_time_annual_minutes, paid_months')
       .eq('school_year', schoolYear),
     supabase.from('employee_monthly_payroll')
-      .select('employee_id, month, paid_minutes, paid_leave_minutes')
+      .select('employee_id, month, paid_hundredth_hours, paid_leave_hundredth_hours, sick_leave_hundredth_hours')
       .eq('school_year', schoolYear),
     supabase.from('employee_school_year_weeks')
       .select('employee_id, worked_weeks')
@@ -246,7 +246,12 @@ export async function getEmployeeSummaries(schoolYear: number): Promise<Employee
   const payrollByEmployee = new Map<string, MonthlyPayrollEntry[]>()
   for (const row of payrollResult.data ?? []) {
     const entries = payrollByEmployee.get(row.employee_id) ?? []
-    entries.push({ month: row.month, paidMinutes: row.paid_minutes, paidLeaveMinutes: row.paid_leave_minutes })
+    entries.push({
+      month: row.month,
+      paidHundredthHours: row.paid_hundredth_hours,
+      paidLeaveHundredthHours: row.paid_leave_hundredth_hours,
+      sickLeaveHundredthHours: row.sick_leave_hundredth_hours,
+    })
     payrollByEmployee.set(row.employee_id, entries)
   }
 
@@ -464,8 +469,9 @@ export async function saveAnnualTracking(
       employee_id: employeeId,
       school_year: schoolYear,
       month: entry.month,
-      paid_minutes: entry.paidMinutes,
-      paid_leave_minutes: entry.paidLeaveMinutes,
+      paid_hundredth_hours: entry.paidHundredthHours,
+      paid_leave_hundredth_hours: entry.paidLeaveHundredthHours,
+      sick_leave_hundredth_hours: entry.sickLeaveHundredthHours,
     })),
     { onConflict: 'employee_id,school_year,month' },
   )

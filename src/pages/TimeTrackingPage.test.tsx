@@ -38,7 +38,7 @@ const employee: EmployeeSummary = {
   paidMonths: 12,
   annualWorkedWeeks: 33,
   settings: { contractType: 'CDI', annualContractMinutes: 925 * 60, fullTimeAnnualMinutes: 1582 * 60, paidMonths: 12 },
-  payroll: [9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8].map((month) => ({ month, paidMinutes: 85 * 60, paidLeaveMinutes: 0 })),
+  payroll: [9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8].map((month) => ({ month, paidHundredthHours: 8500, paidLeaveHundredthHours: 0, sickLeaveHundredthHours: 0 })),
   monthlyHours: [{
     month: 9,
     rawHours: 887 + 56 / 60,
@@ -194,11 +194,11 @@ describe('TimeTrackingPage', () => {
     expect(screen.getByText('Règle appliquée pour CDI')).toBeInTheDocument()
     const leaveChoice = screen.getByRole('radiogroup', { name: 'Source des congés payés comptabilisés' })
     expect(leaveChoice).toHaveTextContent('Congés théoriques92:30')
-    expect(leaveChoice).toHaveTextContent('Congés des bulletins0:00')
+    expect(leaveChoice).toHaveTextContent('Congés des bulletins0,00')
     expect(screen.getByText('Calcul du théorique :', { exact: false }).closest('p')).toHaveTextContent('10 % × max(925:00 de contrat, 893:02 réalisées) = 92:30')
     expect(screen.getByRole('radio', { name: /Congés théoriques/ })).toBeChecked()
     expect(screen.getByText('Total dû').closest('article')).toHaveTextContent('1017:30')
-    expect(screen.getByText('Total bulletins').closest('article')).toHaveTextContent('1020:00')
+    expect(screen.getByText('Total bulletins').closest('article')).toHaveTextContent('1020,00')
     fireEvent.click(screen.getByRole('radio', { name: /Congés des bulletins/ }))
     expect(screen.getByRole('radio', { name: /Congés des bulletins/ })).toBeChecked()
     expect(screen.getByText('Total dû').closest('article')).toHaveTextContent('925:00')
@@ -210,7 +210,7 @@ describe('TimeTrackingPage', () => {
     expect(annualCategories).toHaveTextContent('Remplacements3:00')
     expect(annualCategories).toHaveTextContent('Fériés4:06')
     expect(annualCategories).toHaveTextContent('Coefficients inclus')
-    expect(annualCategories).toHaveTextContent('887:56 contrat + 4:06 fériés + 3:00 remplacements − 2:00 absences = 893:02')
+    expect(annualCategories).toHaveTextContent('887:56 contrat + 4:06 fériés + 3:00 remplacements − 2:00 absences + 0:00 arrêt maladie = 893:02')
     expect(annualCategories).toHaveTextContent('925:00 contrat − 893:02 réalisées = 31:58 à réaliser')
     expect(annualCategories).toHaveTextContent('Les fériés sont calculés séparément avec le coefficient annuel')
     expect(annualCategories).toHaveTextContent('Valeurs affichées arrondies à la minute.')
@@ -223,6 +223,7 @@ describe('TimeTrackingPage', () => {
     expect(screen.getByRole('rowheader', { name: 'Heures de remplacements' })).toBeInTheDocument()
     expect(screen.getByRole('rowheader', { name: 'Heures fériées' })).toBeInTheDocument()
     expect(screen.getByRole('rowheader', { name: 'Heures fériées' }).closest('tr')).toHaveTextContent('4:06')
+    expect(screen.getByRole('rowheader', { name: 'Arrêt maladie' })).toBeInTheDocument()
     expect(screen.getByRole('rowheader', { name: 'Heures réalisées' }).closest('tr')).toHaveTextContent('893:02')
     expect(screen.getByRole('cell', { name: 'Sep : Pas encore validable' })).toHaveTextContent('À venir')
     expect(screen.getByRole('cell', { name: 'Oct : Pas encore validable' })).toHaveAttribute('title', 'Pas encore validable')
@@ -231,10 +232,18 @@ describe('TimeTrackingPage', () => {
     expect(screen.getByRole('region', { name: 'Comparaison entre les heures réelles et le contrat annuel' }))
       .toHaveTextContent('Heures réelles893:02<Contrat annuel925:00→Coefficient retenucontrat annuel / 1582 = 0,5847')
     expect(screen.queryByRole('rowheader', { name: /prépa/i })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Heures du bulletin de Sep (heures au centième)' }), { target: { value: '123,45' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Congés payés de Sep (heures au centième)' }), { target: { value: '10,01' } })
+    expect(screen.getByRole('rowheader', { name: 'Bulletin' }).closest('tr')).toHaveTextContent('1058,45')
+    expect(screen.getByRole('rowheader', { name: 'Congés payés au bulletin' }).closest('tr')).toHaveTextContent('10,01')
+    fireEvent.change(screen.getByRole('textbox', { name: 'Arrêt maladie de Sep (heures au centième)' }), { target: { value: '250,25' } })
+    expect(screen.getByRole('rowheader', { name: 'Arrêt maladie' }).closest('tr')).toHaveTextContent('250,25')
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer la saison' }))
 
     await waitFor(() => expect(saveAnnualTracking).toHaveBeenCalledWith(
-      'employee-1', expect.any(Number), expect.objectContaining({ annualContractMinutes: 925 * 60 }), expect.any(Array),
+      'employee-1', expect.any(Number), expect.objectContaining({ annualContractMinutes: 925 * 60 }), expect.arrayContaining([
+        expect.objectContaining({ month: 9, paidHundredthHours: 12345, paidLeaveHundredthHours: 1001, sickLeaveHundredthHours: 25025 }),
+      ]),
     ))
     expect(await screen.findByText('Suivi de la saison enregistré.')).toBeInTheDocument()
   })
@@ -257,7 +266,7 @@ describe('TimeTrackingPage', () => {
     expect(remainingCard).toHaveTextContent('0:00')
     expect(remainingCard).toHaveTextContent('17:00 en plus du contrat')
     const annualCalculation = screen.getByRole('region', { name: 'Calcul annuel des heures' })
-    expect(annualCalculation).toHaveTextContent('110:00 contrat + 2:00 absences + 5:00 fériés = 117:00')
+    expect(annualCalculation).toHaveTextContent('110:00 contrat + 2:00 absences + 5:00 fériés + 0:00 arrêt maladie = 117:00')
     expect(annualCalculation).toHaveTextContent('Les 3:00 de remplacements sont payées en plus et n’entrent pas dans le calcul du reste.')
     expect(annualCalculation).toHaveTextContent('Total dû = max(100:00 contrat, 117:00 réalisées) + 3:00 remplacements = 120:00.')
     expect(annualCalculation).toHaveTextContent('Calcul des heures en plus du contrat')

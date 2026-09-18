@@ -176,6 +176,21 @@ begin
     raise exception 'La règle de coefficient par événement est absente';
   end if;
   if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'employee_monthly_payroll'
+      and column_name = 'paid_hundredth_hours' and column_default = '0'
+  ) or not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'employee_monthly_payroll'
+      and column_name = 'paid_leave_hundredth_hours' and column_default = '0'
+  ) or not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'employee_monthly_payroll'
+      and column_name = 'sick_leave_hundredth_hours' and column_default = '0'
+  ) then
+    raise exception 'Les heures mensuelles au centième sont absentes';
+  end if;
+  if not exists (
     select 1 from information_schema.tables
     where table_schema = 'public' and table_name = 'monthly_time_validations'
   ) then

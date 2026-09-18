@@ -90,7 +90,12 @@ export const demoEmployees: EmployeeSummary[] = [
 ]
 
 function schoolPayroll(paidMinutes: number) {
-  return [9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8].map((month) => ({ month, paidMinutes, paidLeaveMinutes: 0 }))
+  return [9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8].map((month) => ({
+    month,
+    paidHundredthHours: Math.round(paidMinutes * 100 / 60),
+    paidLeaveHundredthHours: 0,
+    sickLeaveHundredthHours: 0,
+  }))
 }
 
 function monthlyDemoHours(hours: number, index: number, coefficient = 1) {

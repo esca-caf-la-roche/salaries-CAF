@@ -14,6 +14,7 @@ export interface AnnualSummaryInput {
   calendarPublicHolidayHours: number
   payslipHours: number
   payslipPaidLeaveHours: number
+  sickLeaveHours: number
   schoolSeason: SchoolSeason
   fullTimeAnnualHours?: number
 }
@@ -191,7 +192,7 @@ export function calculateAnnualSummary(input: AnnualSummaryInput): AnnualSummary
   if (input.contractType === 'INDEP') {
     const realizedHours = input.calendarContractHours + input.calendarAbsenceHours
       + input.calendarReplacementHours + input.calendarPublicHolidayHours
-    return mapValuesToRoundedMinutes({
+    return {
       contractualRealizedHours: realizedHours,
       guaranteedBaseHours: realizedHours,
       overtimeHours: 0,
@@ -201,13 +202,13 @@ export function calculateAnnualSummary(input: AnnualSummaryInput): AnnualSummary
       payslipTotalHours: input.payslipHours,
       remainingToWorkHours: 0,
       payBalanceHours: realizedHours - input.payslipHours,
-    })
+    }
   }
 
   const isCdi = input.contractType === 'CDI'
-  const ordinaryRealizedHours = input.calendarContractHours + input.calendarAbsenceHours
+  const ordinaryRealizedHours = input.calendarContractHours + input.calendarAbsenceHours + input.sickLeaveHours
   const contractualRealizedHours = isCdi
-    ? input.calendarContractHours + input.calendarPublicHolidayHours + input.calendarReplacementHours - input.calendarAbsenceHours
+    ? input.calendarContractHours + input.calendarPublicHolidayHours + input.calendarReplacementHours - input.calendarAbsenceHours + input.sickLeaveHours
     : ordinaryRealizedHours + input.calendarPublicHolidayHours
   const guaranteedBaseHours = Math.max(input.annualContractHours, isCdi ? contractualRealizedHours : ordinaryRealizedHours)
   const overtimeHours = Math.max(0, contractualRealizedHours - input.annualContractHours)
@@ -218,7 +219,7 @@ export function calculateAnnualSummary(input: AnnualSummaryInput): AnnualSummary
     : Math.max(guaranteedBaseHours, contractualRealizedHours) + input.calendarReplacementHours
   const payslipTotalHours = input.payslipHours + input.payslipPaidLeaveHours
 
-  return mapValuesToRoundedMinutes({
+  return {
     contractualRealizedHours,
     guaranteedBaseHours,
     overtimeHours,
@@ -228,7 +229,7 @@ export function calculateAnnualSummary(input: AnnualSummaryInput): AnnualSummary
     payslipTotalHours,
     remainingToWorkHours: Math.max(0, input.annualContractHours - contractualRealizedHours),
     payBalanceHours: totalDueHours - payslipTotalHours,
-  })
+  }
 }
 
 function utcDate(year: number, month: number, day: number): Date {
@@ -241,12 +242,6 @@ function addUtcDays(date: Date, days: number): Date {
   return result
 }
 
-function mapValuesToRoundedMinutes(summary: AnnualSummary): AnnualSummary {
-  return Object.fromEntries(
-    Object.entries(summary).map(([key, value]) => [key, roundHoursToMinute(value)]),
-  ) as unknown as AnnualSummary
-}
-
 function validateInput(input: AnnualSummaryInput): void {
   const hourFields: Array<[string, number]> = [
     ['annualContractHours', input.annualContractHours],
@@ -256,6 +251,7 @@ function validateInput(input: AnnualSummaryInput): void {
     ['calendarPublicHolidayHours', input.calendarPublicHolidayHours],
     ['payslipHours', input.payslipHours],
     ['payslipPaidLeaveHours', input.payslipPaidLeaveHours],
+    ['sickLeaveHours', input.sickLeaveHours],
   ]
 
   for (const [name, value] of hourFields) {

@@ -27,6 +27,9 @@ export function buildWorkerRecap(employee: EmployeeSummary, schoolYear: number):
     calendarPublicHolidayHours: totals.publicHoliday,
     payslipHours: 0,
     payslipPaidLeaveHours: 0,
+    sickLeaveHours: employee.contractType !== 'INDEP'
+      ? employee.payroll.reduce((sum, entry) => sum + entry.sickLeaveHundredthHours, 0) / 100
+      : 0,
     schoolSeason: { startYear: schoolYear },
     fullTimeAnnualHours: employee.settings.fullTimeAnnualMinutes / 60,
   }).contractualRealizedHours

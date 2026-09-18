@@ -19,6 +19,7 @@ const baseInput: AnnualSummaryInput = {
   calendarPublicHolidayHours: 14,
   payslipHours: 1020,
   payslipPaidLeaveHours: 0,
+  sickLeaveHours: 0,
   schoolSeason: { startYear: 2024 },
 }
 
@@ -57,7 +58,7 @@ describe('calculateAnnualSummary', () => {
   it('uses contract + holidays + replacements - absences as CDI realized hours', () => {
     const result = calculateAnnualSummary(baseInput)
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       contractualRealizedHours: 901 + 56 / 60,
       guaranteedBaseHours: 925,
       overtimeHours: 0,
@@ -65,9 +66,30 @@ describe('calculateAnnualSummary', () => {
       publicHolidayDueHours: 14,
       totalDueHours: 1017.5,
       payslipTotalHours: 1020,
-      remainingToWorkHours: 23 + 4 / 60,
       payBalanceHours: -2.5,
     })
+    expect(result.remainingToWorkHours).toBeCloseTo(23 + 4 / 60)
+  })
+
+  it.each(['CDI', 'CDII', 'CDD'] as const)('counts %s sick leave as annual worked time without adding it to payslips', (contractType) => {
+    const result = calculateAnnualSummary({
+      ...baseInput, contractType, annualContractHours: 1000, calendarContractHours: 750,
+      calendarAbsenceHours: 0, calendarReplacementHours: 0, calendarPublicHolidayHours: 0,
+      sickLeaveHours: 250, payslipHours: 750, payslipPaidLeaveHours: 0,
+    })
+    expect(result.contractualRealizedHours).toBe(1000)
+    expect(result.remainingToWorkHours).toBe(0)
+    expect(result.payslipTotalHours).toBe(750)
+  })
+
+  it('keeps hundredth-hour precision when computing the remaining annual work', () => {
+    const result = calculateAnnualSummary({
+      ...baseInput, contractType: 'CDII', annualContractHours: 1000, calendarContractHours: 749.99,
+      calendarAbsenceHours: 0, calendarReplacementHours: 0, calendarPublicHolidayHours: 0,
+      sickLeaveHours: 250, payslipHours: 0, payslipPaidLeaveHours: 0,
+    })
+    expect(result.contractualRealizedHours).toBe(999.99)
+    expect(result.remainingToWorkHours).toBeCloseTo(0.01)
   })
 
   it('includes automatic holidays and replacements and subtracts absences for a CDI', () => {
@@ -134,6 +156,7 @@ describe('calculateAnnualSummary', () => {
 
   it('rejects invalid hour totals and full-time references', () => {
     expect(() => calculateAnnualSummary({ ...baseInput, calendarAbsenceHours: -1 })).toThrow(RangeError)
+    expect(() => calculateAnnualSummary({ ...baseInput, sickLeaveHours: -1 })).toThrow(RangeError)
     expect(() => calculateAnnualSummary({ ...baseInput, fullTimeAnnualHours: 0 })).toThrow(RangeError)
   })
 })

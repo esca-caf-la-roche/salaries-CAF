@@ -78,8 +78,9 @@ export interface MonthlyHours {
 
 export interface MonthlyPayrollEntry {
   month: number
-  paidMinutes: number
-  paidLeaveMinutes: number
+  paidHundredthHours: number
+  paidLeaveHundredthHours: number
+  sickLeaveHundredthHours: number
 }
 
 export interface MonthlyTimeValidation {
