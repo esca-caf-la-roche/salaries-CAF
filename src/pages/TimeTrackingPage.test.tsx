@@ -35,6 +35,7 @@ const employee: EmployeeSummary = {
   calendarName: 'Jérôme',
   contractType: 'CDI',
   annualContractHours: 925,
+  paidMonths: 12,
   annualWorkedWeeks: 33,
   settings: { contractType: 'CDI', annualContractMinutes: 925 * 60, fullTimeAnnualMinutes: 1582 * 60, paidMonths: 12 },
   payroll: [9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8].map((month) => ({ month, paidMinutes: 85 * 60, paidLeaveMinutes: 0 })),

@@ -15,7 +15,7 @@ const approveTimeMonthChange = vi.fn()
 function employee(contractType: ContractType, annualContractHours: number, hours: Partial<MonthlyHours> = {}): EmployeeSummary {
   return {
     id: `employee-${contractType}`, name: contractType === 'INDEP' ? 'Alex Indépendant' : `Salarié ${contractType}`,
-    calendarName: 'Calendrier Test', contractType, annualContractHours, annualWorkedWeeks: 1,
+    calendarName: 'Calendrier Test', contractType, annualContractHours, paidMonths: contractType === 'CDII' ? 10 : 12, annualWorkedWeeks: 1,
     settings: { contractType, annualContractMinutes: annualContractHours * 60, fullTimeAnnualMinutes: 1582 * 60, paidMonths: 12 }, payroll: [],
     monthlyHours: [{ month: 9, rawHours: 0, weightedHours: 0, contractHours: 0, absenceHours: 0, replacementHours: 0, publicHolidayHours: 0, contractWithPrepHours: 0, contractWithoutPrepHours: 0, absenceWithPrepHours: 0, absenceWithoutPrepHours: 0, replacementWithPrepHours: 0, replacementWithoutPrepHours: 0, publicHolidayWithPrepHours: 0, publicHolidayWithoutPrepHours: 0, workedWeeks: 1, eventCount: 1, ...hours }],
   }
@@ -61,6 +61,7 @@ describe('DashboardPage', () => {
 
     expect(await screen.findByText('Salarié CDI')).toBeInTheDocument()
     expect(screen.getByText('Alex Indépendant')).toBeInTheDocument()
+    expect(screen.getByText('10 mois')).toBeInTheDocument()
     expect(screen.getByLabelText(/au-dessus du contrat/)).toHaveClass('worker-difference--positive')
     expect(screen.getByLabelText(/en dessous du contrat/)).toHaveClass('worker-difference--negative')
     expect(screen.getByLabelText('Sans objectif contractuel')).toHaveClass('worker-difference--neutral')

@@ -40,6 +40,7 @@ function mapResource(resource: Record<string, unknown>): EmployeeResource {
     loginEmail: String(resource.login_email ?? ''),
     contractType: detectedContractType,
     annualContractHours: resource.annual_contract_hours == null ? null : Number(resource.annual_contract_hours),
+    paidMonths: Number(resource.paid_months ?? 12),
     isUnassignedResource: Boolean(resource.is_unassigned_resource),
     userId: resource.user_id ? String(resource.user_id) : null,
     eventCount: Number(resource.event_count ?? 0),
@@ -90,6 +91,7 @@ export async function saveResources(resources: EmployeeResource[]): Promise<Empl
         enabled: resource.enabled,
         loginEmail: resource.loginEmail,
         annualContractHours: resource.annualContractHours,
+        paidMonths: resource.paidMonths,
       })),
     },
   })
@@ -216,7 +218,7 @@ export async function getEmployeeSummaries(schoolYear: number): Promise<Employee
   }
   const [employeesResult, hoursResult, settingsResult, payrollResult, weeksResult] = await Promise.all([
     supabase.from('employees')
-      .select('id, display_name, contract_type, annual_contract_hours')
+      .select('id, display_name, contract_type, annual_contract_hours, paid_months')
       .eq('active', true)
       .eq('is_unassigned_resource', false)
       .order('display_name'),
@@ -259,6 +261,7 @@ export async function getEmployeeSummaries(schoolYear: number): Promise<Employee
       calendarName: '',
       contractType,
       annualContractHours: Number(saved?.annual_contract_minutes ?? Math.round(Number(row.annual_contract_hours) * 60)) / 60,
+      paidMonths: Number(row.paid_months ?? 12),
       annualWorkedWeeks: weeksByEmployee.get(row.id) ?? 0,
       monthlyHours: [],
       payroll: payrollByEmployee.get(row.id) ?? [],
@@ -266,7 +269,7 @@ export async function getEmployeeSummaries(schoolYear: number): Promise<Employee
         contractType,
         annualContractMinutes: saved?.annual_contract_minutes ?? Math.round(Number(row.annual_contract_hours) * 60),
         fullTimeAnnualMinutes: saved?.full_time_annual_minutes ?? 1582 * 60,
-        paidMonths: saved?.paid_months ?? 12,
+        paidMonths: saved?.paid_months ?? Number(row.paid_months ?? 12),
       },
     })
   }

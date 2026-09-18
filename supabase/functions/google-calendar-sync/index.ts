@@ -20,7 +20,7 @@ type GoogleEvent = {
 
 type ResourceUpdate = {
   id?: string; enabled?: boolean; loginEmail?: string;
-  annualContractHours?: number;
+  annualContractHours?: number; paidMonths?: number;
 };
 type CoefficientUpdate = { googleCalendarId?: string; coefficient?: number; hourCategory?: string | null };
 
@@ -161,7 +161,7 @@ async function resourcePayload(admin: SupabaseClient, connectionId: string) {
   if (calendarError) throw calendarError;
   if (!calendars?.length) return [];
   const { data: employees, error: employeeError } = await admin.from("employees")
-    .select("id,resource_calendar_id,email,active,user_id,contract_type,annual_contract_hours,is_unassigned_resource")
+    .select("id,resource_calendar_id,email,active,user_id,contract_type,annual_contract_hours,paid_months,is_unassigned_resource")
     .in("resource_calendar_id", calendars.map((calendar) => calendar.id));
   if (employeeError) throw employeeError;
   const employeeByCalendar = new Map((employees ?? []).map((employee) => [employee.resource_calendar_id, employee]));
@@ -174,6 +174,7 @@ async function resourcePayload(admin: SupabaseClient, connectionId: string) {
       login_email: employee.email, user_id: employee.user_id, event_count: calendar.event_count,
       last_synced_at: calendar.last_synced_at, contract_type: employee.contract_type,
       annual_contract_hours: employee.annual_contract_hours,
+      paid_months: employee.paid_months,
       is_unassigned_resource: employee.is_unassigned_resource,
     }];
   });
@@ -245,12 +246,14 @@ async function saveResources(admin: SupabaseClient, ownerId: string, updates: Re
     const isUnassignedResource = details?.isUnassignedResource ?? false;
     const annualHoursText = String(update.annualContractHours ?? "").trim();
     const annualContractHours = annualHoursText === "" ? null : Number(annualHoursText);
+    const paidMonths = Number(update.paidMonths ?? 12);
     return {
       id,
       enabled: isUnassignedResource ? true : Boolean(update.enabled),
       loginEmail: isUnassignedResource ? "" : normalizeEmail(update.loginEmail),
       contractType: isUnassignedResource ? "" : details?.contractType ?? "",
       annualContractHours: isUnassignedResource ? null : (annualContractHours != null && Number.isFinite(annualContractHours) ? annualContractHours : null),
+      paidMonths: isUnassignedResource ? 12 : paidMonths,
       isUnassignedResource,
     };
   });
@@ -265,12 +268,15 @@ async function saveResources(admin: SupabaseClient, ownerId: string, updates: Re
     if (update.enabled && (!update.contractType || (update.contractType !== "INDEP" && (update.annualContractHours == null || update.annualContractHours <= 0)))) {
       throw new HttpError(400, "Le type de contrat et un nombre d'heures annuelles positif sont requis");
     }
+    if (update.contractType !== "INDEP" && (!Number.isInteger(update.paidMonths) || update.paidMonths < 1 || update.paidMonths > 12)) {
+      throw new HttpError(400, "Le nombre de mois de paiement doit être compris entre 1 et 12");
+    }
   }
 
   const createdUserIds: string[] = [];
   const configuredUpdates: Array<{
     id: string; enabled: boolean; loginEmail: string; contractType: string;
-    annualContractHours: number | null; isUnassignedResource: boolean; userId: string | null;
+    annualContractHours: number | null; paidMonths: number; isUnassignedResource: boolean; userId: string | null;
   }> = [];
   /*
    * Auth provisioning cannot participate in the Postgres transaction. All Auth users are

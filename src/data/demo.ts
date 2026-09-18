@@ -8,10 +8,10 @@ export const demoUser: AppUser = {
 }
 
 export const demoResources: EmployeeResource[] = [
-  { id: 'employee-1', calendarId: 'cal-1', googleCalendarId: 'demo-beatrice@resource.calendar.google.com', name: '(CDI)-Béatrice Martin', color: '#e26d3f', enabled: true, loginEmail: 'beatrice@example.fr', contractType: 'CDI', annualContractHours: 1607, isUnassignedResource: false, eventCount: 42, lastSyncedAt: '2026-08-31T08:45:00Z' },
-  { id: 'employee-2', calendarId: 'cal-2', googleCalendarId: 'demo-paul@resource.calendar.google.com', name: '(CDII)-Paul Renaud', color: '#3f7f73', enabled: true, loginEmail: 'paul@example.fr', contractType: 'CDII', annualContractHours: 820, isUnassignedResource: false, eventCount: 36, lastSyncedAt: '2026-08-31T08:45:00Z' },
-  { id: 'employee-4', calendarId: 'cal-4', googleCalendarId: 'demo-alex@resource.calendar.google.com', name: '(Indep)-Alex Morel', color: '#805f89', enabled: true, loginEmail: 'alex@example.fr', contractType: 'INDEP', annualContractHours: null, isUnassignedResource: false, eventCount: 24, lastSyncedAt: '2026-08-31T08:45:00Z' },
-  { id: 'employee-3', calendarId: 'cal-3', googleCalendarId: 'demo-indetermine@resource.calendar.google.com', name: '(CDII)-A DETERMINER', color: '#4d6f8a', enabled: true, loginEmail: '', contractType: null, annualContractHours: null, isUnassignedResource: true, eventCount: 18, lastSyncedAt: null },
+  { id: 'employee-1', calendarId: 'cal-1', googleCalendarId: 'demo-beatrice@resource.calendar.google.com', name: '(CDI)-Béatrice Martin', color: '#e26d3f', enabled: true, loginEmail: 'beatrice@example.fr', contractType: 'CDI', annualContractHours: 1607, paidMonths: 12, isUnassignedResource: false, eventCount: 42, lastSyncedAt: '2026-08-31T08:45:00Z' },
+  { id: 'employee-2', calendarId: 'cal-2', googleCalendarId: 'demo-paul@resource.calendar.google.com', name: '(CDII)-Paul Renaud', color: '#3f7f73', enabled: true, loginEmail: 'paul@example.fr', contractType: 'CDII', annualContractHours: 820, paidMonths: 10, isUnassignedResource: false, eventCount: 36, lastSyncedAt: '2026-08-31T08:45:00Z' },
+  { id: 'employee-4', calendarId: 'cal-4', googleCalendarId: 'demo-alex@resource.calendar.google.com', name: '(Indep)-Alex Morel', color: '#805f89', enabled: true, loginEmail: 'alex@example.fr', contractType: 'INDEP', annualContractHours: null, paidMonths: 12, isUnassignedResource: false, eventCount: 24, lastSyncedAt: '2026-08-31T08:45:00Z' },
+  { id: 'employee-3', calendarId: 'cal-3', googleCalendarId: 'demo-indetermine@resource.calendar.google.com', name: '(CDII)-A DETERMINER', color: '#4d6f8a', enabled: true, loginEmail: '', contractType: null, annualContractHours: null, paidMonths: 12, isUnassignedResource: true, eventCount: 18, lastSyncedAt: null },
 ]
 
 export const demoCoefficientCalendars: UsedCalendarCoefficient[] = [
@@ -57,6 +57,7 @@ export const demoEmployees: EmployeeSummary[] = [
     calendarName: 'Béatrice · Coordination',
     contractType: 'CDI',
     annualContractHours: 925,
+    paidMonths: 12,
     annualWorkedWeeks: 36,
     settings: { contractType: 'CDI', annualContractMinutes: 925 * 60, fullTimeAnnualMinutes: 1582 * 60, paidMonths: 12 },
     payroll: schoolPayroll(85 * 60),
@@ -68,6 +69,7 @@ export const demoEmployees: EmployeeSummary[] = [
     calendarName: 'Paul · Encadrement',
     contractType: 'CDII',
     annualContractHours: 820,
+    paidMonths: 10,
     annualWorkedWeeks: 33,
     settings: { contractType: 'CDII', annualContractMinutes: 820 * 60, fullTimeAnnualMinutes: 1582 * 60, paidMonths: 12 },
     payroll: schoolPayroll(Math.round(820 * 60 / 12)),
@@ -79,6 +81,7 @@ export const demoEmployees: EmployeeSummary[] = [
     calendarName: 'Alex · Interventions',
     contractType: 'INDEP',
     annualContractHours: 0,
+    paidMonths: 12,
     annualWorkedWeeks: 0,
     settings: { contractType: 'INDEP', annualContractMinutes: 0, fullTimeAnnualMinutes: 1582 * 60, paidMonths: 12 },
     payroll: [],

@@ -19,6 +19,7 @@ export interface EmployeeResource {
   loginEmail: string
   contractType: ContractType | null
   annualContractHours: number | null
+  paidMonths: number
   isUnassignedResource: boolean
   userId?: string | null
   eventCount?: number
@@ -138,6 +139,7 @@ export interface EmployeeSummary {
   calendarName: string
   contractType: ContractType
   annualContractHours: number
+  paidMonths: number
   annualWorkedWeeks: number
   monthlyHours: MonthlyHours[]
   payroll: MonthlyPayrollEntry[]

@@ -64,6 +64,10 @@ function ResourceCard({ resource, onPatch }: ResourceCardProps) {
             <span>Heures annuelles</span>
             <span className="hours-input"><input aria-label={`Heures annuelles de ${resource.name}`} type="number" min="0.01" step="0.01" placeholder="Ex. 1607" value={resource.annualContractHours ?? ''} onChange={(event) => onPatch(resource.id, { annualContractHours: event.target.value === '' ? null : Number(event.target.value) })} /><span>h</span></span>
           </label>}
+          {!resource.isUnassignedResource && resource.contractType !== 'INDEP' && <label className="resource-field">
+            <span>Répartition du salaire</span>
+            <span className="hours-input"><input aria-label={`Nombre de mois de paiement de ${resource.name}`} type="number" min="1" max="12" step="1" value={resource.paidMonths} onChange={(event) => onPatch(resource.id, { paidMonths: Number(event.target.value) })} /><span>mois</span></span>
+          </label>}
           <label className="resource-field">
             <span>E-mail de connexion</span>
             <span className="email-input"><Mail aria-hidden="true" /><input type="email" aria-label={`E-mail de connexion de ${resource.name}`} placeholder="prenom@exemple.fr" value={resource.loginEmail} disabled={!resource.enabled} required={resource.enabled} onChange={(event) => onPatch(resource.id, { loginEmail: event.target.value })} /></span>
@@ -310,6 +314,8 @@ export function ConfigurationPage() {
     if (invalid) { setResourceMessage(`Ajoutez un e-mail de connexion valide pour ${invalid.name}.`); return }
     const missingContract = changed.find((resource) => !resource.isUnassignedResource && resource.enabled && (!resource.contractType || (resource.contractType !== 'INDEP' && (resource.annualContractHours == null || resource.annualContractHours <= 0))))
     if (missingContract) { setResourceMessage(`Ajoutez le type de contrat et les heures annuelles de ${missingContract.name}.`); return }
+    const invalidPaidMonths = changed.find((resource) => !resource.isUnassignedResource && resource.contractType !== 'INDEP' && (!Number.isInteger(resource.paidMonths) || resource.paidMonths < 1 || resource.paidMonths > 12))
+    if (invalidPaidMonths) { setResourceMessage(`Indiquez entre 1 et 12 mois de paiement pour ${invalidPaidMonths.name}.`); return }
     setSaving(true)
     setResourceMessage('')
     setMessage('')

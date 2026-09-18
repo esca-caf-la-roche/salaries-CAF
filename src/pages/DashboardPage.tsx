@@ -118,6 +118,7 @@ export function DashboardPage() {
             <div className="worker-identity"><strong>{employee.name}</strong><span>{contractTypeLabel(employee.contractType)}</span></div>
             <div className="worker-value"><span>Contrat annuel</span><strong>{employee.contractType === 'INDEP' ? '—' : `${formatHoursMinutes(contractHours)} h`}</strong></div>
             <div className="worker-value"><span>Heures réelles</span><strong>{formatHoursMinutes(actualHours)} h</strong></div>
+            <div className="worker-value"><span>Répartition</span><strong>{employee.contractType === 'INDEP' ? '—' : `${employee.paidMonths} mois`}</strong></div>
             <div className={`worker-difference worker-difference--${differenceTone}`} aria-label={differenceLabel}><span>Écart au contrat</span><strong>{differenceHours == null ? 'Non applicable' : signedHours(differenceHours)}</strong><small>{differenceHours == null ? 'Temps réel' : differenceHours >= 0 ? 'Contrat atteint' : 'Reste à réaliser'}</small></div>
             <div className="worker-details" aria-label={`Détail des heures de ${employee.name}`}><span>Absence <strong>{formatHoursMinutes(absenceHours)} h</strong></span><span>Remplacement <strong>{formatHoursMinutes(replacementHours)} h</strong></span><span>Jours fériés <strong>{formatHoursMinutes(publicHolidayHours)} h</strong></span></div>
           </article>

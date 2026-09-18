@@ -13,6 +13,7 @@ const resource: EmployeeResource = {
   loginEmail: '',
   contractType: 'CDII',
   annualContractHours: 820,
+  paidMonths: 12,
   isUnassignedResource: false,
   eventCount: 4,
   lastSyncedAt: null,
@@ -83,6 +84,7 @@ describe('ConfigurationPage', () => {
     }
     expect(screen.getByLabelText('Type de contrat de (CDII)-Alice Martin')).toHaveTextContent('CDII')
     expect(screen.getByRole('spinbutton', { name: 'Heures annuelles de (CDII)-Alice Martin' })).toHaveValue(820)
+    expect(screen.getByRole('spinbutton', { name: 'Nombre de mois de paiement de (CDII)-Alice Martin' })).toHaveValue(12)
     const calendarCard = screen.getByText('Cours du mardi').closest('.kanban-card')
     expect(calendarCard?.querySelector('.calendar-color')).toHaveStyle({ background: '#7986cb' })
   })
@@ -182,6 +184,15 @@ describe('ConfigurationPage', () => {
 
     await waitFor(() => expect(saveResources).toHaveBeenCalledWith([
       expect.objectContaining({ id: 'employee-1', enabled: true, loginEmail: 'alice@example.fr' }),
+    ]))
+  })
+
+  it('saves the number of salary payment months', async () => {
+    render(<ConfigurationPage />)
+    fireEvent.change(await screen.findByRole('spinbutton', { name: 'Nombre de mois de paiement de (CDII)-Alice Martin' }), { target: { value: '10' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les modifications' }))
+    await waitFor(() => expect(saveResources).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'employee-1', paidMonths: 10 }),
     ]))
   })
 
