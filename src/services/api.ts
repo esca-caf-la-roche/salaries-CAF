@@ -20,6 +20,7 @@ import type {
   ReplacementAssignment,
   ReplacementEvent,
   ReplacementResource,
+  DeclinedResourceEvent,
 } from '../types'
 
 const pause = (milliseconds = 180) => new Promise((resolve) => window.setTimeout(resolve, milliseconds))
@@ -310,6 +311,59 @@ export async function runIncrementalSync(mode: 'automatic' | 'manual' = 'manual'
       : failed.length
       ? `${synced} calendrier(s) synchronisé(s), ${failed.length} en erreur.`
       : `${synced} ressource(s) synchronisée(s).${unmapped ? ` ${unmapped} événement(s) ignoré(s) car leur calendrier d'origine n'a pas de catégorie d'heures et de coefficient définis.` : ''}`,
+  }
+}
+
+export async function getDeclinedResourceEvents(): Promise<DeclinedResourceEvent[]> {
+  if (isDemoMode || !supabase) {
+    await pause()
+    return []
+  }
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: { action: 'declinedResourceEvents' },
+  })
+  if (error) await throwFunctionError(error, 'La détection des ressources indisponibles a échoué.')
+  return (data?.events ?? []).map((event: Record<string, unknown>) => ({
+    eventId: String(event.eventId),
+    calendarId: String(event.calendarId),
+    resourceName: String(event.resourceName ?? ''),
+    title: String(event.title ?? 'Sans titre'),
+    startsAt: String(event.startsAt ?? ''),
+    endsAt: String(event.endsAt ?? ''),
+    allDay: Boolean(event.allDay),
+    htmlLink: String(event.htmlLink ?? ''),
+  }))
+}
+
+export async function repairResourceEvent(resourceCalendarId: string, eventId: string): Promise<void> {
+  if (isDemoMode || !supabase) {
+    await pause()
+    return
+  }
+  const { error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: { action: 'repairResourceEvent', resourceCalendarId, eventId },
+  })
+  if (error) await throwFunctionError(error, 'La correction de la ressource a échoué.')
+}
+
+export async function runFullResync(): Promise<SyncState> {
+  if (isDemoMode || !supabase) {
+    await pause(850)
+    return { status: 'success', lastSyncedAt: new Date().toISOString(), message: 'Resynchronisation complète simulée (mode démonstration).' }
+  }
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: { action: 'resyncAll' },
+  })
+  if (error) await throwFunctionError(error, 'La resynchronisation complète a échoué.')
+  const results = Array.isArray(data?.results) ? data.results : []
+  const failed = results.filter((result: { error?: string }) => result.error)
+  const synced = results.length - failed.length
+  return {
+    status: failed.length ? 'error' : 'success',
+    lastSyncedAt: new Date().toISOString(),
+    message: failed.length
+      ? `${synced} ressource(s) resynchronisée(s), ${failed.length} en erreur.`
+      : `${synced} ressource(s) resynchronisée(s) complètement.`,
   }
 }
 
