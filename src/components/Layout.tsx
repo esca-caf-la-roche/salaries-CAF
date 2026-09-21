@@ -1,4 +1,4 @@
-import { ArrowLeftRight, BriefcaseBusiness, CalendarClock, CalendarRange, Gauge, LogOut, Settings, Sigma, UserRoundCheck } from 'lucide-react'
+import { ArrowLeftRight, BriefcaseBusiness, CalendarClock, CalendarRange, Gauge, LogOut, RefreshCcw, Settings, Sigma, UserRoundCheck } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { Logo } from './Logo'
@@ -14,6 +14,7 @@ export function Layout() {
         <nav className="main-nav" aria-label="Navigation principale">
           {user?.role === 'admin' && <NavLink to="/vue-ensemble"><Gauge aria-hidden="true" /> <span>Vue d'ensemble</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/absences-remplacements"><UserRoundCheck aria-hidden="true" /> <span>Absences & remplacements</span></NavLink>}
+          {user?.role === 'admin' && <NavLink to="/gerer-remplacements"><RefreshCcw aria-hidden="true" /> <span>Gérer les remplacements</span></NavLink>}
           <NavLink to="/" end><Sigma aria-hidden="true" /> <span>Suivi des heures</span></NavLink>
           {user?.role === 'admin' && <NavLink to="/independants"><BriefcaseBusiness aria-hidden="true" /><span>Indépendants</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/a-determiner"><CalendarClock aria-hidden="true" /> <span>À déterminer</span></NavLink>}
@@ -42,6 +43,7 @@ export function Layout() {
         <nav className={`mobile-nav${user?.role === 'admin' ? ' mobile-nav--admin' : ''}`} aria-label="Navigation mobile">
           {user?.role === 'admin' && <NavLink to="/vue-ensemble"><Gauge aria-hidden="true" /><span>Vue</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/absences-remplacements"><UserRoundCheck aria-hidden="true" /><span>Absences</span></NavLink>}
+          {user?.role === 'admin' && <NavLink to="/gerer-remplacements"><RefreshCcw aria-hidden="true" /><span>Remplacer</span></NavLink>}
           <NavLink to="/" end><Sigma aria-hidden="true" /><span>Suivi</span></NavLink>
           {user?.role === 'admin' && <NavLink to="/independants"><BriefcaseBusiness aria-hidden="true" /><span>Indépendants</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/a-determiner"><CalendarClock aria-hidden="true" /><span>À déterminer</span></NavLink>}

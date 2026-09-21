@@ -15,6 +15,7 @@ type GoogleEvent = {
   recurringEventId?: string; originalStartTime?: { dateTime?: string; date?: string };
   updated?: string; etag?: string;
   organizer?: { email?: string; displayName?: string; self?: boolean };
+  attendees?: Array<{ email?: string; displayName?: string; resource?: boolean; responseStatus?: string }>;
   [key: string]: unknown;
 };
 
@@ -25,6 +26,9 @@ type ResourceUpdate = {
 type CoefficientUpdate = { googleCalendarId?: string; coefficient?: number; hourCategory?: string | null };
 
 const UNASSIGNED_RESOURCE_GOOGLE_ID = "c_1885o4bj2rlv4gijgd278pfg9rub0@resource.calendar.google.com";
+const ABSENCE_CALENDAR_GOOGLE_ID = "c_4ed912f70b6b3db20a1aa55ee91a32c90e82bf6e9e41fb514b9ad671790a4bb6@group.calendar.google.com";
+const REPLACEMENT_CALENDAR_GOOGLE_ID = "c_0c7e7b5cd64848b9ff300c38c6ed06da82f39c7010f98b5ffd46c32b37bfbcf1@group.calendar.google.com";
+const RESOURCE_ID_PATTERN = /^[^\s@]+@resource\.calendar\.google\.com$/i;
 
 function isUnassignedResource(calendar: { google_calendar_id?: unknown; name?: unknown }): boolean {
   return normalizeEmail(calendar.google_calendar_id) === UNASSIGNED_RESOURCE_GOOGLE_ID;
@@ -671,6 +675,218 @@ async function unassignedEvents(admin: SupabaseClient) {
   };
 }
 
+type ReplacementResource = { google_calendar_id: string; name: string; color: string | null };
+
+function requiredString(value: unknown, label: string, maxLength = 512): string {
+  if (typeof value !== "string" || !value.trim() || value.length > maxLength) {
+    throw new HttpError(400, `${label} invalide`);
+  }
+  return value.trim();
+}
+
+function validInstant(value: unknown, label: string): string {
+  const instant = requiredString(value, label, 64);
+  if (!/^\d{4}-\d{2}-\d{2}T/.test(instant) || !Number.isFinite(Date.parse(instant))) {
+    throw new HttpError(400, `${label} doit être une date ISO avec heure`);
+  }
+  return instant;
+}
+
+function parisMonthBoundary(year: number, zeroBasedMonth: number): string {
+  const guess = Date.UTC(year, zeroBasedMonth, 1, 12);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date(guess));
+  const part = (type: string) => Number(parts.find((item) => item.type === type)?.value);
+  const offset = Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"), part("second")) - guess;
+  return new Date(Date.UTC(year, zeroBasedMonth, 1) - offset).toISOString();
+}
+
+async function replacementResources(admin: SupabaseClient, connectionId: string): Promise<ReplacementResource[]> {
+  const { data, error } = await admin.from("calendars")
+    .select("google_calendar_id,name,color")
+    .eq("connection_id", connectionId).eq("is_resource", true).eq("enabled", true);
+  if (error) throw error;
+  return (data ?? []) as ReplacementResource[];
+}
+
+function assertKnownResource(resources: ReplacementResource[], value: unknown, label: string): string {
+  const id = requiredString(value, label);
+  if (!RESOURCE_ID_PATTERN.test(id) || !resources.some((resource) => resource.google_calendar_id === id)) {
+    throw new HttpError(400, `${label} ne correspond pas à une ressource active`);
+  }
+  return id;
+}
+
+async function googleJson(
+  token: string,
+  url: URL,
+  method: "GET" | "POST" | "PATCH" = "GET",
+  body?: unknown,
+): Promise<Record<string, unknown>> {
+  const response = method === "GET"
+    ? await googleFetch(url, token)
+    : await fetch(url, {
+      method,
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+  if (!response.ok) {
+    const googleError = payload.error as { message?: string; status?: string } | undefined;
+    if (response.status === 401 || response.status === 403) {
+      throw new HttpError(409, "Google Calendar refuse cette opération. Reconnectez le compte Google pour accorder le droit d’écriture.");
+    }
+    if (response.status === 404) throw new HttpError(404, "Événement Google introuvable");
+    if (response.status === 409 || response.status === 412) throw new HttpError(409, "L’événement Google a été modifié simultanément");
+    throw new HttpError(502, `Google Calendar indisponible (${response.status}${googleError?.status ? `, ${googleError.status}` : ""})`);
+  }
+  return payload;
+}
+
+async function replacementMonthEvents(admin: SupabaseClient, connectionId: string, body: Record<string, unknown>) {
+  const resources = await replacementResources(admin, connectionId);
+  const resourceCalendarId = assertKnownResource(resources, body.resourceCalendarId, "resourceCalendarId");
+  if (!Number.isInteger(body.year) || Number(body.year) < 2020 || Number(body.year) > 2100) throw new HttpError(400, "year invalide");
+  if (!Number.isInteger(body.month) || Number(body.month) < 1 || Number(body.month) > 12) throw new HttpError(400, "month invalide");
+  const timeMin = parisMonthBoundary(Number(body.year), Number(body.month) - 1);
+  const timeMax = parisMonthBoundary(Number(body.year), Number(body.month));
+  const token = await getAccessToken(admin, connectionId);
+  const events: Record<string, unknown>[] = [];
+  let pageToken: string | undefined;
+  do {
+    const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(resourceCalendarId)}/events`);
+    url.searchParams.set("timeMin", timeMin); url.searchParams.set("timeMax", timeMax);
+    url.searchParams.set("singleEvents", "true"); url.searchParams.set("maxResults", "2500");
+    url.searchParams.set("fields", "nextPageToken,items(id,status,summary,start,end,organizer,attendees,location,description)");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+    const payload = await googleJson(token, url);
+    const items = Array.isArray(payload.items) ? payload.items as GoogleEvent[] : [];
+    events.push(...items.filter((event) => event.status !== "cancelled").map((event) => ({
+      id: event.id, title: event.summary ?? "Sans titre", startTime: event.start?.dateTime ?? event.start?.date,
+      endTime: event.end?.dateTime ?? event.end?.date, calendarId: resourceCalendarId,
+      organizer: event.organizer?.email ?? "",
+      resource: event.attendees?.find((attendee) => attendee.resource || RESOURCE_ID_PATTERN.test(attendee.email ?? ""))?.email ?? resourceCalendarId,
+    })));
+    pageToken = typeof payload.nextPageToken === "string" ? payload.nextPageToken : undefined;
+  } while (pageToken);
+  return { events };
+}
+
+async function replacementAvailability(admin: SupabaseClient, connectionId: string, body: Record<string, unknown>) {
+  const timeMin = validInstant(body.timeMin, "timeMin");
+  const timeMax = validInstant(body.timeMax, "timeMax");
+  const duration = Date.parse(timeMax) - Date.parse(timeMin);
+  if (duration <= 0 || duration > 31 * 24 * 60 * 60_000) throw new HttpError(400, "La période doit être positive et limitée à 31 jours");
+  const resources = await replacementResources(admin, connectionId);
+  if (resources.length > 50) throw new HttpError(409, "Trop de ressources actives pour une requête de disponibilité");
+  const token = await getAccessToken(admin, connectionId);
+  const url = new URL("https://www.googleapis.com/calendar/v3/freeBusy");
+  const payload = await googleJson(token, url, "POST", {
+    timeMin, timeMax, timeZone: "Europe/Paris", items: resources.map((resource) => ({ id: resource.google_calendar_id })),
+  });
+  const calendars = (payload.calendars ?? {}) as Record<string, { busy?: unknown[]; errors?: unknown[] }>;
+  const failed = resources.filter((resource) => calendars[resource.google_calendar_id]?.errors?.length);
+  if (failed.length) throw new HttpError(502, `Disponibilité Google incomplète pour ${failed.length} ressource(s)`);
+  return { resources: resources.filter((resource) => (calendars[resource.google_calendar_id]?.busy ?? []).length === 0)
+    .map((resource) => ({ id: resource.google_calendar_id, name: resource.name, color: resource.color })) };
+}
+
+function eventTimes(event: GoogleEvent) {
+  if (event.start?.dateTime && event.end?.dateTime) return {
+    start: { dateTime: event.start.dateTime, timeZone: "Europe/Paris" },
+    end: { dateTime: event.end.dateTime, timeZone: "Europe/Paris" },
+  };
+  if (event.start?.date && event.end?.date) return { start: { date: event.start.date }, end: { date: event.end.date } };
+  throw new HttpError(409, "L’événement Google n’a pas de période exploitable");
+}
+
+async function processReplacement(
+  admin: SupabaseClient,
+  connectionId: string,
+  resources: ReplacementResource[],
+  body: Record<string, unknown>,
+) {
+  const eventId = requiredString(body.eventId, "eventId", 1024).replace(/@google\.com$/i, "");
+  const sourceResourceCalendarId = assertKnownResource(resources, body.sourceResourceCalendarId, "sourceResourceCalendarId");
+  const absenceAttendee = assertKnownResource(resources, body.absenceAttendee, "absenceAttendee");
+  const replacementAttendee = assertKnownResource(resources, body.replacementAttendee, "replacementAttendee");
+  if (absenceAttendee === replacementAttendee) throw new HttpError(400, "Le salarié absent et son remplaçant doivent être différents");
+  const token = await getAccessToken(admin, connectionId);
+  const sourceUrl = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(sourceResourceCalendarId)}/events/${encodeURIComponent(eventId)}`);
+  const sourceEvent = await googleJson(token, sourceUrl) as GoogleEvent;
+  const organizerId = requiredString(sourceEvent.organizer?.email, "organisateur Google");
+  const organizerUrl = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(organizerId)}/events/${encodeURIComponent(eventId)}`);
+  const fullEvent = await googleJson(token, organizerUrl) as GoogleEvent;
+  const attendees = Array.isArray(fullEvent.attendees) ? fullEvent.attendees : [];
+
+  if (absenceAttendee === UNASSIGNED_RESOURCE_GOOGLE_ID) {
+    const retained = attendees.filter((attendee) => normalizeEmail(attendee.email) !== UNASSIGNED_RESOURCE_GOOGLE_ID);
+    if (!retained.some((attendee) => normalizeEmail(attendee.email) === normalizeEmail(replacementAttendee))) retained.push({ email: replacementAttendee });
+    await googleJson(token, organizerUrl, "PATCH", { attendees: retained });
+    return { mode: "unassigned", updatedEventId: eventId };
+  }
+
+  if (fullEvent.summary === "Absence avec prépa") throw new HttpError(409, "Cet événement a déjà été traité comme une absence");
+  const removed = attendees.filter((attendee) => attendee.resource || RESOURCE_ID_PATTERN.test(attendee.email ?? ""));
+  const originalResource = removed[0]?.displayName || removed[0]?.email || sourceResourceCalendarId;
+  const originalSummary = fullEvent.summary ?? "Sans titre";
+  const retained = attendees.filter((attendee) => !(attendee.resource || RESOURCE_ID_PATTERN.test(attendee.email ?? "")));
+  await googleJson(token, organizerUrl, "PATCH", { attendees: retained, location: "" });
+  const times = eventTimes(fullEvent);
+  const absenceUrl = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(ABSENCE_CALENDAR_GOOGLE_ID)}/events`);
+  const absence = await googleJson(token, absenceUrl, "POST", {
+    summary: "Absence avec prépa", description: `Absence avec prépa : ${originalSummary}`,
+    ...times, attendees: [{ email: absenceAttendee }],
+  });
+  const replacementUrl = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(REPLACEMENT_CALENDAR_GOOGLE_ID)}/events`);
+  let description = `Remplacements : ${originalSummary} (${originalResource})`;
+  if (fullEvent.description) description += `\n\nDescription d'origine :\n${fullEvent.description}`;
+  try {
+    const replacement = await googleJson(token, replacementUrl, "POST", {
+      summary: "Remplacement", description, ...times, attendees: [{ email: replacementAttendee }],
+    });
+    return { mode: "standard", updatedEventId: eventId, absenceEventId: absence.id, replacementEventId: replacement.id };
+  } catch {
+    throw new HttpError(502, `L’absence a été créée (${String(absence.id ?? "ID inconnu")}), mais la création du remplacement a échoué. Vérifiez Google Calendar avant de réessayer.`);
+  }
+}
+
+async function processReplacements(admin: SupabaseClient, body: Record<string, unknown>) {
+  const connection = await sharedConnectionFor(admin);
+  const resources = await replacementResources(admin, connection.id);
+  const absenceAttendee = assertKnownResource(resources, body.resourceId, "resourceId");
+  if (!Array.isArray(body.assignments) || !body.assignments.length) throw new HttpError(400, "Aucun remplacement fourni");
+  if (body.assignments.length > 50) throw new HttpError(400, "Trop de remplacements en une seule fois");
+  const results: Record<string, unknown>[] = [];
+  let failed = 0;
+  for (const assignment of body.assignments) {
+    const item = (assignment ?? {}) as Record<string, unknown>;
+    try {
+      const outcome = await processReplacement(admin, connection.id, resources, {
+        eventId: item.eventId,
+        absenceAttendee,
+        replacementAttendee: item.replacementResourceId,
+      });
+      results.push({ eventId: item.eventId, mode: outcome.mode, ok: true });
+    } catch (error) {
+      failed++;
+      results.push({
+        eventId: item.eventId, ok: false,
+        error: error instanceof HttpError ? error.message : "Erreur de traitement",
+      });
+    }
+  }
+  const done = results.length - failed;
+  return {
+    results,
+    message: failed === 0
+      ? `${done} remplacement(s) enregistré(s).`
+      : `${done} remplacement(s) enregistré(s), ${failed} en erreur.`,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
   try {
@@ -710,6 +926,15 @@ Deno.serve(async (req) => {
     if (body.action === "updateIndependentInvoice") return json(await updateIndependentInvoice(admin, user.id, body));
     if (body.action === "deleteIndependentInvoice") return json(await deleteIndependentInvoice(admin, user.id, body));
     if (body.action === "unassignedEvents") return json(await unassignedEvents(admin));
+    if (body.action === "replacementMonthEvents") {
+      const connection = await sharedConnectionFor(admin);
+      return json(await replacementMonthEvents(admin, connection.id, body));
+    }
+    if (body.action === "replacementAvailability") {
+      const connection = await sharedConnectionFor(admin);
+      return json(await replacementAvailability(admin, connection.id, body));
+    }
+    if (body.action === "processReplacements") return json(await processReplacements(admin, body));
     if (body.action === "saveResources") return json(await saveResources(admin, body.resources));
     if (body.action === "saveCoefficients") return json(await saveCoefficients(admin, body.calendars));
     throw new HttpError(400, "Action attendue: discover, resources, coefficientCalendars, unassignedEvents, independentEvents, createIndependentInvoice, saveResources, saveCoefficients ou sync");

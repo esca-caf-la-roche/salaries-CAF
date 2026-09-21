@@ -1,7 +1,10 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.112.4";
 import { HttpError } from "./http.ts";
 
-export const GOOGLE_SCOPE = "openid email https://www.googleapis.com/auth/calendar.readonly";
+// Replacement management reads free/busy data and creates/updates events. Existing
+// connections granted only `calendar.readonly` must be reconnected once so Google
+// issues a refresh token carrying this broader scope.
+export const GOOGLE_SCOPE = "openid email https://www.googleapis.com/auth/calendar";
 
 function required(name: string): string {
   const value = Deno.env.get(name);

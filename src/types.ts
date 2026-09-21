@@ -167,3 +167,22 @@ export interface GoogleConnectionStatus {
   email: string | null
   connectedAt: string | null
 }
+
+export interface ReplacementResource {
+  id: string
+  name: string
+}
+
+export interface ReplacementEvent {
+  id: string
+  title: string
+  startsAt: string
+  endsAt: string
+  resourceId: string
+  originalResourceId: string
+}
+
+export interface ReplacementAssignment {
+  eventId: string
+  replacementResourceId: string
+}
