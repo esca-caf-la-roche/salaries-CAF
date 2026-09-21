@@ -311,7 +311,7 @@ export function ConfigurationPage() {
     setConnecting(true)
     setMessage('')
     try { await startGoogleConnection() }
-    catch { setMessage('La connexion Google n\'a pas pu démarrer.') }
+    catch (startError) { setMessage(startError instanceof Error && startError.message ? startError.message : 'La connexion Google n\'a pas pu démarrer.') }
     finally { setConnecting(false) }
   }
   const refreshCoefficients = async () => {
