@@ -34,13 +34,39 @@ Deno.serve(async (req) => {
     });
     const userInfo = userInfoResponse.ok ? await userInfoResponse.json() : {};
     const scopes = (tokens.scope ?? "").split(" ").filter(Boolean);
-    const { data: connection, error: connectionError } = await admin.from("google_connections")
-      .upsert({ owner_id: oauthState.owner_id, google_account_email: userInfo.email ?? null, scopes, revoked_at: null }, { onConflict: "owner_id" })
-      .select("id").single();
-    if (connectionError) throw connectionError;
+    const googleAccountEmail = userInfo.email ?? null;
+
+    // Connexion Google partagée : une seule connexion active pour toute l'association.
+    // Si une connexion existe déjà, seule la même adresse Google peut être reconnectée.
+    const { data: existing, error: existingError } = await admin.from("google_connections")
+      .select("id,google_account_email").is("revoked_at", null)
+      .order("connected_at", { ascending: true }).limit(1).maybeSingle();
+    if (existingError) throw existingError;
+    if (existing && googleAccountEmail &&
+        String(existing.google_account_email ?? "").trim().toLowerCase() !== googleAccountEmail.trim().toLowerCase()) {
+      return redirect(fallback, { google: "error", reason: "google_account_already_connected" });
+    }
+
+    let connectionId: string;
+    if (existing) {
+      const { error: updateError } = await admin.from("google_connections")
+        .update({ google_account_email: googleAccountEmail, scopes, updated_at: now })
+        .eq("id", existing.id);
+      if (updateError) throw updateError;
+      connectionId = existing.id;
+    } else {
+      const { data: created, error: insertError } = await admin.from("google_connections")
+        .insert({ owner_id: oauthState.owner_id, google_account_email: googleAccountEmail, scopes })
+        .select("id").single();
+      if (insertError) throw insertError;
+      connectionId = created.id;
+    }
+    // Sécurité : une seule connexion active est conservée.
+    await admin.from("google_connections")
+      .update({ revoked_at: now }).is("revoked_at", null).neq("id", connectionId);
     const expiresAt = tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000).toISOString() : null;
     const { error: credentialsError } = await admin.rpc("internal_upsert_google_credentials", {
-      p_connection_id: connection.id, p_access_token: tokens.access_token,
+      p_connection_id: connectionId, p_access_token: tokens.access_token,
       p_refresh_token: tokens.refresh_token ?? null, p_token_type: tokens.token_type ?? "Bearer", p_expires_at: expiresAt,
     });
     if (credentialsError) throw credentialsError;

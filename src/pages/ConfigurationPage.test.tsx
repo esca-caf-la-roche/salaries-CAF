@@ -40,6 +40,7 @@ const saveCoefficientCalendars = vi.fn()
 const startGoogleConnection = vi.fn()
 const getValidationAlertEmail = vi.fn()
 const saveValidationAlertEmail = vi.fn()
+const getGoogleConnection = vi.fn()
 
 vi.mock('../services/api', () => ({
   getResources: (...args: unknown[]) => getResources(...args),
@@ -50,6 +51,7 @@ vi.mock('../services/api', () => ({
   startGoogleConnection: (...args: unknown[]) => startGoogleConnection(...args),
   getValidationAlertEmail: (...args: unknown[]) => getValidationAlertEmail(...args),
   saveValidationAlertEmail: (...args: unknown[]) => saveValidationAlertEmail(...args),
+  getGoogleConnection: (...args: unknown[]) => getGoogleConnection(...args),
 }))
 
 describe('ConfigurationPage', () => {
@@ -64,6 +66,20 @@ describe('ConfigurationPage', () => {
     saveCoefficientCalendars.mockImplementation(async (calendars: UsedCalendarCoefficient[]) => calendars)
     getValidationAlertEmail.mockResolvedValue('')
     saveValidationAlertEmail.mockResolvedValue(undefined)
+    getGoogleConnection.mockResolvedValue({ connected: true, email: 'google@association.fr', connectedAt: '2026-09-01T08:00:00Z' })
+  })
+
+  it('shows the shared Google account status instead of a connect button when a connection exists', async () => {
+    render(<ConfigurationPage />)
+    expect(await screen.findByText('Google connecté :', { exact: false })).toBeInTheDocument()
+    expect(screen.getByText('google@association.fr')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Connecter Google' })).not.toBeInTheDocument()
+  })
+
+  it('offers to connect Google when no shared connection exists', async () => {
+    getGoogleConnection.mockResolvedValue({ connected: false, email: null, connectedAt: null })
+    render(<ConfigurationPage />)
+    expect(await screen.findByRole('button', { name: 'Connecter Google' })).toBeInTheDocument()
   })
 
   it('shows employee resources and the seven Kanban destinations without dropdowns', async () => {

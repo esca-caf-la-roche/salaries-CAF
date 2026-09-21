@@ -161,3 +161,9 @@ export interface SyncState {
   lastSyncedAt: string | null
   message?: string
 }
+
+export interface GoogleConnectionStatus {
+  connected: boolean
+  email: string | null
+  connectedAt: string | null
+}

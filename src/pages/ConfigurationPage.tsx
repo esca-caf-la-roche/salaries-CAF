@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, ChevronDown, CircleAlert, GripVertical, Mail, RefreshCw, Search } from 'lucide-react'
-import { discoverResources, getCoefficientCalendars, getResources, getValidationAlertEmail, saveCoefficientCalendars, saveResources, saveValidationAlertEmail, startGoogleConnection } from '../services/api'
-import type { ContractType, EmployeeResource, HourCategory, PreparationCoefficient, UsedCalendarCoefficient } from '../types'
+import { discoverResources, getGoogleConnection, getCoefficientCalendars, getResources, getValidationAlertEmail, saveCoefficientCalendars, saveResources, saveValidationAlertEmail, startGoogleConnection } from '../services/api'
+import type { ContractType, EmployeeResource, GoogleConnectionStatus, HourCategory, PreparationCoefficient, UsedCalendarCoefficient } from '../types'
 import { contractTypeLabel } from '../lib/contracts'
 
 const configuredHourCategories: Array<{ value: HourCategory; label: string }> = [
@@ -187,6 +187,7 @@ export function ConfigurationPage() {
   const [coefficientsRefreshing, setCoefficientsRefreshing] = useState(false)
   const [discovering, setDiscovering] = useState(false)
   const [connecting, setConnecting] = useState(false)
+  const [googleConnection, setGoogleConnection] = useState<GoogleConnectionStatus | null>(null)
   const [dirty, setDirty] = useState(new Set<string>())
   const [coefficientDirty, setCoefficientDirty] = useState(new Set<string>())
   const [saving, setSaving] = useState(false)
@@ -203,6 +204,7 @@ export function ConfigurationPage() {
   useEffect(() => { void getResources().then(setResources).catch(() => setMessage('Les ressources n\'ont pas pu être chargées.')).finally(() => setLoading(false)) }, [])
   useEffect(() => { void getCoefficientCalendars().then(setCoefficientCalendars).catch(() => setMessage('Les calendriers utilisés n\'ont pas pu être chargés.')).finally(() => setCoefficientsLoading(false)) }, [])
   useEffect(() => { void getValidationAlertEmail().then(setValidationAlertEmail).catch(() => setAlertEmailMessage('Le destinataire des alertes n’a pas pu être chargé.')) }, [])
+  useEffect(() => { void getGoogleConnection().then(setGoogleConnection).catch(() => setGoogleConnection({ connected: false, email: null, connectedAt: null })) }, [])
   useEffect(() => {
     if (!movedCalendarId) return
     const movedCard = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-calendar-id]'))
@@ -365,9 +367,13 @@ export function ConfigurationPage() {
       <header className="page-heading">
         <div><p className="eyebrow">Paramétrage</p><h1>Ressources et comptage</h1><p>Configurez les contrats des ressources, puis classez les heures des calendriers utilisés.</p></div>
         <div className="page-actions">
-          <button className="button button--secondary" type="button" onClick={() => void connectGoogle()} disabled={connecting}>
-            {connecting ? 'Connexion…' : 'Connecter Google'}
-          </button>
+          {googleConnection?.connected ? (
+            <span className="connection-status" role="status"><Check aria-hidden="true" /> Google connecté : <strong>{googleConnection.email ?? 'compte de l’association'}</strong></span>
+          ) : (
+            <button className="button button--secondary" type="button" onClick={() => void connectGoogle()} disabled={connecting}>
+              {connecting ? 'Connexion…' : 'Connecter Google'}
+            </button>
+          )}
           <button className="button button--secondary" type="button" onClick={() => void detect()} disabled={discovering}>
             <RefreshCw className={discovering ? 'spin' : ''} aria-hidden="true" /> {discovering ? 'Détection…' : 'Détecter les ressources'}
           </button>
