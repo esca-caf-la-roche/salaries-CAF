@@ -17,6 +17,9 @@ import type {
   UnassignedEvent,
   UsedCalendarCoefficient,
   GoogleConnectionStatus,
+  ReplacementAssignment,
+  ReplacementEvent,
+  ReplacementResource,
 } from '../types'
 
 const pause = (milliseconds = 180) => new Promise((resolve) => window.setTimeout(resolve, milliseconds))
@@ -78,6 +81,49 @@ export async function getResources(): Promise<EmployeeResource[]> {
   })
   if (error) await throwFunctionError(error, 'Les ressources n\'ont pas pu être chargées.')
   return (data?.resources ?? []).map(mapResource)
+}
+
+export async function getReplacementEvents(resourceId: string, year: number, month: number): Promise<ReplacementEvent[]> {
+  if (isDemoMode || !supabase) {
+    await pause()
+    return []
+  }
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: { action: 'replacementMonthEvents', resourceCalendarId: resourceId, year, month },
+  })
+  if (error) await throwFunctionError(error, 'Les événements à remplacer n’ont pas pu être chargés.')
+  return (data?.events ?? []).map((event: Record<string, unknown>) => ({
+    id: String(event.id),
+    title: String(event.title ?? 'Sans objet'),
+    startsAt: String(event.startTime ?? ''),
+    endsAt: String(event.endTime ?? ''),
+    resourceId: String(event.resource ?? resourceId),
+    originalResourceId: String(event.resource ?? resourceId),
+  }))
+}
+
+export async function getAvailableReplacementResources(startsAt: string, endsAt: string): Promise<ReplacementResource[]> {
+  if (isDemoMode || !supabase) {
+    await pause()
+    return []
+  }
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: { action: 'replacementAvailability', timeMin: startsAt, timeMax: endsAt },
+  })
+  if (error) await throwFunctionError(error, 'Les ressources disponibles n’ont pas pu être chargées.')
+  return (data?.resources ?? []).map((resource: Record<string, unknown>) => ({ id: String(resource.id), name: String(resource.name) }))
+}
+
+export async function processReplacements(resourceId: string, assignments: ReplacementAssignment[]): Promise<string> {
+  if (isDemoMode || !supabase) {
+    await pause()
+    return 'Les remplacements ont été enregistrés en mode démonstration.'
+  }
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: { action: 'processReplacements', resourceId, assignments },
+  })
+  if (error) await throwFunctionError(error, 'Les remplacements n’ont pas pu être enregistrés.')
+  return String(data?.message ?? 'Les remplacements ont été enregistrés.')
 }
 
 export async function saveResources(resources: EmployeeResource[]): Promise<EmployeeResource[]> {

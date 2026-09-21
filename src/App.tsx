@@ -5,6 +5,7 @@ import { useAuth } from './context/AuthContext'
 import { ConfigurationPage } from './pages/ConfigurationPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { ReplacementAbsencePage } from './pages/ReplacementAbsencePage'
+import { ReplacementManagementPage } from './pages/ReplacementManagementPage'
 import { LoginPage } from './pages/LoginPage'
 import { IndependentEventsPage } from './pages/IndependentEventsPage'
 import { UnassignedEventsPage } from './pages/UnassignedEventsPage'
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="conversion" element={<TimeConversionPage />} />
         <Route path="vue-ensemble" element={<AdminRoute><DashboardPage /></AdminRoute>} />
         <Route path="absences-remplacements" element={<AdminRoute><ReplacementAbsencePage /></AdminRoute>} />
+        <Route path="gerer-remplacements" element={<AdminRoute><ReplacementManagementPage /></AdminRoute>} />
         <Route path="independants" element={<AdminRoute><IndependentEventsPage /></AdminRoute>} />
         <Route path="a-determiner" element={<AdminRoute><UnassignedEventsPage /></AdminRoute>} />
         <Route path="configuration" element={<AdminRoute><ConfigurationPage /></AdminRoute>} />

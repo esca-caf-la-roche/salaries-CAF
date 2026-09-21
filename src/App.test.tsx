@@ -59,7 +59,7 @@ describe('role-based routes', () => {
     await screen.findByRole('heading', { name: 'Vue admin' })
     const navigation = screen.getByRole('navigation', { name: 'Navigation principale' })
     expect(within(navigation).getAllByRole('link').map((link) => link.textContent?.trim())).toEqual([
-      "Vue d'ensemble", 'Absences & remplacements', 'Suivi des heures', 'Indépendants', 'À déterminer', 'Conversion', 'Configuration',
+      "Vue d'ensemble", 'Absences & remplacements', 'Gérer les remplacements', 'Suivi des heures', 'Indépendants', 'À déterminer', 'Conversion', 'Configuration',
     ])
   })
 })
