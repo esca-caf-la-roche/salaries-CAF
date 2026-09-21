@@ -3,8 +3,9 @@
 - Project: La Cordée — suivi des heures CAF
 - Phase: production application, actively maintained
 - Current branch: `main`, tracking `origin/main`
-- Current focus: overview redesign completed and awaiting production deployment verification.
+- Current focus: clean baseline restored on `main`; replacement-management feature (Codex WIP) parked on branch `wip/gestion-remplacements` awaiting decisions and realignment.
 - Deployment: GitHub Pages through `.github/workflows/deploy-pages.yml` after lint, tests, and build.
+- Pending decisions before resuming the replacement feature: (A) screen only handles "absent person → replacement", or (B) also handle direct assignment of unassigned ("À déterminer") sessions; Google scope change requires one-time reconnection of existing accounts.
 
 ## Recent completed work
 

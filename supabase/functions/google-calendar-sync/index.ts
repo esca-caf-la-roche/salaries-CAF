@@ -30,10 +30,13 @@ function isUnassignedResource(calendar: { google_calendar_id?: unknown; name?: u
   return normalizeEmail(calendar.google_calendar_id) === UNASSIGNED_RESOURCE_GOOGLE_ID;
 }
 
-async function connectionFor(admin: SupabaseClient, ownerId: string) {
+// Le compte Google (celui de l'association) est partagé : tous les utilisateurs passent par la même connexion.
+async function sharedConnectionFor(admin: SupabaseClient) {
   const { data, error } = await admin.from("google_connections")
-    .select("id").eq("owner_id", ownerId).is("revoked_at", null).single();
-  if (error || !data) throw new HttpError(409, "Connectez d'abord le compte Google");
+    .select("id").is("revoked_at", null)
+    .order("connected_at", { ascending: true }).limit(1).maybeSingle();
+  if (error) throw error;
+  if (!data) throw new HttpError(409, "Aucun compte Google connecté. Un administrateur doit d'abord connecter le compte Google de l'association.");
   return data as { id: string };
 }
 
@@ -72,8 +75,8 @@ async function refreshCoefficientCalendarMetadata(
   if (error) throw error;
 }
 
-async function discover(admin: SupabaseClient, ownerId: string) {
-  const connection = await connectionFor(admin, ownerId);
+async function discover(admin: SupabaseClient) {
+  const connection = await sharedConnectionFor(admin);
   const token = await getAccessToken(admin, connection.id);
   const calendars = await listGoogleCalendars(token);
   await refreshCoefficientCalendarMetadata(admin, connection.id, calendars);
@@ -222,8 +225,8 @@ async function provisionUser(admin: SupabaseClient, email: string) {
   return { user: data.user, created: true };
 }
 
-async function saveResources(admin: SupabaseClient, ownerId: string, updates: ResourceUpdate[]) {
-  const connection = await connectionFor(admin, ownerId);
+async function saveResources(admin: SupabaseClient, updates: ResourceUpdate[]) {
+  const connection = await sharedConnectionFor(admin);
   if (!Array.isArray(updates) || !updates.length) return { resources: await resourcePayload(admin, connection.id) };
   const ids = updates.map((update) => String(update.id ?? ""));
   const { data: employees, error } = await admin.from("employees")
@@ -305,8 +308,8 @@ async function saveResources(admin: SupabaseClient, ownerId: string, updates: Re
   return { resources: await resourcePayload(admin, connection.id) };
 }
 
-async function saveCoefficients(admin: SupabaseClient, ownerId: string, updates: CoefficientUpdate[]) {
-  const connection = await connectionFor(admin, ownerId);
+async function saveCoefficients(admin: SupabaseClient, updates: CoefficientUpdate[]) {
+  const connection = await sharedConnectionFor(admin);
   if (!Array.isArray(updates) || !updates.length) {
     return { calendars: await coefficientPayload(admin, connection.id) };
   }
@@ -439,8 +442,8 @@ async function executeSync(admin: SupabaseClient, calendar: Record<string, unkno
   return { calendarId: calendar.id, mode, pages, eventsSeen: seen, eventCount: count ?? 0, unmappedEvents: unmapped };
 }
 
-async function sync(admin: SupabaseClient, ownerId: string, calendarIds?: string[]) {
-  const connection = await connectionFor(admin, ownerId);
+async function sync(admin: SupabaseClient, calendarIds?: string[]) {
+  const connection = await sharedConnectionFor(admin);
   return syncConnection(admin, connection, calendarIds);
 }
 
@@ -521,12 +524,12 @@ function eventPayload(event: Record<string, unknown>) {
   };
 }
 
-async function independentEvents(admin: SupabaseClient, ownerId: string, schoolYear: unknown) {
+async function independentEvents(admin: SupabaseClient, schoolYear: unknown) {
   if (typeof schoolYear !== "number" || !Number.isInteger(schoolYear) || schoolYear < 2000 || schoolYear > 2100) {
     throw new HttpError(400, "Année scolaire invalide");
   }
   const bounds = independentSeasonBounds(schoolYear);
-  const connection = await connectionFor(admin, ownerId);
+  const connection = await sharedConnectionFor(admin);
   const { data: employees, error: employeesError } = await admin.from("employees")
     .select("id,display_name,resource_calendar_id,calendars!employees_resource_calendar_id_fkey!inner(id,last_synced_at)")
     .eq("active", true).eq("contract_type", "INDEP")
@@ -537,7 +540,7 @@ async function independentEvents(admin: SupabaseClient, ownerId: string, schoolY
     const calendar = Array.isArray(employee.calendars) ? employee.calendars[0] : employee.calendars;
     if (!calendar) continue;
     if (!calendar.last_synced_at) {
-      const synchronization = await sync(admin, ownerId, [String(calendar.id)]);
+      const synchronization = await sync(admin, [String(calendar.id)]);
       const failed = synchronization.results.find((result) => "error" in result && result.error);
       if (failed && "error" in failed) {
         throw new HttpError(502, `Synchronisation de la ressource indépendante impossible : ${failed.error}`);
@@ -596,11 +599,11 @@ async function createIndependentInvoice(admin: SupabaseClient, ownerId: string, 
   return { invoiceId: String(invoice.invoice_id), totalMinutes: Number(invoice.total_minutes) };
 }
 
-async function independentInvoices(admin: SupabaseClient, ownerId: string, employeeId: unknown) {
+async function independentInvoices(admin: SupabaseClient, employeeId: unknown) {
   if (typeof employeeId !== "string") throw new HttpError(400, "Indépendant invalide");
   const { data, error } = await admin.from("independent_invoices")
     .select("id,invoice_number,received_on,total_minutes,independent_invoice_events(count),employees!inner(resource_calendar_id,calendars!employees_resource_calendar_id_fkey!inner(connection_id))")
-    .eq("employee_id", employeeId).eq("employees.calendars.connection_id", (await connectionFor(admin, ownerId)).id)
+    .eq("employee_id", employeeId).eq("employees.calendars.connection_id", (await sharedConnectionFor(admin)).id)
     .order("received_on", { ascending: false }).order("created_at", { ascending: false });
   if (error) throw error;
   return { invoices: (data ?? []).map((invoice) => ({ id: String(invoice.id), invoiceNumber: invoice.invoice_number ? String(invoice.invoice_number) : null, receivedOn: String(invoice.received_on), totalMinutes: Number(invoice.total_minutes), eventCount: Array.isArray(invoice.independent_invoice_events) ? Number(invoice.independent_invoice_events[0]?.count ?? 0) : 0 })) };
@@ -625,8 +628,8 @@ async function deleteIndependentInvoice(admin: SupabaseClient, ownerId: string, 
   return { ok: true };
 }
 
-async function unassignedEvents(admin: SupabaseClient, ownerId: string) {
-  const connection = await connectionFor(admin, ownerId);
+async function unassignedEvents(admin: SupabaseClient) {
+  const connection = await sharedConnectionFor(admin);
   const { data: calendars, error: calendarsError } = await admin.from("calendars")
     .select("id,last_synced_at")
     .eq("connection_id", connection.id)
@@ -641,7 +644,7 @@ async function unassignedEvents(admin: SupabaseClient, ownerId: string) {
     .filter((calendar) => !calendar.last_synced_at)
     .map((calendar) => String(calendar.id));
   if (neverSyncedIds.length) {
-    const synchronization = await sync(admin, ownerId, neverSyncedIds);
+    const synchronization = await sync(admin, neverSyncedIds);
     const failed = synchronization.results.find((result) => "error" in result && result.error);
     if (failed && "error" in failed) {
       throw new HttpError(502, `Synchronisation de la ressource À déterminer impossible : ${failed.error}`);
@@ -676,29 +679,39 @@ Deno.serve(async (req) => {
     const { user, role, admin } = await requireActiveUser(req);
     if (body.action === "sync") {
       return json(role === "admin"
-        ? await sync(admin, user.id, body.calendarIds)
+        ? await sync(admin, body.calendarIds)
         : await syncEmployeeCalendar(admin, user.id, body.mode));
     }
     if (role !== "admin") throw new HttpError(403, "Accès administrateur requis");
-    if (body.action === "discover") return json(await discover(admin, user.id));
+    if (body.action === "connectionInfo") {
+      const { data: connection } = await admin.from("google_connections")
+        .select("google_account_email,connected_at").is("revoked_at", null)
+        .order("connected_at", { ascending: true }).limit(1).maybeSingle();
+      return json({
+        connected: Boolean(connection),
+        email: connection?.google_account_email ?? null,
+        connectedAt: connection?.connected_at ?? null,
+      });
+    }
+    if (body.action === "discover") return json(await discover(admin));
     if (body.action === "resources") {
-      const connection = await connectionFor(admin, user.id);
+      const connection = await sharedConnectionFor(admin);
       return json({ resources: await resourcePayload(admin, connection.id) });
     }
     if (body.action === "coefficientCalendars") {
-      const connection = await connectionFor(admin, user.id);
+      const connection = await sharedConnectionFor(admin);
       const token = await getAccessToken(admin, connection.id);
       await refreshCoefficientCalendarMetadata(admin, connection.id, await listGoogleCalendars(token));
       return json({ calendars: await coefficientPayload(admin, connection.id) });
     }
-    if (body.action === "independentEvents") return json(await independentEvents(admin, user.id, body.schoolYear));
+    if (body.action === "independentEvents") return json(await independentEvents(admin, body.schoolYear));
     if (body.action === "createIndependentInvoice") return json(await createIndependentInvoice(admin, user.id, body));
-    if (body.action === "independentInvoices") return json(await independentInvoices(admin, user.id, body.employeeId));
+    if (body.action === "independentInvoices") return json(await independentInvoices(admin, body.employeeId));
     if (body.action === "updateIndependentInvoice") return json(await updateIndependentInvoice(admin, user.id, body));
     if (body.action === "deleteIndependentInvoice") return json(await deleteIndependentInvoice(admin, user.id, body));
-    if (body.action === "unassignedEvents") return json(await unassignedEvents(admin, user.id));
-    if (body.action === "saveResources") return json(await saveResources(admin, user.id, body.resources));
-    if (body.action === "saveCoefficients") return json(await saveCoefficients(admin, user.id, body.calendars));
+    if (body.action === "unassignedEvents") return json(await unassignedEvents(admin));
+    if (body.action === "saveResources") return json(await saveResources(admin, body.resources));
+    if (body.action === "saveCoefficients") return json(await saveCoefficients(admin, body.calendars));
     throw new HttpError(400, "Action attendue: discover, resources, coefficientCalendars, unassignedEvents, independentEvents, createIndependentInvoice, saveResources, saveCoefficients ou sync");
   } catch (error) {
     return errorResponse(error);

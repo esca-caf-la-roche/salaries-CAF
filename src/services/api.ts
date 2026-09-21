@@ -16,6 +16,7 @@ import type {
   SyncState,
   UnassignedEvent,
   UsedCalendarCoefficient,
+  GoogleConnectionStatus,
 } from '../types'
 
 const pause = (milliseconds = 180) => new Promise((resolve) => window.setTimeout(resolve, milliseconds))
@@ -210,6 +211,22 @@ export async function saveCoefficientCalendars(calendars: UsedCalendarCoefficien
   })
   if (error) throw error
   return (data?.calendars ?? []).map(mapCoefficientCalendar)
+}
+
+export async function getGoogleConnection(): Promise<GoogleConnectionStatus> {
+  if (isDemoMode || !supabase) {
+    await pause()
+    return { connected: true, email: 'google@association.fr', connectedAt: new Date().toISOString() }
+  }
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: { action: 'connectionInfo' },
+  })
+  if (error) await throwFunctionError(error, 'L’état de la connexion Google n’a pas pu être chargé.')
+  return {
+    connected: Boolean(data?.connected),
+    email: data?.email ? String(data.email) : null,
+    connectedAt: data?.connectedAt ? String(data.connectedAt) : null,
+  }
 }
 
 export async function startGoogleConnection(): Promise<void> {
