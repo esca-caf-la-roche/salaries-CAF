@@ -27,6 +27,8 @@ const pause = (milliseconds = 180) => new Promise((resolve) => window.setTimeout
 
 async function throwFunctionError(error: unknown, fallback: string): Promise<never> {
   if (error instanceof FunctionsHttpError) {
+    const response = error.context as unknown as Response
+    if (response?.status === 401) throw new Error('Votre session a expiré. Déconnectez-vous puis reconnectez-vous.')
     const payload = await error.context.clone().json().catch(() => null) as { error?: unknown } | null
     if (typeof payload?.error === 'string' && payload.error.trim()) throw new Error(payload.error)
   }
