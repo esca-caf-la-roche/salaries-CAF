@@ -13,7 +13,6 @@ const getMonthlyTimeValidations = vi.fn()
 const approveTimeMonthChange = vi.fn()
 const getDeclinedResourceEvents = vi.fn()
 const repairResourceEvent = vi.fn()
-const runFullResync = vi.fn()
 
 function employee(contractType: ContractType, annualContractHours: number, hours: Partial<MonthlyHours> = {}): EmployeeSummary {
   return {
@@ -33,7 +32,6 @@ vi.mock('../services/api', () => ({
   approveTimeMonthChange: (...args: unknown[]) => approveTimeMonthChange(...args),
   getDeclinedResourceEvents: (...args: unknown[]) => getDeclinedResourceEvents(...args),
   repairResourceEvent: (...args: unknown[]) => repairResourceEvent(...args),
-  runFullResync: (...args: unknown[]) => runFullResync(...args),
 }))
 
 vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'admin-1', role: 'admin', email: 'admin@example.fr', displayName: 'Admin' } }) }))
@@ -51,7 +49,6 @@ describe('DashboardPage', () => {
     approveTimeMonthChange.mockImplementation(async (employeeId: string, schoolYear: number, month: number) => ({ employeeId, schoolYear, month, status: 'validated', validatedAt: '2026-08-31T10:00:00Z', changeDetectedAt: null, changeCount: 1, approvedAt: '2026-09-06T10:00:00Z' }))
     getDeclinedResourceEvents.mockResolvedValue([])
     repairResourceEvent.mockResolvedValue(undefined)
-    runFullResync.mockResolvedValue({ status: 'success', lastSyncedAt: '2026-09-01T08:00:00Z', message: '3 ressource(s) resynchronisée(s) complètement.' })
   })
 
   it('calculates actual hours with the existing contract-specific rules', () => {
@@ -107,12 +104,15 @@ describe('DashboardPage', () => {
     await waitFor(() => expect(tasks).not.toHaveTextContent('Ressource indisponible'))
   })
 
-  it('triggers a full resync and reports the outcome', async () => {
+  it('refreshes declined-resource tasks through the single sync button', async () => {
+    const startsAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    getDeclinedResourceEvents
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ eventId: 'evt-2', calendarId: 'c1', resourceName: '(CDII)-Alice Martin', title: 'Cours du mardi', startsAt, endsAt: new Date(Date.parse(startsAt) + 7200000).toISOString(), allDay: false, htmlLink: 'https://calendar.google.com/x' }])
     render(<MemoryRouter><DashboardPage /></MemoryRouter>)
-    await screen.findByRole('button', { name: 'Resynchronisation complète' })
-    fireEvent.click(screen.getByRole('button', { name: 'Resynchronisation complète' }))
-    await waitFor(() => expect(runFullResync).toHaveBeenCalled())
-    expect(await screen.findByText(/3 ressource\(s\) resynchronisée\(s\) complètement/)).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Actualiser Google' }))
+    expect(await screen.findByText('Ressource indisponible')).toBeInTheDocument()
+    expect(getDeclinedResourceEvents).toHaveBeenCalledTimes(2)
   })
 
   it('approves a change notification and removes it from tasks', async () => {

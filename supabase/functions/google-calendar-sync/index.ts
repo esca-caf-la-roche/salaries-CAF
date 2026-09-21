@@ -977,9 +977,26 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const { user, role, admin } = await requireActiveUser(req);
     if (body.action === "sync") {
-      return json(role === "admin"
-        ? await sync(admin, body.calendarIds)
-        : await syncEmployeeCalendar(admin, user.id, body.mode));
+      if (role !== "admin") return json(await syncEmployeeCalendar(admin, user.id, body.mode));
+      // Resynchronisation complète automatique quand des événements à venir n'ont
+      // encore aucune donnée d'attendees (historique antérieur au champ élargi).
+      const stale = await admin.from("calendar_events")
+        .select("id", { head: true, count: "exact" })
+        .eq("calendars.connection_id", (await sharedConnectionFor(admin)).id)
+        .eq("calendars.is_resource", true)
+        .eq("calendars.enabled", true)
+        .neq("status", "cancelled")
+        .filter("raw->attendees", "is", null)
+        .limit(1);
+      if (!stale.error && (stale.count ?? 0) > 0) {
+        const connection = await sharedConnectionFor(admin);
+        const { error: resetError } = await admin.from("calendars").update({ sync_token: null })
+          .eq("connection_id", connection.id).eq("is_resource", true).eq("enabled", true);
+        if (resetError) throw resetError;
+        const full = await syncConnection(admin, { id: connection.id });
+        return json({ ...full, mode: "full" });
+      }
+      return json(await sync(admin, body.calendarIds));
     }
     if (role !== "admin") throw new HttpError(403, "Accès administrateur requis");
     if (body.action === "connectionInfo") {

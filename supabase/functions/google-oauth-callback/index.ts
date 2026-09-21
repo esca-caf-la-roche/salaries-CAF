@@ -44,7 +44,8 @@ Deno.serve(async (req) => {
     if (existingError) throw existingError;
     if (existing && googleAccountEmail &&
         String(existing.google_account_email ?? "").trim().toLowerCase() !== googleAccountEmail.trim().toLowerCase()) {
-      return redirect(fallback, { google: "error", reason: "google_account_already_connected" });
+      // On renvoie vers la page d'origine (redirect_to est déjà validé côté oauth-start).
+      return redirect(oauthState.redirect_to, { google: "error", reason: "google_account_already_connected", connected: String(existing.google_account_email ?? "") });
     }
 
     let connectionId: string;
