@@ -390,7 +390,7 @@ async function executeSync(admin: SupabaseClient, calendar: Record<string, unkno
     url.searchParams.set("maxResults", "2500");
     url.searchParams.set("singleEvents", "true");
     url.searchParams.set("showDeleted", "true");
-    url.searchParams.set("fields", "nextPageToken,nextSyncToken,items(id,status,summary,description,location,organizer(email,displayName,self),start,end,recurringEventId,originalStartTime,updated,etag)");
+    url.searchParams.set("fields", "nextPageToken,nextSyncToken,items(id,status,summary,description,location,organizer(email,displayName,self),start,end,recurringEventId,originalStartTime,updated,etag,attendees,htmlLink)");
     if (mode === "incremental") url.searchParams.set("syncToken", String(calendar.sync_token));
     else url.searchParams.set("timeMin", initialTimeMin());
     if (pageToken) url.searchParams.set("pageToken", pageToken);
@@ -887,6 +887,79 @@ async function processReplacements(admin: SupabaseClient, body: Record<string, u
   };
 }
 
+// Un attendee ressource "refusé" (responseStatus="declined") correspond à la ressource
+// barrée dans Google Calendar : l'auto-acceptation a échoué et la salle/salarie n'est pas réservé.
+async function declinedResourceEvents(admin: SupabaseClient) {
+  const connection = await sharedConnectionFor(admin);
+  const nowIso = new Date().toISOString();
+  const today = nowIso.slice(0, 10);
+  const { data: rows, error } = await admin.from("calendar_events")
+    .select("google_event_id,summary,starts_at,ends_at,start_date,all_day,raw,calendars!inner(google_calendar_id,name)")
+    .eq("calendars.connection_id", connection.id)
+    .eq("calendars.is_resource", true)
+    .eq("calendars.enabled", true)
+    .neq("status", "cancelled")
+    .or(`starts_at.gte.${nowIso},start_date.gte.${today}`)
+    .order("starts_at", { ascending: true })
+    .limit(400);
+  if (error) throw error;
+  const events: Record<string, unknown>[] = [];
+  for (const row of rows ?? []) {
+    const record = row as Record<string, unknown>;
+    const calendar = record.calendars as { google_calendar_id: string; name: string };
+    const raw = (record.raw ?? {}) as { attendees?: Array<{ email?: string; responseStatus?: string }>; htmlLink?: string };
+    const attendees = Array.isArray(raw.attendees) ? raw.attendees : [];
+    const declined = attendees.some((attendee) => normalizeEmail(attendee?.email) === normalizeEmail(calendar.google_calendar_id)
+      && attendee.responseStatus === "declined");
+    if (!declined) continue;
+    events.push({
+      eventId: String(record.google_event_id),
+      calendarId: calendar.google_calendar_id,
+      resourceName: calendar.name,
+      title: record.summary ?? "Sans titre",
+      startsAt: record.starts_at ?? record.start_date ?? "",
+      endsAt: record.ends_at ?? "",
+      allDay: Boolean(record.all_day),
+      htmlLink: typeof raw.htmlLink === "string" && raw.htmlLink
+        ? raw.htmlLink
+        : `https://calendar.google.com/calendar/u/0/r/eventedit/${encodeURIComponent(String(record.google_event_id))}`,
+    });
+    if (events.length >= 100) break;
+  }
+  return { events };
+}
+
+async function repairResourceEvent(admin: SupabaseClient, body: Record<string, unknown>) {
+  const connection = await sharedConnectionFor(admin);
+  const resources = await replacementResources(admin, connection.id);
+  const resourceCalendarId = assertKnownResource(resources, body.resourceCalendarId, "resourceCalendarId");
+  const eventId = requiredString(body.eventId, "eventId", 1024).replace(/@google\.com$/i, "");
+  const token = await getAccessToken(admin, connection.id);
+  const sourceUrl = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(resourceCalendarId)}/events/${encodeURIComponent(eventId)}`);
+  const sourceEvent = await googleJson(token, sourceUrl) as GoogleEvent;
+  const organizerId = requiredString(sourceEvent.organizer?.email, "organisateur Google");
+  const organizerUrl = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(organizerId)}/events/${encodeURIComponent(eventId)}`);
+  const fullEvent = await googleJson(token, organizerUrl) as GoogleEvent;
+  const attendees = Array.isArray(fullEvent.attendees)
+    ? fullEvent.attendees.filter((attendee) => normalizeEmail(attendee.email) !== normalizeEmail(resourceCalendarId))
+    : [];
+  // Retirer puis re-remettre la ressource : son calendrier re-traite l'invitation
+  // et l'auto-acceptation rejoue, exactement comme la correction manuelle.
+  attendees.push({ email: resourceCalendarId });
+  await googleJson(token, organizerUrl, "PATCH", { attendees });
+  return { ok: true, updatedEventId: eventId };
+}
+
+// Resynchronisation complète : force le passage full (attendees/htmlLink inclus) même
+// quand un sync_token incrémental existe déjà, ex. pour amorcer la détection ci-dessus.
+async function resyncAll(admin: SupabaseClient) {
+  const connection = await sharedConnectionFor(admin);
+  const { error } = await admin.from("calendars").update({ sync_token: null })
+    .eq("connection_id", connection.id).eq("is_resource", true).eq("enabled", true);
+  if (error) throw error;
+  return syncConnection(admin, { id: connection.id });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
   try {
@@ -935,6 +1008,9 @@ Deno.serve(async (req) => {
       return json(await replacementAvailability(admin, connection.id, body));
     }
     if (body.action === "processReplacements") return json(await processReplacements(admin, body));
+    if (body.action === "declinedResourceEvents") return json(await declinedResourceEvents(admin));
+    if (body.action === "repairResourceEvent") return json(await repairResourceEvent(admin, body));
+    if (body.action === "resyncAll") return json(await resyncAll(admin));
     if (body.action === "saveResources") return json(await saveResources(admin, body.resources));
     if (body.action === "saveCoefficients") return json(await saveCoefficients(admin, body.calendars));
     throw new HttpError(400, "Action attendue: discover, resources, coefficientCalendars, unassignedEvents, independentEvents, createIndependentInvoice, saveResources, saveCoefficients ou sync");

@@ -186,3 +186,14 @@ export interface ReplacementAssignment {
   eventId: string
   replacementResourceId: string
 }
+
+export interface DeclinedResourceEvent {
+  eventId: string
+  calendarId: string
+  resourceName: string
+  title: string
+  startsAt: string
+  endsAt: string
+  allDay: boolean
+  htmlLink: string
+}

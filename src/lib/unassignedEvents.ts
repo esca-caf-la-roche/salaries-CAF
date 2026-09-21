@@ -1,6 +1,8 @@
 import type { UnassignedEvent } from '../types'
 
-export function eventStart(event: UnassignedEvent): Date {
+type SchedulableEvent = Pick<UnassignedEvent, 'allDay' | 'startsAt' | 'endsAt'>
+
+export function eventStart(event: SchedulableEvent): Date {
   return new Date(event.allDay ? `${event.startsAt}T00:00:00` : event.startsAt)
 }
 
@@ -35,13 +37,13 @@ export function eventDayLabel(event: UnassignedEvent): string {
   return label.charAt(0).toUpperCase() + label.slice(1)
 }
 
-export function formatEventTime(event: UnassignedEvent): string {
+export function formatEventTime(event: SchedulableEvent): string {
   if (event.allDay) return 'Toute la journée'
   const time = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })
   return `${time.format(eventStart(event))}–${time.format(new Date(event.endsAt))}`
 }
 
-export function formatEventDate(event: UnassignedEvent): string {
+export function formatEventDate(event: SchedulableEvent): string {
   const start = eventStart(event)
   if (event.allDay) {
     return new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).format(start)

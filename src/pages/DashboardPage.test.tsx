@@ -11,6 +11,9 @@ const getUnassignedEvents = vi.fn()
 const runIncrementalSync = vi.fn()
 const getMonthlyTimeValidations = vi.fn()
 const approveTimeMonthChange = vi.fn()
+const getDeclinedResourceEvents = vi.fn()
+const repairResourceEvent = vi.fn()
+const runFullResync = vi.fn()
 
 function employee(contractType: ContractType, annualContractHours: number, hours: Partial<MonthlyHours> = {}): EmployeeSummary {
   return {
@@ -28,6 +31,9 @@ vi.mock('../services/api', () => ({
   runIncrementalSync: (...args: unknown[]) => runIncrementalSync(...args),
   getMonthlyTimeValidations: (...args: unknown[]) => getMonthlyTimeValidations(...args),
   approveTimeMonthChange: (...args: unknown[]) => approveTimeMonthChange(...args),
+  getDeclinedResourceEvents: (...args: unknown[]) => getDeclinedResourceEvents(...args),
+  repairResourceEvent: (...args: unknown[]) => repairResourceEvent(...args),
+  runFullResync: (...args: unknown[]) => runFullResync(...args),
 }))
 
 vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'admin-1', role: 'admin', email: 'admin@example.fr', displayName: 'Admin' } }) }))
@@ -43,6 +49,9 @@ describe('DashboardPage', () => {
     getMonthlyTimeValidations.mockResolvedValue([])
     runIncrementalSync.mockResolvedValue({ status: 'success', lastSyncedAt: '2026-09-01T08:00:00Z' })
     approveTimeMonthChange.mockImplementation(async (employeeId: string, schoolYear: number, month: number) => ({ employeeId, schoolYear, month, status: 'validated', validatedAt: '2026-08-31T10:00:00Z', changeDetectedAt: null, changeCount: 1, approvedAt: '2026-09-06T10:00:00Z' }))
+    getDeclinedResourceEvents.mockResolvedValue([])
+    repairResourceEvent.mockResolvedValue(undefined)
+    runFullResync.mockResolvedValue({ status: 'success', lastSyncedAt: '2026-09-01T08:00:00Z', message: '3 ressource(s) resynchronisée(s) complètement.' })
   })
 
   it('calculates actual hours with the existing contract-specific rules', () => {
@@ -79,6 +88,31 @@ describe('DashboardPage', () => {
     expect(tasks).toHaveTextContent('Moniteur à déterminer')
     expect(tasks).toHaveTextContent('Configuration incomplète')
     expect(within(tasks).getByRole('link', { name: 'Attribuer' })).toHaveAttribute('href', '/a-determiner')
+  })
+
+  it('lists declined resource events as tasks and repairs them on demand', async () => {
+    const startsAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    getDeclinedResourceEvents.mockResolvedValue([
+      { eventId: 'evt-declined', calendarId: 'salle-a@resource.calendar.google.com', resourceName: '(CDII)-Alice Martin', title: 'Cours du mardi', startsAt, endsAt: new Date(Date.parse(startsAt) + 7200000).toISOString(), allDay: false, htmlLink: 'https://calendar.google.com/event?eid=abc' },
+    ])
+    render(<MemoryRouter><DashboardPage /></MemoryRouter>)
+
+    const tasks = await screen.findByRole('region', { name: 'Tâches et alertes' })
+    expect(tasks).toHaveTextContent('Ressource indisponible')
+    expect(tasks).toHaveTextContent('(CDII)-Alice Martin')
+    const seeLink = within(tasks).getByRole('link', { name: 'Ouvrir Cours du mardi dans Google Calendar' })
+    expect(seeLink).toHaveAttribute('href', 'https://calendar.google.com/event?eid=abc')
+    fireEvent.click(within(tasks).getByRole('button', { name: 'Corriger' }))
+    await waitFor(() => expect(repairResourceEvent).toHaveBeenCalledWith('salle-a@resource.calendar.google.com', 'evt-declined'))
+    await waitFor(() => expect(tasks).not.toHaveTextContent('Ressource indisponible'))
+  })
+
+  it('triggers a full resync and reports the outcome', async () => {
+    render(<MemoryRouter><DashboardPage /></MemoryRouter>)
+    await screen.findByRole('button', { name: 'Resynchronisation complète' })
+    fireEvent.click(screen.getByRole('button', { name: 'Resynchronisation complète' }))
+    await waitFor(() => expect(runFullResync).toHaveBeenCalled())
+    expect(await screen.findByText(/3 ressource\(s\) resynchronisée\(s\) complètement/)).toBeInTheDocument()
   })
 
   it('approves a change notification and removes it from tasks', async () => {

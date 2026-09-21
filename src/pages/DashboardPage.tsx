@@ -6,8 +6,8 @@ import { contractTypeLabel } from '../lib/contracts'
 import { formatSyncDate, monthLabel, schoolYearForDate } from '../lib/format'
 import { eventStart, formatEventDate, isEventWithinNextDays } from '../lib/unassignedEvents'
 import { buildWorkerRecap } from '../lib/workerRecap'
-import { approveTimeMonthChange, getCoefficientCalendars, getEmployeeSummaries, getMonthlyTimeValidations, getUnassignedEvents, runIncrementalSync } from '../services/api'
-import type { EmployeeSummary, MonthlyTimeValidation, SyncState, UnassignedEvent, UsedCalendarCoefficient } from '../types'
+import { approveTimeMonthChange, getDeclinedResourceEvents, getCoefficientCalendars, getEmployeeSummaries, getMonthlyTimeValidations, getUnassignedEvents, repairResourceEvent, runFullResync, runIncrementalSync } from '../services/api'
+import type { DeclinedResourceEvent, EmployeeSummary, MonthlyTimeValidation, SyncState, UnassignedEvent, UsedCalendarCoefficient } from '../types'
 import { useAuth } from '../context/AuthContext'
 
 const currentSchoolYear = schoolYearForDate(new Date())
@@ -27,6 +27,9 @@ export function DashboardPage() {
   const [usedCalendars, setUsedCalendars] = useState<UsedCalendarCoefficient[]>([])
   const [unassignedEvents, setUnassignedEvents] = useState<UnassignedEvent[]>([])
   const [validations, setValidations] = useState<MonthlyTimeValidation[]>([])
+  const [declinedEvents, setDeclinedEvents] = useState<DeclinedResourceEvent[]>([])
+  const [repairingEvent, setRepairingEvent] = useState('')
+  const [resyncing, setResyncing] = useState(false)
   const [approvingValidation, setApprovingValidation] = useState('')
   const [validationError, setValidationError] = useState('')
 
@@ -44,6 +47,7 @@ export function DashboardPage() {
     void getCoefficientCalendars().then(setUsedCalendars).catch(() => setUsedCalendars([]))
     void getUnassignedEvents().then(setUnassignedEvents).catch(() => setUnassignedEvents([]))
     void getMonthlyTimeValidations().then(setValidations).catch(() => setValidations([]))
+    void getDeclinedResourceEvents().then(setDeclinedEvents).catch(() => setDeclinedEvents([]))
   }, [user?.role])
 
   const workers = useMemo(() => employees.map((employee) => buildWorkerRecap(employee, schoolYear)), [employees, schoolYear])
@@ -52,7 +56,7 @@ export function DashboardPage() {
   const urgentUnassignedEvents = unassignedEvents.filter((event) => isEventWithinNextDays(event, new Date(), 7)).sort((a, b) => eventStart(a).getTime() - eventStart(b).getTime())
   const pendingValidationChanges = validations.filter((validation) => validation.status === 'changes_pending')
   const configurationTasks = new Set([...calendarsWithoutType.map((calendar) => calendar.googleCalendarId), ...calendarsWithoutCoefficient.map((calendar) => calendar.googleCalendarId)]).size
-  const taskCount = pendingValidationChanges.length + urgentUnassignedEvents.length + configurationTasks
+  const taskCount = pendingValidationChanges.length + urgentUnassignedEvents.length + configurationTasks + declinedEvents.length
 
   const synchronize = async () => {
     setSync((state) => ({ ...state, status: 'syncing' }))
@@ -65,6 +69,32 @@ export function DashboardPage() {
       try { setValidations(await getMonthlyTimeValidations()) } catch { /* Keep the previous tasks. */ }
     } catch {
       setSync((state) => ({ ...state, status: 'error', message: 'La synchronisation a échoué. Vérifiez la connexion Google.' }))
+    }
+  }
+
+  const repairResource = async (declined: DeclinedResourceEvent) => {
+    setRepairingEvent(declined.eventId)
+    setValidationError('')
+    try {
+      await repairResourceEvent(declined.calendarId, declined.eventId)
+      setDeclinedEvents((items) => items.filter((item) => item.eventId !== declined.eventId))
+    } catch (repairError) {
+      setValidationError(repairError instanceof Error ? repairError.message : 'La correction de la ressource a échoué.')
+    } finally {
+      setRepairingEvent('')
+    }
+  }
+
+  const fullResync = async () => {
+    setResyncing(true)
+    try {
+      const result = await runFullResync()
+      setSync(result)
+      void getDeclinedResourceEvents().then(setDeclinedEvents).catch(() => setDeclinedEvents([]))
+    } catch {
+      setSync((state) => ({ ...state, status: 'error', message: 'La resynchronisation complète a échoué.' }))
+    } finally {
+      setResyncing(false)
     }
   }
 
@@ -88,6 +118,7 @@ export function DashboardPage() {
       <div className="overview-heading__actions">
         <label><span>Saison</span><div className="select-wrap"><select aria-label="Saison" value={schoolYear} onChange={(event) => setSchoolYear(Number(event.target.value))}>{[schoolYear - 1, schoolYear, schoolYear + 1].map((year) => <option key={year} value={year}>{year}–{year + 1}</option>)}</select><ChevronDown aria-hidden="true" /></div></label>
         <button className="button button--secondary" onClick={() => void synchronize()} disabled={sync.status === 'syncing'}><RefreshCw className={sync.status === 'syncing' ? 'spin' : ''} aria-hidden="true" />{sync.status === 'syncing' ? 'Synchronisation…' : 'Actualiser Google'}</button>
+        <button className="button button--secondary" onClick={() => void fullResync()} disabled={resyncing || sync.status === 'syncing'} title="Relit chaque calendrier ressource de zéro (utilisé après une correction Google ou un problème de connexion)">{resyncing ? 'Resynchronisation…' : 'Resynchronisation complète'}</button>
       </div>
     </header>
 
@@ -104,6 +135,7 @@ export function DashboardPage() {
           return <article className="task-item task-item--urgent" key={key}><CircleAlert aria-hidden="true" /><div><strong>Modification d’heures à approuver</strong><span>{employee?.name ?? 'Salarié'} · {monthLabel(validation.month)} {validation.month >= 9 ? validation.schoolYear : validation.schoolYear + 1}</span></div><button className="button button--secondary" type="button" onClick={() => void approveValidation(validation)} disabled={approvingValidation === key}>{approvingValidation === key ? 'Approbation…' : 'Approuver'}</button></article>
         })}
         {urgentUnassignedEvents.map((event) => <article className="task-item task-item--urgent" key={event.id}><CircleAlert aria-hidden="true" /><div><strong>Moniteur à déterminer</strong><span>{event.title} · {formatEventDate(event)}</span></div><Link className="button button--secondary" to="/a-determiner">Attribuer</Link></article>)}
+        {declinedEvents.map((declined) => <article className="task-item task-item--warning" key={declined.eventId}><CircleAlert aria-hidden="true" /><div><strong>Ressource indisponible</strong><span>{declined.resourceName} · {declined.title} · {formatEventDate(declined)}</span></div><span className="task-item__actions"><a className="button button--secondary" href={declined.htmlLink} target="_blank" rel="noreferrer" aria-label={`Ouvrir ${declined.title} dans Google Calendar`}>Voir</a><button className="button button--primary" type="button" onClick={() => void repairResource(declined)} disabled={repairingEvent === declined.eventId}>{repairingEvent === declined.eventId ? 'Correction…' : 'Corriger'}</button></span></article>)}
         {configurationTasks > 0 && <article className="task-item task-item--warning"><CircleAlert aria-hidden="true" /><div><strong>Configuration incomplète</strong><span>{calendarsWithoutType.length ? `${calendarsWithoutType.length} type${calendarsWithoutType.length > 1 ? 's' : ''} d’heures à définir` : ''}{calendarsWithoutType.length && calendarsWithoutCoefficient.length ? ' · ' : ''}{calendarsWithoutCoefficient.length ? `${calendarsWithoutCoefficient.length} coefficient${calendarsWithoutCoefficient.length > 1 ? 's' : ''} à définir` : ''}</span></div><Link className="button button--secondary" to="/configuration#calendriers-utilises">Configurer</Link></article>}
       </div>}
     </section>
