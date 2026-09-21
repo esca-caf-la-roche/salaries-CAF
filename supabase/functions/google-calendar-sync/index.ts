@@ -947,7 +947,17 @@ async function repairResourceEvent(admin: SupabaseClient, body: Record<string, u
   // et l'auto-acceptation rejoue, exactement comme la correction manuelle.
   attendees.push({ email: resourceCalendarId });
   await googleJson(token, organizerUrl, "PATCH", { attendees });
-  return { ok: true, updatedEventId: eventId };
+  // Resynchroniser le calendrier de la ressource : la copie locale (raw.attendees)
+  // reflète immédiatement l'acceptation, sinon la tâche réapparaîtrait au rechargement.
+  let resynced = true;
+  try {
+    const { data: calendarRow } = await admin.from("calendars").select("id")
+      .eq("connection_id", connection.id).eq("google_calendar_id", resourceCalendarId).maybeSingle();
+    if (calendarRow?.id) await syncConnection(admin, { id: connection.id }, [String(calendarRow.id)]);
+  } catch {
+    resynced = false;
+  }
+  return { ok: true, updatedEventId: eventId, resynced };
 }
 
 // Resynchronisation complète : force le passage full (attendees/htmlLink inclus) même
