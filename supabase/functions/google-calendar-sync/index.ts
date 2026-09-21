@@ -980,15 +980,10 @@ Deno.serve(async (req) => {
       if (role !== "admin") return json(await syncEmployeeCalendar(admin, user.id, body.mode));
       // Resynchronisation complète automatique quand des événements à venir n'ont
       // encore aucune donnée d'attendees (historique antérieur au champ élargi).
-      const stale = await admin.from("calendar_events")
-        .select("id", { head: true, count: "exact" })
-        .eq("calendars.connection_id", (await sharedConnectionFor(admin)).id)
-        .eq("calendars.is_resource", true)
-        .eq("calendars.enabled", true)
-        .neq("status", "cancelled")
-        .filter("raw->attendees", "is", null)
-        .limit(1);
-      if (!stale.error && (stale.count ?? 0) > 0) {
+      const { data: staleCount, error: staleError } = await admin
+        .rpc("internal_count_stale_attendee_events", { p_connection_id: (await sharedConnectionFor(admin)).id });
+      if (staleError) throw staleError;
+      if (Number(staleCount ?? 0) > 0) {
         const connection = await sharedConnectionFor(admin);
         const { error: resetError } = await admin.from("calendars").update({ sync_token: null })
           .eq("connection_id", connection.id).eq("is_resource", true).eq("enabled", true);
