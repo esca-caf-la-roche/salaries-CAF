@@ -6,7 +6,7 @@ import { contractTypeLabel } from '../lib/contracts'
 import { formatSyncDate, monthLabel, schoolYearForDate } from '../lib/format'
 import { eventStart, formatEventDate, isEventWithinNextDays } from '../lib/unassignedEvents'
 import { buildWorkerRecap } from '../lib/workerRecap'
-import { approveTimeMonthChange, getDeclinedResourceEvents, getCoefficientCalendars, getEmployeeSummaries, getMonthlyTimeValidations, getUnassignedEvents, repairResourceEvent, runFullResync, runIncrementalSync } from '../services/api'
+import { approveTimeMonthChange, getDeclinedResourceEvents, getCoefficientCalendars, getEmployeeSummaries, getMonthlyTimeValidations, getUnassignedEvents, repairResourceEvent, runIncrementalSync } from '../services/api'
 import type { DeclinedResourceEvent, EmployeeSummary, MonthlyTimeValidation, SyncState, UnassignedEvent, UsedCalendarCoefficient } from '../types'
 import { useAuth } from '../context/AuthContext'
 
@@ -29,7 +29,6 @@ export function DashboardPage() {
   const [validations, setValidations] = useState<MonthlyTimeValidation[]>([])
   const [declinedEvents, setDeclinedEvents] = useState<DeclinedResourceEvent[]>([])
   const [repairingEvent, setRepairingEvent] = useState('')
-  const [resyncing, setResyncing] = useState(false)
   const [approvingValidation, setApprovingValidation] = useState('')
   const [validationError, setValidationError] = useState('')
 
@@ -67,6 +66,7 @@ export function DashboardPage() {
       try { setUsedCalendars(await getCoefficientCalendars()) } catch { /* Keep the previous tasks. */ }
       try { setUnassignedEvents(await getUnassignedEvents()) } catch { /* Keep the previous tasks. */ }
       try { setValidations(await getMonthlyTimeValidations()) } catch { /* Keep the previous tasks. */ }
+      try { setDeclinedEvents(await getDeclinedResourceEvents()) } catch { /* Keep the previous tasks. */ }
     } catch {
       setSync((state) => ({ ...state, status: 'error', message: 'La synchronisation a échoué. Vérifiez la connexion Google.' }))
     }
@@ -82,19 +82,6 @@ export function DashboardPage() {
       setValidationError(repairError instanceof Error ? repairError.message : 'La correction de la ressource a échoué.')
     } finally {
       setRepairingEvent('')
-    }
-  }
-
-  const fullResync = async () => {
-    setResyncing(true)
-    try {
-      const result = await runFullResync()
-      setSync(result)
-      void getDeclinedResourceEvents().then(setDeclinedEvents).catch(() => setDeclinedEvents([]))
-    } catch {
-      setSync((state) => ({ ...state, status: 'error', message: 'La resynchronisation complète a échoué.' }))
-    } finally {
-      setResyncing(false)
     }
   }
 
@@ -118,7 +105,6 @@ export function DashboardPage() {
       <div className="overview-heading__actions">
         <label><span>Saison</span><div className="select-wrap"><select aria-label="Saison" value={schoolYear} onChange={(event) => setSchoolYear(Number(event.target.value))}>{[schoolYear - 1, schoolYear, schoolYear + 1].map((year) => <option key={year} value={year}>{year}–{year + 1}</option>)}</select><ChevronDown aria-hidden="true" /></div></label>
         <button className="button button--secondary" onClick={() => void synchronize()} disabled={sync.status === 'syncing'}><RefreshCw className={sync.status === 'syncing' ? 'spin' : ''} aria-hidden="true" />{sync.status === 'syncing' ? 'Synchronisation…' : 'Actualiser Google'}</button>
-        <button className="button button--secondary" onClick={() => void fullResync()} disabled={resyncing || sync.status === 'syncing'} title="Relit chaque calendrier ressource de zéro (utilisé après une correction Google ou un problème de connexion)">{resyncing ? 'Resynchronisation…' : 'Resynchronisation complète'}</button>
       </div>
     </header>
 

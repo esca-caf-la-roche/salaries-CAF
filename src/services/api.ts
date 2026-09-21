@@ -346,27 +346,6 @@ export async function repairResourceEvent(resourceCalendarId: string, eventId: s
   if (error) await throwFunctionError(error, 'La correction de la ressource a échoué.')
 }
 
-export async function runFullResync(): Promise<SyncState> {
-  if (isDemoMode || !supabase) {
-    await pause(850)
-    return { status: 'success', lastSyncedAt: new Date().toISOString(), message: 'Resynchronisation complète simulée (mode démonstration).' }
-  }
-  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
-    body: { action: 'resyncAll' },
-  })
-  if (error) await throwFunctionError(error, 'La resynchronisation complète a échoué.')
-  const results = Array.isArray(data?.results) ? data.results : []
-  const failed = results.filter((result: { error?: string }) => result.error)
-  const synced = results.length - failed.length
-  return {
-    status: failed.length ? 'error' : 'success',
-    lastSyncedAt: new Date().toISOString(),
-    message: failed.length
-      ? `${synced} ressource(s) resynchronisée(s), ${failed.length} en erreur.`
-      : `${synced} ressource(s) resynchronisée(s) complètement.`,
-  }
-}
-
 export async function getEmployeeSummaries(schoolYear: number): Promise<EmployeeSummary[]> {
   if (isDemoMode || !supabase) {
     await pause()

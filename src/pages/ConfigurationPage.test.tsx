@@ -82,6 +82,19 @@ describe('ConfigurationPage', () => {
     expect(await screen.findByRole('button', { name: 'Connecter Google' })).toBeInTheDocument()
   })
 
+  it('explains the account mismatch when the callback reports an already connected account', () => {
+    window.history.replaceState({}, '', '/configuration?google=error&reason=google_account_already_connected&connected=coursescalade%40caflarochebonneville.fr')
+    render(<ConfigurationPage />)
+    expect(screen.getByText(/Un compte Google est déjà connecté \(coursescalade@caflarochebonneville\.fr\)/)).toBeInTheDocument()
+    expect(window.location.search).toBe('')
+  })
+
+  it('confirms the connection when the callback reports success', () => {
+    window.history.replaceState({}, '', '/configuration?google=connected')
+    render(<ConfigurationPage />)
+    expect(screen.getByText(/Compte Google de l’association connecté/)).toBeInTheDocument()
+  })
+
   it('shows employee resources and the seven Kanban destinations without dropdowns', async () => {
     render(<ConfigurationPage />)
 

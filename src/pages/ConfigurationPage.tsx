@@ -196,6 +196,7 @@ export function ConfigurationPage() {
   const [movedCalendarId, setMovedCalendarId] = useState<string | null>(null)
   const [kanbanAnnouncement, setKanbanAnnouncement] = useState('')
   const [message, setMessage] = useState('')
+  const [paramsAlert, setParamsAlert] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
   const [resourceMessage, setResourceMessage] = useState('')
   const [validationAlertEmail, setValidationAlertEmail] = useState('')
   const [alertEmailMessage, setAlertEmailMessage] = useState('')
@@ -205,6 +206,20 @@ export function ConfigurationPage() {
   useEffect(() => { void getCoefficientCalendars().then(setCoefficientCalendars).catch(() => setMessage('Les calendriers utilisés n\'ont pas pu être chargés.')).finally(() => setCoefficientsLoading(false)) }, [])
   useEffect(() => { void getValidationAlertEmail().then(setValidationAlertEmail).catch(() => setAlertEmailMessage('Le destinataire des alertes n’a pas pu être chargé.')) }, [])
   useEffect(() => { void getGoogleConnection().then(setGoogleConnection).catch(() => setGoogleConnection({ connected: false, email: null, connectedAt: null })) }, [])
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const google = params.get('google')
+    if (!google) return
+    if (google === 'connected') {
+      setParamsAlert({ tone: 'success', text: 'Compte Google de l’association connecté. Les nouvelles permissions sont actives.' })
+      void getGoogleConnection().then(setGoogleConnection).catch(() => undefined)
+    } else if (params.get('reason') === 'google_account_already_connected') {
+      setParamsAlert({ tone: 'error', text: `Un compte Google est déjà connecté (${params.get('connected') ?? 'compte de l’association'}). Reconnectez-vous avec ce même compte pour renouveler les permissions.` })
+    } else {
+      setParamsAlert({ tone: 'error', text: 'La connexion Google a échoué. Réessayez depuis cette page.' })
+    }
+    window.history.replaceState({}, '', window.location.pathname)
+  }, [])
   useEffect(() => {
     if (!movedCalendarId) return
     const movedCard = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-calendar-id]'))
@@ -380,6 +395,7 @@ export function ConfigurationPage() {
         </div>
       </header>
       {message && <div className="alert alert--success" role="status">{message}</div>}
+      {paramsAlert && <div className={`alert ${paramsAlert.tone === 'error' ? 'alert--error' : 'alert--success'}`} role="status">{paramsAlert.text}</div>}
       <section className="setup-note">
         <span><CircleAlert aria-hidden="true" /></span>
         <div><strong>Comment fonctionne le calcul ?</strong><p>Les heures annuelles fixent l'objectif du salarié. Chaque calendrier choisit d'abord son niveau de préparation, puis son type d'heures. Pour une ressource marquée (Indep), tous les événements horaires comptent au temps réel, même sans règle de calendrier. Une saison va du 1er septembre au 31 août.</p></div>
