@@ -25,8 +25,8 @@ describe('Layout mobile navigation', () => {
     const bar = screen.getByRole('navigation', { name: 'Navigation mobile' })
     expect(bar.querySelectorAll('a')).toHaveLength(4)
     expect(screen.getByRole('button', { name: 'Plus de navigation' })).toBeInTheDocument()
-    for (const label of ['Vue', 'Suivi', 'Remplacer', 'Indép.']) {
-      expect(screen.getByText(label)).toBeInTheDocument()
+    for (const label of ['Vue', 'Suivi', 'Absences', 'Bulletins']) {
+      expect(within(bar).getByText(label)).toBeInTheDocument()
     }
   })
 
@@ -35,7 +35,9 @@ describe('Layout mobile navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Plus de navigation' }))
     const sheet = screen.getByRole('menu', { name: 'Autres pages' })
     expect(sheet.querySelectorAll('a')).toHaveLength(6)
-    expect(within(sheet).getByText('Absences & remplacements')).toBeInTheDocument()
+    expect(within(sheet).getAllByRole('menuitem').map((link) => link.textContent?.trim())).toEqual([
+      'Gérer les remplacements', 'À déterminer', 'Contacts', 'Indépendants', 'Conversion', 'Configuration',
+    ])
     expect(within(sheet).getByText('Contacts')).toBeInTheDocument()
     expect(within(sheet).getByText('Configuration')).toBeInTheDocument()
     fireEvent.click(within(sheet).getByText('À déterminer'))

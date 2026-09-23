@@ -12,14 +12,14 @@ type MobileNavItem = { to: string; icon: LucideIcon; label: string; shortLabel?:
 const adminPrimaryMobile: MobileNavItem[] = [
   { to: '/vue-ensemble', icon: Gauge, label: "Vue d'ensemble", shortLabel: 'Vue' },
   { to: '/', icon: Sigma, label: 'Suivi des heures', shortLabel: 'Suivi', end: true },
-  { to: '/gerer-remplacements', icon: RefreshCcw, label: 'Gérer les remplacements', shortLabel: 'Remplacer' },
-  { to: '/independants', icon: BriefcaseBusiness, label: 'Indépendants', shortLabel: 'Indép.' },
+  { to: '/absences-remplacements', icon: UserRoundCheck, label: 'Absences & remplacements', shortLabel: 'Absences' },
+  { to: '/bulletins', icon: ReceiptText, label: 'Bulletins' },
 ]
 const adminSecondaryMobile: MobileNavItem[] = [
-  { to: '/bulletins', icon: ReceiptText, label: 'Bulletins' },
-  { to: '/absences-remplacements', icon: UserRoundCheck, label: 'Absences & remplacements' },
+  { to: '/gerer-remplacements', icon: RefreshCcw, label: 'Gérer les remplacements' },
   { to: '/a-determiner', icon: CalendarClock, label: 'À déterminer' },
   { to: '/contacts', icon: ContactRound, label: 'Contacts' },
+  { to: '/independants', icon: BriefcaseBusiness, label: 'Indépendants' },
   { to: '/conversion', icon: ArrowLeftRight, label: 'Conversion' },
   { to: '/configuration', icon: CalendarRange, label: 'Configuration' },
 ]
