@@ -11,6 +11,7 @@ import { IndependentEventsPage } from './pages/IndependentEventsPage'
 import { UnassignedEventsPage } from './pages/UnassignedEventsPage'
 import { TimeTrackingPage } from './pages/TimeTrackingPage'
 import { TimeConversionPage } from './pages/TimeConversionPage'
+import { PayrollEntryPage } from './pages/PayrollEntryPage'
 
 function ProtectedLayout() {
   const { user, loading } = useAuth()
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="vue-ensemble" element={<AdminRoute><DashboardPage /></AdminRoute>} />
         <Route path="absences-remplacements" element={<AdminRoute><ReplacementAbsencePage /></AdminRoute>} />
         <Route path="gerer-remplacements" element={<AdminRoute><ReplacementManagementPage /></AdminRoute>} />
+        <Route path="bulletins" element={<AdminRoute><PayrollEntryPage /></AdminRoute>} />
         <Route path="independants" element={<AdminRoute><IndependentEventsPage /></AdminRoute>} />
         <Route path="a-determiner" element={<AdminRoute><UnassignedEventsPage /></AdminRoute>} />
         <Route path="configuration" element={<AdminRoute><ConfigurationPage /></AdminRoute>} />

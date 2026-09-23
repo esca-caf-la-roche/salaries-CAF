@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeftRight, BriefcaseBusiness, CalendarClock, CalendarRange, Gauge, LogOut, RefreshCcw, Settings, Sigma, UserRoundCheck, Ellipsis, X } from 'lucide-react'
+import { ArrowLeftRight, BriefcaseBusiness, CalendarClock, CalendarRange, Gauge, LogOut, RefreshCcw, Settings, Sigma, UserRoundCheck, Ellipsis, X, ReceiptText } from 'lucide-react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import type { LucideIcon } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -16,6 +16,7 @@ const adminPrimaryMobile: MobileNavItem[] = [
   { to: '/independants', icon: BriefcaseBusiness, label: 'Indépendants', shortLabel: 'Indép.' },
 ]
 const adminSecondaryMobile: MobileNavItem[] = [
+  { to: '/bulletins', icon: ReceiptText, label: 'Bulletins' },
   { to: '/absences-remplacements', icon: UserRoundCheck, label: 'Absences & remplacements' },
   { to: '/a-determiner', icon: CalendarClock, label: 'À déterminer' },
   { to: '/conversion', icon: ArrowLeftRight, label: 'Conversion' },
@@ -60,6 +61,7 @@ export function Layout() {
           {user?.role === 'admin' && <NavLink to="/vue-ensemble"><Gauge aria-hidden="true" /> <span>Vue d'ensemble</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/absences-remplacements"><UserRoundCheck aria-hidden="true" /> <span>Absences & remplacements</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/gerer-remplacements"><RefreshCcw aria-hidden="true" /> <span>Gérer les remplacements</span></NavLink>}
+          {user?.role === 'admin' && <NavLink to="/bulletins"><ReceiptText aria-hidden="true" /> <span>Bulletins</span></NavLink>}
           <NavLink to="/" end><Sigma aria-hidden="true" /> <span>Suivi des heures</span></NavLink>
           {user?.role === 'admin' && <NavLink to="/independants"><BriefcaseBusiness aria-hidden="true" /><span>Indépendants</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/a-determiner"><CalendarClock aria-hidden="true" /> <span>À déterminer</span></NavLink>}

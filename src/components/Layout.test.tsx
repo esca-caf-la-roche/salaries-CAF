@@ -34,7 +34,7 @@ describe('Layout mobile navigation', () => {
     renderLayout('/vue-ensemble')
     fireEvent.click(screen.getByRole('button', { name: 'Plus de navigation' }))
     const sheet = screen.getByRole('menu', { name: 'Autres pages' })
-    expect(sheet.querySelectorAll('a')).toHaveLength(4)
+    expect(sheet.querySelectorAll('a')).toHaveLength(5)
     expect(within(sheet).getByText('Absences & remplacements')).toBeInTheDocument()
     expect(within(sheet).getByText('Ressources')).toBeInTheDocument()
     fireEvent.click(within(sheet).getByText('À déterminer'))

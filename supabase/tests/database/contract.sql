@@ -3,6 +3,13 @@ begin;
 
 do $$
 begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'employee_monthly_payroll'
+      and column_name = 'bulk_recorded_at' and data_type = 'timestamp with time zone'
+  ) then
+    raise exception 'Le marqueur de saisie mensuelle groupée est absent';
+  end if;
   if not exists (select 1 from pg_class where oid = 'public.monthly_hours'::regclass) then
     raise exception 'Vue monthly_hours absente';
   end if;

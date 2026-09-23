@@ -92,6 +92,18 @@ export interface MonthlyPayrollEntry {
   sickLeaveHundredthHours: number
 }
 
+export interface PayrollWorkerEntry {
+  employeeId: string
+  employeeName: string
+  paidHundredthHours: number
+}
+
+export interface RecordedPayrollMonth {
+  schoolYear: number
+  month: number
+  employeeCount: number
+}
+
 export interface MonthlyTimeValidation {
   employeeId: string
   schoolYear: number

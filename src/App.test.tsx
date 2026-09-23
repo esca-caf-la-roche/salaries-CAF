@@ -15,6 +15,7 @@ vi.mock('./pages/ReplacementAbsencePage', () => ({ ReplacementAbsencePage: () =>
 vi.mock('./pages/ConfigurationPage', () => ({ ConfigurationPage: () => null }))
 vi.mock('./pages/IndependentEventsPage', () => ({ IndependentEventsPage: () => null }))
 vi.mock('./pages/UnassignedEventsPage', () => ({ UnassignedEventsPage: () => null }))
+vi.mock('./pages/PayrollEntryPage', () => ({ PayrollEntryPage: () => <h1>Bulletins admin</h1> }))
 vi.mock('./pages/LoginPage', () => ({ LoginPage: () => null }))
 
 describe('role-based routes', () => {
@@ -44,6 +45,13 @@ describe('role-based routes', () => {
     expect(await screen.findByRole('heading', { name: 'Suivi personnel' })).toBeInTheDocument()
   })
 
+  it('restricts the payslip entry page to administrators', async () => {
+    currentUser = { id: 'employee-1', role: 'employee', displayName: 'Salarié', email: 'employee@example.fr' }
+    render(<MemoryRouter initialEntries={['/bulletins']}><App /></MemoryRouter>)
+    expect(await screen.findByRole('heading', { name: 'Suivi personnel' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Bulletins' })).not.toBeInTheDocument()
+  })
+
   it('makes conversion available to every authenticated role', async () => {
     currentUser = { id: 'employee-1', role: 'employee', displayName: 'Salarié', email: 'employee@example.fr' }
     render(<MemoryRouter initialEntries={['/conversion']}><App /></MemoryRouter>)
@@ -59,7 +67,7 @@ describe('role-based routes', () => {
     await screen.findByRole('heading', { name: 'Vue admin' })
     const navigation = screen.getByRole('navigation', { name: 'Navigation principale' })
     expect(within(navigation).getAllByRole('link').map((link) => link.textContent?.trim())).toEqual([
-      "Vue d'ensemble", 'Absences & remplacements', 'Gérer les remplacements', 'Suivi des heures', 'Indépendants', 'À déterminer', 'Conversion', 'Configuration',
+      "Vue d'ensemble", 'Absences & remplacements', 'Gérer les remplacements', 'Bulletins', 'Suivi des heures', 'Indépendants', 'À déterminer', 'Conversion', 'Configuration',
     ])
   })
 })

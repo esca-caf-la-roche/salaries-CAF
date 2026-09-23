@@ -9,6 +9,8 @@ import type {
   EmployeeSummary,
   MonthlyEventHour,
   MonthlyPayrollEntry,
+  PayrollWorkerEntry,
+  RecordedPayrollMonth,
   MonthlyTimeValidation,
   UserNotification,
   ValidationHistoryEvent,
@@ -613,4 +615,76 @@ export async function saveAnnualTracking(
     { onConflict: 'employee_id,school_year,month' },
   )
   if (payrollError) throw payrollError
+}
+
+export async function getPayrollEntryPage(schoolYear: number, month: number): Promise<{
+  workers: PayrollWorkerEntry[]
+  recordedMonths: RecordedPayrollMonth[]
+}> {
+  if (isDemoMode || !supabase) {
+    await pause()
+    const workers = demoEmployees
+      .filter((employee) => employee.contractType !== 'INDEP')
+      .map((employee) => ({
+        employeeId: employee.id,
+        employeeName: employee.name,
+        paidHundredthHours: employee.payroll.find((entry) => entry.month === month)?.paidHundredthHours ?? 0,
+      }))
+    return { workers, recordedMonths: [{ schoolYear, month, employeeCount: workers.length }] }
+  }
+
+  const [employeesResult, payrollResult, recordedResult] = await Promise.all([
+    supabase.from('employees')
+      .select('id, display_name, active')
+      .eq('is_unassigned_resource', false)
+      .neq('contract_type', 'INDEP')
+      .order('display_name'),
+    supabase.from('employee_monthly_payroll')
+      .select('employee_id, paid_hundredth_hours')
+      .eq('school_year', schoolYear)
+      .eq('month', month),
+    supabase.from('employee_monthly_payroll')
+      .select('school_year, month, employee_id')
+      .not('bulk_recorded_at', 'is', null)
+      .order('school_year', { ascending: false })
+      .order('month', { ascending: false }),
+  ])
+  if (employeesResult.error) throw employeesResult.error
+  if (payrollResult.error) throw payrollResult.error
+  if (recordedResult.error) throw recordedResult.error
+
+  const paidByEmployee = new Map((payrollResult.data ?? []).map((row) => [row.employee_id, Number(row.paid_hundredth_hours)]))
+  const workers = (employeesResult.data ?? [])
+    .filter((employee) => employee.active || paidByEmployee.has(employee.id))
+    .map((employee) => ({
+    employeeId: employee.id,
+    employeeName: employee.display_name,
+    paidHundredthHours: paidByEmployee.get(employee.id) ?? 0,
+    }))
+  const recorded = new Map<string, RecordedPayrollMonth>()
+  for (const row of recordedResult.data ?? []) {
+    const key = `${row.school_year}-${row.month}`
+    const current = recorded.get(key)
+    recorded.set(key, {
+      schoolYear: Number(row.school_year),
+      month: Number(row.month),
+      employeeCount: (current?.employeeCount ?? 0) + 1,
+    })
+  }
+  return { workers, recordedMonths: [...recorded.values()] }
+}
+
+export async function savePayrollMonth(schoolYear: number, month: number, workers: PayrollWorkerEntry[]): Promise<void> {
+  if (isDemoMode || !supabase) { await pause(); return }
+  const { error } = await supabase.from('employee_monthly_payroll').upsert(
+    workers.map((worker) => ({
+      employee_id: worker.employeeId,
+      school_year: schoolYear,
+      month,
+      paid_hundredth_hours: worker.paidHundredthHours,
+      bulk_recorded_at: new Date().toISOString(),
+    })),
+    { onConflict: 'employee_id,school_year,month' },
+  )
+  if (error) throw error
 }
