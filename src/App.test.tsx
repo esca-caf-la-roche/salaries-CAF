@@ -16,6 +16,7 @@ vi.mock('./pages/ConfigurationPage', () => ({ ConfigurationPage: () => null }))
 vi.mock('./pages/IndependentEventsPage', () => ({ IndependentEventsPage: () => null }))
 vi.mock('./pages/UnassignedEventsPage', () => ({ UnassignedEventsPage: () => null }))
 vi.mock('./pages/PayrollEntryPage', () => ({ PayrollEntryPage: () => <h1>Bulletins admin</h1> }))
+vi.mock('./pages/ContactsPage', () => ({ ContactsPage: () => <h1>Contacts admin</h1> }))
 vi.mock('./pages/LoginPage', () => ({ LoginPage: () => null }))
 
 describe('role-based routes', () => {
@@ -52,6 +53,13 @@ describe('role-based routes', () => {
     expect(screen.queryByRole('link', { name: 'Bulletins' })).not.toBeInTheDocument()
   })
 
+  it('restricts the replacement directory to administrators', async () => {
+    currentUser = { id: 'employee-1', role: 'employee', displayName: 'Salarié', email: 'employee@example.fr' }
+    render(<MemoryRouter initialEntries={['/contacts']}><App /></MemoryRouter>)
+    expect(await screen.findByRole('heading', { name: 'Suivi personnel' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Contacts' })).not.toBeInTheDocument()
+  })
+
   it('makes conversion available to every authenticated role', async () => {
     currentUser = { id: 'employee-1', role: 'employee', displayName: 'Salarié', email: 'employee@example.fr' }
     render(<MemoryRouter initialEntries={['/conversion']}><App /></MemoryRouter>)
@@ -67,7 +75,7 @@ describe('role-based routes', () => {
     await screen.findByRole('heading', { name: 'Vue admin' })
     const navigation = screen.getByRole('navigation', { name: 'Navigation principale' })
     expect(within(navigation).getAllByRole('link').map((link) => link.textContent?.trim())).toEqual([
-      "Vue d'ensemble", 'Absences & remplacements', 'Gérer les remplacements', 'Bulletins', 'Suivi des heures', 'Indépendants', 'À déterminer', 'Conversion', 'Configuration',
+      "Vue d'ensemble", 'Suivi des heures', 'Absences & remplacements', 'Bulletins', 'Gérer les remplacements', 'À déterminer', 'Contacts', 'Indépendants', 'Conversion', 'Configuration',
     ])
   })
 })

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeftRight, BriefcaseBusiness, CalendarClock, CalendarRange, Gauge, LogOut, RefreshCcw, Settings, Sigma, UserRoundCheck, Ellipsis, X, ReceiptText } from 'lucide-react'
+import { ArrowLeftRight, BriefcaseBusiness, CalendarClock, CalendarRange, ContactRound, Gauge, LogOut, RefreshCcw, Settings, Sigma, UserRoundCheck, Ellipsis, X, ReceiptText } from 'lucide-react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import type { LucideIcon } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -19,8 +19,9 @@ const adminSecondaryMobile: MobileNavItem[] = [
   { to: '/bulletins', icon: ReceiptText, label: 'Bulletins' },
   { to: '/absences-remplacements', icon: UserRoundCheck, label: 'Absences & remplacements' },
   { to: '/a-determiner', icon: CalendarClock, label: 'À déterminer' },
+  { to: '/contacts', icon: ContactRound, label: 'Contacts' },
   { to: '/conversion', icon: ArrowLeftRight, label: 'Conversion' },
-  { to: '/configuration', icon: CalendarRange, label: 'Ressources' },
+  { to: '/configuration', icon: CalendarRange, label: 'Configuration' },
 ]
 const employeePrimaryMobile: MobileNavItem[] = [
   { to: '/', icon: Sigma, label: 'Suivi des heures', shortLabel: 'Suivi', end: true },
@@ -59,12 +60,13 @@ export function Layout() {
         <Logo />
         <nav className="main-nav" aria-label="Navigation principale">
           {user?.role === 'admin' && <NavLink to="/vue-ensemble"><Gauge aria-hidden="true" /> <span>Vue d'ensemble</span></NavLink>}
-          {user?.role === 'admin' && <NavLink to="/absences-remplacements"><UserRoundCheck aria-hidden="true" /> <span>Absences & remplacements</span></NavLink>}
-          {user?.role === 'admin' && <NavLink to="/gerer-remplacements"><RefreshCcw aria-hidden="true" /> <span>Gérer les remplacements</span></NavLink>}
-          {user?.role === 'admin' && <NavLink to="/bulletins"><ReceiptText aria-hidden="true" /> <span>Bulletins</span></NavLink>}
           <NavLink to="/" end><Sigma aria-hidden="true" /> <span>Suivi des heures</span></NavLink>
-          {user?.role === 'admin' && <NavLink to="/independants"><BriefcaseBusiness aria-hidden="true" /><span>Indépendants</span></NavLink>}
+          {user?.role === 'admin' && <NavLink to="/absences-remplacements"><UserRoundCheck aria-hidden="true" /> <span>Absences & remplacements</span></NavLink>}
+          {user?.role === 'admin' && <NavLink to="/bulletins"><ReceiptText aria-hidden="true" /> <span>Bulletins</span></NavLink>}
+          {user?.role === 'admin' && <NavLink to="/gerer-remplacements"><RefreshCcw aria-hidden="true" /> <span>Gérer les remplacements</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/a-determiner"><CalendarClock aria-hidden="true" /> <span>À déterminer</span></NavLink>}
+          {user?.role === 'admin' && <NavLink to="/contacts"><ContactRound aria-hidden="true" /> <span>Contacts</span></NavLink>}
+          {user?.role === 'admin' && <NavLink to="/independants"><BriefcaseBusiness aria-hidden="true" /><span>Indépendants</span></NavLink>}
           <NavLink to="/conversion"><ArrowLeftRight aria-hidden="true" /> <span>Conversion</span></NavLink>
           {user?.role === 'admin' && <NavLink to="/configuration"><Settings aria-hidden="true" /> <span>Configuration</span></NavLink>}
         </nav>

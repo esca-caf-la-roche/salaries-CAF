@@ -23,9 +23,72 @@ import type {
   ReplacementEvent,
   ReplacementResource,
   DeclinedResourceEvent,
+  ReplacementContact,
+  ReplacementContactInput,
 } from '../types'
 
 const pause = (milliseconds = 180) => new Promise((resolve) => window.setTimeout(resolve, milliseconds))
+
+let demoReplacementContacts: ReplacementContact[] = []
+
+function mapReplacementContact(row: Record<string, unknown>): ReplacementContact {
+  return {
+    id: String(row.id),
+    lastName: String(row.last_name),
+    firstName: String(row.first_name),
+    email: String(row.email),
+    phone: String(row.phone),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  }
+}
+
+export async function getReplacementContacts(): Promise<ReplacementContact[]> {
+  if (isDemoMode || !supabase) { await pause(); return structuredClone(demoReplacementContacts) }
+  const { data, error } = await supabase.from('replacement_contacts')
+    .select('id, last_name, first_name, email, phone, created_at, updated_at')
+    .order('last_name').order('first_name')
+  if (error) throw error
+  return (data ?? []).map(mapReplacementContact)
+}
+
+export async function createReplacementContact(input: ReplacementContactInput): Promise<ReplacementContact> {
+  if (isDemoMode || !supabase) {
+    await pause()
+    const now = new Date().toISOString()
+    const contact = { ...input, id: crypto.randomUUID(), createdAt: now, updatedAt: now }
+    demoReplacementContacts.push(contact)
+    return structuredClone(contact)
+  }
+  const { data, error } = await supabase.from('replacement_contacts').insert({
+    last_name: input.lastName.trim(), first_name: input.firstName.trim(),
+    email: input.email.trim(), phone: input.phone.trim(),
+  }).select('id, last_name, first_name, email, phone, created_at, updated_at').single()
+  if (error) throw error
+  return mapReplacementContact(data)
+}
+
+export async function updateReplacementContact(id: string, input: ReplacementContactInput): Promise<ReplacementContact> {
+  if (isDemoMode || !supabase) {
+    await pause()
+    const index = demoReplacementContacts.findIndex((contact) => contact.id === id)
+    if (index < 0) throw new Error('Contact introuvable.')
+    demoReplacementContacts[index] = { ...demoReplacementContacts[index], ...input, updatedAt: new Date().toISOString() }
+    return structuredClone(demoReplacementContacts[index])
+  }
+  const { data, error } = await supabase.from('replacement_contacts').update({
+    last_name: input.lastName.trim(), first_name: input.firstName.trim(),
+    email: input.email.trim(), phone: input.phone.trim(), updated_at: new Date().toISOString(),
+  }).eq('id', id).select('id, last_name, first_name, email, phone, created_at, updated_at').single()
+  if (error) throw error
+  return mapReplacementContact(data)
+}
+
+export async function deleteReplacementContact(id: string): Promise<void> {
+  if (isDemoMode || !supabase) { await pause(); demoReplacementContacts = demoReplacementContacts.filter((contact) => contact.id !== id); return }
+  const { error } = await supabase.from('replacement_contacts').delete().eq('id', id)
+  if (error) throw error
+}
 
 async function throwFunctionError(error: unknown, fallback: string): Promise<never> {
   if (error instanceof FunctionsHttpError) {

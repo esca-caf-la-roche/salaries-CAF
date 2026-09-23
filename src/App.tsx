@@ -12,6 +12,7 @@ import { UnassignedEventsPage } from './pages/UnassignedEventsPage'
 import { TimeTrackingPage } from './pages/TimeTrackingPage'
 import { TimeConversionPage } from './pages/TimeConversionPage'
 import { PayrollEntryPage } from './pages/PayrollEntryPage'
+import { ContactsPage } from './pages/ContactsPage'
 
 function ProtectedLayout() {
   const { user, loading } = useAuth()
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="bulletins" element={<AdminRoute><PayrollEntryPage /></AdminRoute>} />
         <Route path="independants" element={<AdminRoute><IndependentEventsPage /></AdminRoute>} />
         <Route path="a-determiner" element={<AdminRoute><UnassignedEventsPage /></AdminRoute>} />
+        <Route path="contacts" element={<AdminRoute><ContactsPage /></AdminRoute>} />
         <Route path="configuration" element={<AdminRoute><ConfigurationPage /></AdminRoute>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

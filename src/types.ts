@@ -209,3 +209,15 @@ export interface DeclinedResourceEvent {
   allDay: boolean
   htmlLink: string
 }
+
+export interface ReplacementContact {
+  id: string
+  lastName: string
+  firstName: string
+  email: string
+  phone: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type ReplacementContactInput = Omit<ReplacementContact, 'id' | 'createdAt' | 'updatedAt'>
