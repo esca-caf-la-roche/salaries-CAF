@@ -22,6 +22,28 @@ vi.mock('./pages/LoginPage', () => ({ LoginPage: () => null }))
 describe('role-based routes', () => {
   afterEach(cleanup)
 
+  it('opens the overview from the home URL for an administrator', async () => {
+    currentUser = { id: 'admin-1', role: 'admin', displayName: 'Admin', email: 'admin@example.fr' }
+    render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>)
+
+    expect(await screen.findByRole('heading', { name: 'Vue admin' })).toBeInTheDocument()
+  })
+
+  it('opens personal time tracking from the home URL for an employee', async () => {
+    currentUser = { id: 'employee-1', role: 'employee', displayName: 'Salarié', email: 'employee@example.fr' }
+    render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>)
+
+    expect(await screen.findByRole('heading', { name: 'Suivi personnel' })).toBeInTheDocument()
+  })
+
+  it('keeps time tracking available to an administrator on its dedicated URL', async () => {
+    currentUser = { id: 'admin-1', role: 'admin', displayName: 'Admin', email: 'admin@example.fr' }
+    render(<MemoryRouter initialEntries={['/suivi-heures']}><App /></MemoryRouter>)
+
+    expect(await screen.findByRole('heading', { name: 'Suivi personnel' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Suivi des heures' })).toHaveAttribute('href', '/suivi-heures')
+  })
+
   it('redirects an employee away from the overview and hides its navigation entry', async () => {
     currentUser = { id: 'employee-1', role: 'employee', displayName: 'Salarié', email: 'employee@example.fr' }
     render(<MemoryRouter initialEntries={['/vue-ensemble']}><App /></MemoryRouter>)

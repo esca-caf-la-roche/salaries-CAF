@@ -26,12 +26,18 @@ function AdminRoute({ children }: { children: ReactNode }) {
   return user?.role === 'admin' ? children : <Navigate to="/" replace />
 }
 
+function HomeRoute() {
+  const { user } = useAuth()
+  return <Navigate to={user?.role === 'admin' ? '/vue-ensemble' : '/suivi-heures'} replace />
+}
+
 export default function App() {
   return (
     <Routes>
       <Route path="/connexion" element={<LoginPage />} />
       <Route element={<ProtectedLayout />}>
-        <Route index element={<TimeTrackingPage />} />
+        <Route index element={<HomeRoute />} />
+        <Route path="suivi-heures" element={<TimeTrackingPage />} />
         <Route path="conversion" element={<TimeConversionPage />} />
         <Route path="vue-ensemble" element={<AdminRoute><DashboardPage /></AdminRoute>} />
         <Route path="absences-remplacements" element={<AdminRoute><ReplacementAbsencePage /></AdminRoute>} />

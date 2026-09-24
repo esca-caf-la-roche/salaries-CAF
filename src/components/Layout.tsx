@@ -11,7 +11,7 @@ type MobileNavItem = { to: string; icon: LucideIcon; label: string; shortLabel?:
 // Bonne pratique mobile : 3 à 5 destinations dans la barre, le reste dans « Plus ».
 const adminPrimaryMobile: MobileNavItem[] = [
   { to: '/vue-ensemble', icon: Gauge, label: "Vue d'ensemble", shortLabel: 'Vue' },
-  { to: '/', icon: Sigma, label: 'Suivi des heures', shortLabel: 'Suivi', end: true },
+  { to: '/suivi-heures', icon: Sigma, label: 'Suivi des heures', shortLabel: 'Suivi' },
   { to: '/absences-remplacements', icon: UserRoundCheck, label: 'Absences & remplacements', shortLabel: 'Absences' },
   { to: '/bulletins', icon: ReceiptText, label: 'Bulletins' },
 ]
@@ -24,7 +24,7 @@ const adminSecondaryMobile: MobileNavItem[] = [
   { to: '/configuration', icon: CalendarRange, label: 'Configuration' },
 ]
 const employeePrimaryMobile: MobileNavItem[] = [
-  { to: '/', icon: Sigma, label: 'Suivi des heures', shortLabel: 'Suivi', end: true },
+  { to: '/suivi-heures', icon: Sigma, label: 'Suivi des heures', shortLabel: 'Suivi' },
   { to: '/conversion', icon: ArrowLeftRight, label: 'Conversion', shortLabel: 'Conversion' },
 ]
 
@@ -60,7 +60,7 @@ export function Layout() {
         <Logo />
         <nav className="main-nav" aria-label="Navigation principale">
           {user?.role === 'admin' && <NavLink to="/vue-ensemble"><Gauge aria-hidden="true" /> <span>Vue d'ensemble</span></NavLink>}
-          <NavLink to="/" end><Sigma aria-hidden="true" /> <span>Suivi des heures</span></NavLink>
+          <NavLink to="/suivi-heures"><Sigma aria-hidden="true" /> <span>Suivi des heures</span></NavLink>
           {user?.role === 'admin' && <NavLink to="/absences-remplacements"><UserRoundCheck aria-hidden="true" /> <span>Absences & remplacements</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/bulletins"><ReceiptText aria-hidden="true" /> <span>Bulletins</span></NavLink>}
           {user?.role === 'admin' && <NavLink to="/gerer-remplacements"><RefreshCcw aria-hidden="true" /> <span>Gérer les remplacements</span></NavLink>}

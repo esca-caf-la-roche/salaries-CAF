@@ -2,6 +2,8 @@
 
 Application statique React pour suivre les heures issues de Google Calendar, avant et après application d'un coefficient par ressource. L'interface est déployable sur GitHub Pages ; Supabase gère l'authentification, les données et la synchronisation Google côté serveur.
 
+L'URL d'accueil adapte automatiquement sa destination au rôle connecté : un administrateur arrive sur **Vue d'ensemble**, tandis qu'un salarié arrive sur **Suivi des heures**.
+
 L'authentification utilise exclusivement un OTP e-mail à 6 chiffres. Les administrateurs sont créés manuellement dans **Supabase Auth > Users**, puis reçoivent explicitement le rôle `admin` dans `public.profiles`. Pour les salariés, la page **Configuration** affiche uniquement les calendriers ressources Google : le type de contrat est détecté depuis le préfixe `(CDI)-`, `(CDII)-` ou `(CDD)-` du nom de la ressource ; l'administrateur renseigne ensuite le volume annuel et l'e-mail de connexion, puis le compte Auth correspondant est provisionné côté serveur.
 
 Les ressources dont le nom contient **`(Indep)`** (sans distinction de casse) sont détectées comme **Indépendant**. Elles nécessitent un e-mail de connexion mais aucun volume annuel. Tous leurs événements horaires non annulés comptent à leur durée réelle, même lorsque le calendrier n'a aucune règle ou est classé en absence : aucune majoration de préparation ni heure automatique n'est ajoutée. Les journées entières restent exclues. La synthèse affiche les heures réalisées et leur comparaison avec les heures saisies au bulletin, sans garantie annuelle.
@@ -24,6 +26,15 @@ La page **Suivi des heures** propose désormais deux lectures complémentaires :
 Les saisies contractuelles et de bulletin sont conservées par salarié et par saison, en minutes entières. Pour un CDI, les heures réelles correspondent à `contrat + fériés + remplacements - absences` et le calcul garantit au minimum le volume annuel du contrat. Les jours fériés métropolitains viennent de `calendrier.api.gouv.fr` : ils restent tous visibles, mais seuls ceux du lundi au vendredi comptent. Chaque jour ouvré vaut `7 h × coefficient`, avec `contrat annuel / référence temps plein` tant que les heures réelles restent sous le contrat, puis `heures réelles / référence temps plein` une fois le contrat atteint. Les congés représentent 10 % de la base garantie. Pour un CDII, les fériés configurés dans Google Calendar restent inclus dans les heures réalisées et aucun congé supplémentaire n'est ajouté. La formule active est rappelée directement sous la synthèse pour rester contrôlable.
 
 La synthèse annuelle regroupe les totaux contrat, absences, remplacements et fériés dans une seule card. Elle précise que les coefficients sont inclus et décompose numériquement le passage de ces rubriques aux heures réalisées, puis au reste à réaliser. Le calcul final affiche `contrat - heures réalisées` lorsqu'il reste des heures, ou `heures réalisées - contrat = +surplus` en cas de dépassement. Le graphe mensuel affiche les heures pondérées. Le reste à réaliser est signalé en rouge tant qu'il est positif ; une fois le contrat atteint, la card devient verte, reste à `0:00` et affiche les heures effectuées en plus du contrat. Le bouton **Actualiser Google** relance la synchronisation puis recharge les données du suivi.
+
+## Déclencheurs de la synchronisation Google Calendar
+
+- Les boutons **Actualiser Google** lancent une synchronisation à la demande : toutes les ressources actives pour un administrateur, uniquement sa ressource pour un salarié CDI.
+- L'ouverture du **Suivi des heures** par un salarié lance automatiquement sa synchronisation ; le serveur ignore l'appel si cette ressource a déjà été synchronisée depuis moins d'une heure.
+- La première lecture de **À déterminer** ou d'un indépendant jamais synchronisé lance une synchronisation initiale de la ressource concernée. Ces ressources doivent avoir été détectées auparavant dans **Configuration**.
+- Une ressource utilise une synchronisation incrémentale dès qu'elle possède un jeton Google. Sans jeton, après expiration Google (`410`) ou lorsqu'un contrôle global l'impose, elle repart sur une synchronisation complète.
+- La correction d'une ressource refusée tente ensuite de resynchroniser sa ressource. La connexion OAuth, **Détecter les ressources** et l'actualisation des calendriers de coefficient ne synchronisent pas les événements.
+- Aucun cron, webhook Google ou autre synchronisation périodique n'est configuré : hors première lecture, les données évoluent à l'ouverture du suivi salarié ou après une action explicite.
 
 Supabase range techniquement les e-mails OTP dans l'emplacement de configuration nommé `magic_link`, mais le modèle hébergé doit contenir uniquement `{{ .Token }}` et aucune variable `{{ .ConfirmationURL }}`. Le fichier local `supabase/templates/otp.html` sert de source à copier dans **Authentication > Email Templates > Magic Link / OTP** du projet hébergé.
 
