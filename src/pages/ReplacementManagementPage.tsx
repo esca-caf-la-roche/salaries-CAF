@@ -18,6 +18,7 @@ export function ReplacementManagementPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [syncWarning, setSyncWarning] = useState('')
   const selectedEvents = useMemo(() => events.filter((event) => selectedIds.includes(event.id)), [events, selectedIds])
 
   useEffect(() => { void getResources().then((items) => setResources(items.filter((item) => item.enabled))).catch(() => setError('Les ressources n’ont pas pu être chargées.')).finally(() => setLoading(false)) }, [])
@@ -38,18 +39,20 @@ export function ReplacementManagementPage() {
   }
   const submit = async () => {
     if (selectedEvents.some((event) => !assignments[event.id])) return
-    setLoading(true); setError(''); setSuccess('')
+    setLoading(true); setError(''); setSuccess(''); setSyncWarning('')
     try {
-      const message = await processReplacements(resourceId, selectedEvents.map((event) => ({ eventId: event.id, replacementResourceId: assignments[event.id] })))
-      setSuccess(message)
+      const result = await processReplacements(resourceId, selectedEvents.map((event) => ({ eventId: event.id, replacementResourceId: assignments[event.id] })))
+      if (result.hasFailures) setError(result.message)
+      else setSuccess(result.message)
+      setSyncWarning(result.syncWarning ?? '')
     } catch (submitError) { setError(submitError instanceof Error ? submitError.message : 'Les remplacements n’ont pas pu être enregistrés.') } finally { setLoading(false) }
   }
-  const reset = () => { setStep(1); setResourceId(''); setEvents([]); setSelectedIds([]); setAssignments({}); setSuccess('') }
+  const reset = () => { setStep(1); setResourceId(''); setEvents([]); setSelectedIds([]); setAssignments({}); setSuccess(''); setSyncWarning('') }
 
   return <div className="page replacement-management-page">
     <header className="page-heading"><div><p className="eyebrow">Administration</p><h1>Gérer les remplacements</h1><p>Sélectionnez les cours concernés puis attribuez une ressource disponible.</p></div></header>
     <ol className="replacement-steps" aria-label="Progression"><li aria-current={step === 1 ? 'step' : undefined} className={step >= 1 ? 'is-active' : ''}>1 <span>Ressource</span></li><li aria-current={step === 2 ? 'step' : undefined} className={step >= 2 ? 'is-active' : ''}>2 <span>Événements</span></li><li aria-current={step === 3 ? 'step' : undefined} className={step >= 3 ? 'is-active' : ''}>3 <span>Attribution</span></li></ol>
-    {error && <div className="alert alert--error" role="alert">{error}</div>}{success && <div className="alert alert--success" role="status"><Check aria-hidden="true" />{success}</div>}
+    {error && <div className="alert alert--error" role="alert">{error}</div>}{success && <div className="alert alert--success" role="status"><Check aria-hidden="true" />{success}</div>}{syncWarning && <div className="alert alert--error" role="alert">{syncWarning}</div>}
     <section className="replacement-workflow" aria-busy={loading}>
       {step === 1 && <><h2>Qui doit être remplacé ?</h2><label className="replacement-field"><span>Ressource concernée</span><select value={resourceId} onChange={(event) => setResourceId(event.target.value)} disabled={loading}><option value="">Sélectionner une ressource</option>{resources.map((resource) => <option value={resource.googleCalendarId} key={resource.id}>{resource.name}</option>)}</select></label><p className="replacement-help">Les événements choisis seront déplacés vers le calendrier des absences. Le remplaçant recevra une copie dans le calendrier des remplacements.</p><div className="replacement-actions"><button className="button button--primary" disabled={!resourceId} onClick={() => setStep(2)}>Choisir les événements <ArrowRight aria-hidden="true" /></button></div></>}
       {step === 2 && <><div className="replacement-workflow__heading"><div><h2>Événements de {monthName.format(month)}</h2><p>{resources.find((resource) => resource.googleCalendarId === resourceId)?.name}</p></div><div className="replacement-month-nav"><button type="button" aria-label="Mois précédent" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}><ChevronLeft /></button><button type="button" aria-label="Mois suivant" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}><ChevronRight /></button></div></div>{loading ? <div className="skeleton-list" aria-label="Chargement des événements"><i /><i /></div> : events.length === 0 ? <p className="overview-empty">Aucun événement pour ce mois.</p> : <ul className="replacement-event-list">{events.map((event) => <li key={event.id}><label><input type="checkbox" checked={selectedIds.includes(event.id)} onChange={(change) => setSelectedIds((ids) => change.target.checked ? [...ids, event.id] : ids.filter((id) => id !== event.id))} /><span><strong>{event.title}</strong><time dateTime={event.startsAt}>{dateTime.format(new Date(event.startsAt))}</time></span></label></li>)}</ul>}<div className="replacement-actions replacement-actions--split"><button className="button button--secondary" onClick={() => setStep(1)}><ArrowLeft /> Retour</button><button className="button button--primary" disabled={!selectedIds.length || loading} onClick={() => void openAssignments()}>Attribuer {selectedIds.length || ''} événement{selectedIds.length > 1 ? 's' : ''} <ArrowRight /></button></div></>}

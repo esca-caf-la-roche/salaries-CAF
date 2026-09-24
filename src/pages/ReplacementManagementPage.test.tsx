@@ -61,7 +61,7 @@ describe('ReplacementManagementPage', () => {
     getResources.mockResolvedValue([structuredClone(resource), structuredClone(unassigned)])
     getReplacementEvents.mockResolvedValue([structuredClone(replacementEvent)])
     getAvailableReplacementResources.mockResolvedValue(structuredClone(available))
-    processReplacements.mockResolvedValue('1 remplacement(s) enregistré(s).')
+    processReplacements.mockResolvedValue({ message: '1 remplacement(s) enregistré(s).', syncWarning: null, hasFailures: false })
   })
 
   it('runs the three-step workflow from resource selection to confirmation', async () => {
@@ -104,5 +104,32 @@ describe('ReplacementManagementPage', () => {
     fireEvent.change(await screen.findByLabelText('Ressource concernée'), { target: { value: resource.googleCalendarId } })
     fireEvent.click(screen.getByRole('button', { name: /Choisir les événements/ }))
     expect(await screen.findByText('resourceCalendarId ne correspond pas à une ressource active')).toBeInTheDocument()
+  })
+
+  it('warns when Google was updated but the local refresh failed', async () => {
+    processReplacements.mockResolvedValue({ message: '1 remplacement(s) enregistré(s).', syncWarning: 'Les données du site n’ont pas pu être actualisées.', hasFailures: false })
+    render(<ReplacementManagementPage />)
+    fireEvent.change(await screen.findByLabelText('Ressource concernée'), { target: { value: resource.googleCalendarId } })
+    fireEvent.click(screen.getByRole('button', { name: /Choisir les événements/ }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Cours du mardi/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Attribuer 1 événement/ }))
+    fireEvent.change(await screen.findByRole('combobox', { name: /Remplaçant pour Cours du mardi/ }), { target: { value: available[0].id } })
+    fireEvent.click(screen.getByRole('button', { name: /Enregistrer les remplacements/ }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Les données du site n’ont pas pu être actualisées.')
+  })
+
+  it('shows failed Google replacements as an error instead of a success', async () => {
+    processReplacements.mockResolvedValue({ message: '0 remplacement(s) enregistré(s), 1 en erreur.', syncWarning: null, hasFailures: true })
+    render(<ReplacementManagementPage />)
+    fireEvent.change(await screen.findByLabelText('Ressource concernée'), { target: { value: resource.googleCalendarId } })
+    fireEvent.click(screen.getByRole('button', { name: /Choisir les événements/ }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Cours du mardi/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Attribuer 1 événement/ }))
+    fireEvent.change(await screen.findByRole('combobox', { name: /Remplaçant pour Cours du mardi/ }), { target: { value: available[0].id } })
+    fireEvent.click(screen.getByRole('button', { name: /Enregistrer les remplacements/ }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('0 remplacement(s) enregistré(s), 1 en erreur.')
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 })

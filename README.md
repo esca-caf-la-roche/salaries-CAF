@@ -29,12 +29,15 @@ La synthèse annuelle regroupe les totaux contrat, absences, remplacements et f�
 
 ## Déclencheurs de la synchronisation Google Calendar
 
-- Les boutons **Actualiser Google** lancent une synchronisation à la demande : toutes les ressources actives pour un administrateur, uniquement sa ressource pour un salarié CDI.
+- L'ouverture de **Vue d'ensemble** par un administrateur lance automatiquement l'actualisation des ressources dont la dernière synchronisation remonte à plus d'une heure. L'interface affiche la progression puis le résultat ; en cas d'échec, les dernières données disponibles restent visibles avec une alerte rouge.
+- Les boutons **Actualiser Google** lancent une synchronisation forcée à la demande : toutes les ressources actives pour un administrateur, uniquement sa ressource pour un salarié CDI. Les CDII et CDD n'ont volontairement pas de bouton manuel car ils ne modifient pas leur Google Agenda.
 - L'ouverture du **Suivi des heures** par un salarié lance automatiquement sa synchronisation ; le serveur ignore l'appel si cette ressource a déjà été synchronisée depuis moins d'une heure.
 - La première lecture de **À déterminer** ou d'un indépendant jamais synchronisé lance une synchronisation initiale de la ressource concernée. Ces ressources doivent avoir été détectées auparavant dans **Configuration**.
-- Une ressource utilise une synchronisation incrémentale dès qu'elle possède un jeton Google. Sans jeton, après expiration Google (`410`) ou lorsqu'un contrôle global l'impose, elle repart sur une synchronisation complète.
+- Une ressource utilise une synchronisation incrémentale dès qu'elle possède un jeton Google. Sans jeton ou après expiration Google (`410`), elle repart sur une synchronisation complète.
 - La correction d'une ressource refusée tente ensuite de resynchroniser sa ressource. La connexion OAuth, **Détecter les ressources** et l'actualisation des calendriers de coefficient ne synchronisent pas les événements.
-- Aucun cron, webhook Google ou autre synchronisation périodique n'est configuré : hors première lecture, les données évoluent à l'ouverture du suivi salarié ou après une action explicite.
+- L'enregistrement d'un remplacement resynchronise immédiatement les ressources concernées. Si cette actualisation locale échoue après l'écriture Google, l'administrateur reçoit un avertissement explicite afin d'éviter une nouvelle saisie du remplacement.
+- La détection des nouveaux salariés et calendriers reste volontairement manuelle via **Détecter les ressources** dans **Configuration**, car cette opération est occasionnelle.
+- Aucun cron, webhook Google ou traitement nocturne n'est configuré : les heures ne changent pas assez régulièrement pour justifier une synchronisation lorsque personne n'utilise le site.
 
 Supabase range techniquement les e-mails OTP dans l'emplacement de configuration nommé `magic_link`, mais le modèle hébergé doit contenir uniquement `{{ .Token }}` et aucune variable `{{ .ConfirmationURL }}`. Le fichier local `supabase/templates/otp.html` sert de source à copier dans **Authentication > Email Templates > Magic Link / OTP** du projet hébergé.
 

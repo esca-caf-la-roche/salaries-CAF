@@ -182,16 +182,20 @@ export async function getAvailableReplacementResources(startsAt: string, endsAt:
   return (data?.resources ?? []).map((resource: Record<string, unknown>) => ({ id: String(resource.id), name: String(resource.name) }))
 }
 
-export async function processReplacements(resourceId: string, assignments: ReplacementAssignment[]): Promise<string> {
+export async function processReplacements(resourceId: string, assignments: ReplacementAssignment[]): Promise<{ message: string; syncWarning: string | null; hasFailures: boolean }> {
   if (isDemoMode || !supabase) {
     await pause()
-    return 'Les remplacements ont été enregistrés en mode démonstration.'
+    return { message: 'Les remplacements ont été enregistrés en mode démonstration.', syncWarning: null, hasFailures: false }
   }
   const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
     body: { action: 'processReplacements', resourceId, assignments },
   })
   if (error) await throwFunctionError(error, 'Les remplacements n’ont pas pu être enregistrés.')
-  return String(data?.message ?? 'Les remplacements ont été enregistrés.')
+  return {
+    message: String(data?.message ?? 'Les remplacements ont été enregistrés.'),
+    syncWarning: data?.syncWarning ? String(data.syncWarning) : null,
+    hasFailures: Number(data?.failed ?? 0) > 0,
+  }
 }
 
 export async function saveResources(resources: EmployeeResource[]): Promise<EmployeeResource[]> {
@@ -367,7 +371,8 @@ export async function runIncrementalSync(mode: 'automatic' | 'manual' = 'manual'
   if (error) throw error
   const results = Array.isArray(data?.results) ? data.results : []
   const failed = results.filter((result: { error?: string }) => result.error)
-  const synced = results.length - failed.length
+  const skipped = results.filter((result: { skipped?: string }) => result.skipped)
+  const synced = results.length - failed.length - skipped.length
   const unmapped = results.reduce((total: number, result: { unmappedEvents?: number }) => total + Number(result.unmappedEvents ?? 0), 0)
   const recentlySynced = results.length > 0 && results.every((result: { skipped?: string }) => result.skipped === 'recently_synced')
   return {
@@ -377,7 +382,7 @@ export async function runIncrementalSync(mode: 'automatic' | 'manual' = 'manual'
       ? 'Données Google déjà actualisées depuis moins d’une heure.'
       : failed.length
       ? `${synced} calendrier(s) synchronisé(s), ${failed.length} en erreur.`
-      : `${synced} ressource(s) synchronisée(s).${unmapped ? ` ${unmapped} événement(s) ignoré(s) car leur calendrier d'origine n'a pas de catégorie d'heures et de coefficient définis.` : ''}`,
+      : `${synced} ressource(s) synchronisée(s).${skipped.length ? ` ${skipped.length} déjà à jour ou en cours.` : ''}${unmapped ? ` ${unmapped} événement(s) ignoré(s) car leur calendrier d'origine n'a pas de catégorie d'heures et de coefficient définis.` : ''}`,
   }
 }
 

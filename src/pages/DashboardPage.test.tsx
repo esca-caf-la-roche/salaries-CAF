@@ -45,7 +45,7 @@ describe('DashboardPage', () => {
     getUnassignedEvents.mockResolvedValue([])
     getCoefficientCalendars.mockResolvedValue([])
     getMonthlyTimeValidations.mockResolvedValue([])
-    runIncrementalSync.mockResolvedValue({ status: 'success', lastSyncedAt: '2026-09-01T08:00:00Z' })
+    runIncrementalSync.mockResolvedValue({ status: 'success', lastSyncedAt: '2026-09-01T08:00:00Z', message: 'Données Google actualisées.' })
     approveTimeMonthChange.mockImplementation(async (employeeId: string, schoolYear: number, month: number) => ({ employeeId, schoolYear, month, status: 'validated', validatedAt: '2026-08-31T10:00:00Z', changeDetectedAt: null, changeCount: 1, approvedAt: '2026-09-06T10:00:00Z' }))
     getDeclinedResourceEvents.mockResolvedValue([])
     repairResourceEvent.mockResolvedValue(undefined)
@@ -55,6 +55,26 @@ describe('DashboardPage', () => {
     expect(buildWorkerRecap(employee('CDI', 100, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 3 }), 2026).actualHours).toBe(88)
     expect(buildWorkerRecap(employee('CDII', 100, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 3 }), 2026).actualHours).toBe(103)
     expect(buildWorkerRecap(employee('INDEP', 0, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 3 }), 2026).actualHours).toBe(108)
+  })
+
+  it('automatically synchronizes when an administrator opens the overview', async () => {
+    let finishSync: ((value: unknown) => void) | undefined
+    runIncrementalSync.mockImplementationOnce(() => new Promise((resolve) => { finishSync = resolve }))
+    render(<MemoryRouter><DashboardPage /></MemoryRouter>)
+
+    expect(await screen.findByText('Synchronisation automatique en cours…')).toBeInTheDocument()
+    expect(runIncrementalSync).toHaveBeenCalledWith('automatic')
+    finishSync?.({ status: 'success', lastSyncedAt: '2026-09-24T10:00:00Z', message: 'Données Google actualisées.' })
+    expect(await screen.findByText('Données Google actualisées.', { exact: false })).toBeInTheDocument()
+  })
+
+  it('keeps the existing overview visible when automatic synchronization fails', async () => {
+    getEmployeeSummaries.mockResolvedValue([employee('CDI', 100)])
+    runIncrementalSync.mockRejectedValueOnce(new Error('Google indisponible'))
+    render(<MemoryRouter><DashboardPage /></MemoryRouter>)
+
+    expect(await screen.findByText('Salarié CDI')).toBeInTheDocument()
+    expect(await screen.findByText('La synchronisation automatique a échoué. Les dernières données disponibles restent affichées.')).toBeInTheDocument()
   })
 
   it('shows every worker with annual contract, actual hours, colored difference and secondary details', async () => {
@@ -108,11 +128,14 @@ describe('DashboardPage', () => {
     const startsAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
     getDeclinedResourceEvents
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ eventId: 'evt-2', calendarId: 'c1', resourceName: '(CDII)-Alice Martin', title: 'Cours du mardi', startsAt, endsAt: new Date(Date.parse(startsAt) + 7200000).toISOString(), allDay: false, htmlLink: 'https://calendar.google.com/x' }])
     render(<MemoryRouter><DashboardPage /></MemoryRouter>)
+    await waitFor(() => expect(runIncrementalSync).toHaveBeenCalledWith('automatic'))
+    await waitFor(() => expect(getDeclinedResourceEvents).toHaveBeenCalledTimes(2))
     fireEvent.click(await screen.findByRole('button', { name: 'Actualiser Google' }))
     expect(await screen.findByText('Ressource indisponible')).toBeInTheDocument()
-    expect(getDeclinedResourceEvents).toHaveBeenCalledTimes(2)
+    expect(getDeclinedResourceEvents).toHaveBeenCalledTimes(3)
   })
 
   it('approves a change notification and removes it from tasks', async () => {
@@ -128,12 +151,13 @@ describe('DashboardPage', () => {
 
   it('refreshes the overview and every task source after Google synchronization', async () => {
     render(<MemoryRouter><DashboardPage /></MemoryRouter>)
-    await waitFor(() => expect(getUnassignedEvents).toHaveBeenCalledTimes(1))
-    fireEvent.click(screen.getByRole('button', { name: 'Actualiser Google' }))
-    await waitFor(() => expect(runIncrementalSync).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(runIncrementalSync).toHaveBeenCalledWith('automatic'))
     await waitFor(() => expect(getUnassignedEvents).toHaveBeenCalledTimes(2))
-    expect(getCoefficientCalendars).toHaveBeenCalledTimes(2)
-    expect(getMonthlyTimeValidations).toHaveBeenCalledTimes(2)
-    expect(getEmployeeSummaries).toHaveBeenCalledTimes(2)
+    fireEvent.click(screen.getByRole('button', { name: 'Actualiser Google' }))
+    await waitFor(() => expect(runIncrementalSync).toHaveBeenNthCalledWith(2, 'manual'))
+    await waitFor(() => expect(getUnassignedEvents).toHaveBeenCalledTimes(3))
+    expect(getCoefficientCalendars).toHaveBeenCalledTimes(3)
+    expect(getMonthlyTimeValidations).toHaveBeenCalledTimes(3)
+    expect(getEmployeeSummaries).toHaveBeenCalledTimes(3)
   })
 })

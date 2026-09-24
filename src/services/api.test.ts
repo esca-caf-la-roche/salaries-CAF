@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getEmployeeSummaries, getIndependentEvents } from './api'
+import { getEmployeeSummaries, getIndependentEvents, runIncrementalSync } from './api'
 
 const from = vi.hoisted(() => vi.fn())
 const invoke = vi.hoisted(() => vi.fn())
@@ -44,5 +44,21 @@ describe('getEmployeeSummaries', () => {
     const result = await getEmployeeSummaries(2026)
     expect(result).toHaveLength(1)
     expect(result[0]).toMatchObject({ id: 'indep', contractType: 'INDEP', settings: { contractType: 'INDEP' } })
+  })
+})
+
+describe('runIncrementalSync', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('sends the automatic mode and distinguishes fresh resources from synchronized resources', async () => {
+    invoke.mockResolvedValue({
+      data: { results: [{ calendarId: 'fresh', skipped: 'recently_synced' }, { calendarId: 'stale', eventsSeen: 2 }] },
+      error: null,
+    })
+
+    const result = await runIncrementalSync('automatic')
+
+    expect(invoke).toHaveBeenCalledWith('google-calendar-sync', { body: { action: 'sync', mode: 'automatic' } })
+    expect(result).toMatchObject({ status: 'success', message: '1 ressource(s) synchronisée(s). 1 déjà à jour ou en cours.' })
   })
 })

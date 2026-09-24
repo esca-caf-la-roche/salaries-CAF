@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BadgeCheck, BellRing, ChevronDown, CircleAlert, RefreshCw, UsersRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { formatHoursMinutes } from '../lib/annualSummary'
@@ -31,6 +31,7 @@ export function DashboardPage() {
   const [repairingEvent, setRepairingEvent] = useState('')
   const [approvingValidation, setApprovingValidation] = useState('')
   const [validationError, setValidationError] = useState('')
+  const automaticSyncStarted = useRef(false)
 
   useEffect(() => {
     setLoading(true)
@@ -57,10 +58,10 @@ export function DashboardPage() {
   const configurationTasks = new Set([...calendarsWithoutType.map((calendar) => calendar.googleCalendarId), ...calendarsWithoutCoefficient.map((calendar) => calendar.googleCalendarId)]).size
   const taskCount = pendingValidationChanges.length + urgentUnassignedEvents.length + configurationTasks + declinedEvents.length
 
-  const synchronize = async () => {
-    setSync((state) => ({ ...state, status: 'syncing' }))
+  const synchronize = useCallback(async (mode: 'automatic' | 'manual' = 'manual') => {
+    setSync((state) => ({ ...state, status: 'syncing', message: mode === 'automatic' ? 'Synchronisation automatique en cours…' : state.message }))
     try {
-      const result = await runIncrementalSync()
+      const result = await runIncrementalSync(mode)
       setSync(result)
       try { setEmployees(await getEmployeeSummaries(schoolYear)) } catch { /* Keep the previous overview. */ }
       try { setUsedCalendars(await getCoefficientCalendars()) } catch { /* Keep the previous tasks. */ }
@@ -68,9 +69,15 @@ export function DashboardPage() {
       try { setValidations(await getMonthlyTimeValidations()) } catch { /* Keep the previous tasks. */ }
       try { setDeclinedEvents(await getDeclinedResourceEvents()) } catch { /* Keep the previous tasks. */ }
     } catch {
-      setSync((state) => ({ ...state, status: 'error', message: 'La synchronisation a échoué. Vérifiez la connexion Google.' }))
+      setSync((state) => ({ ...state, status: 'error', message: mode === 'automatic' ? 'La synchronisation automatique a échoué. Les dernières données disponibles restent affichées.' : 'La synchronisation a échoué. Vérifiez la connexion Google.' }))
     }
-  }
+  }, [schoolYear])
+
+  useEffect(() => {
+    if (user?.role !== 'admin' || automaticSyncStarted.current) return
+    automaticSyncStarted.current = true
+    void synchronize('automatic')
+  }, [synchronize, user?.role])
 
   const repairResource = async (declined: DeclinedResourceEvent) => {
     setRepairingEvent(declined.eventId)
@@ -104,11 +111,11 @@ export function DashboardPage() {
       <div><p className="eyebrow">Vue d’ensemble</p><h1>Toute l’équipe, en un regard</h1><p>Situation annuelle des salariés et indépendants pour la saison du 1er septembre au 31 août.</p></div>
       <div className="overview-heading__actions">
         <label><span>Saison</span><div className="select-wrap"><select aria-label="Saison" value={schoolYear} onChange={(event) => setSchoolYear(Number(event.target.value))}>{[schoolYear - 1, schoolYear, schoolYear + 1].map((year) => <option key={year} value={year}>{year}–{year + 1}</option>)}</select><ChevronDown aria-hidden="true" /></div></label>
-        <button className="button button--secondary" onClick={() => void synchronize()} disabled={sync.status === 'syncing'}><RefreshCw className={sync.status === 'syncing' ? 'spin' : ''} aria-hidden="true" />{sync.status === 'syncing' ? 'Synchronisation…' : 'Actualiser Google'}</button>
+        <button className="button button--secondary" onClick={() => void synchronize('manual')} disabled={sync.status === 'syncing'}><RefreshCw className={sync.status === 'syncing' ? 'spin' : ''} aria-hidden="true" />{sync.status === 'syncing' ? 'Synchronisation…' : 'Actualiser Google'}</button>
       </div>
     </header>
 
-    {sync.message && <div className={`alert ${sync.status === 'error' ? 'alert--error' : 'alert--success'}`} role="status">{sync.message} · {formatSyncDate(sync.lastSyncedAt)}</div>}
+    {sync.message && <div className={`alert ${sync.status === 'error' ? 'alert--error' : 'alert--success'}`} role="status">{sync.message}{sync.lastSyncedAt ? ` · ${formatSyncDate(sync.lastSyncedAt)}` : ''}</div>}
     {error && <div className="alert alert--error" role="alert">{error}</div>}
     {validationError && <div className="alert alert--error" role="alert">{validationError}</div>}
 

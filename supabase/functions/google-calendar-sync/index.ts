@@ -2,6 +2,7 @@ import { corsHeaders, errorResponse, HttpError, json } from "../_shared/http.ts"
 import { independentSeasonBounds, clipIndependentEvent } from "../_shared/independentEvents.ts";
 import { detectContractType } from "../_shared/contracts.ts";
 import { getAccessToken, googleFetch } from "../_shared/google.ts";
+import { wasSyncedRecently } from "../_shared/syncPolicy.ts";
 import { requireActiveUser } from "../_shared/supabase.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.112.4";
 
@@ -446,24 +447,30 @@ async function executeSync(admin: SupabaseClient, calendar: Record<string, unkno
   return { calendarId: calendar.id, mode, pages, eventsSeen: seen, eventCount: count ?? 0, unmappedEvents: unmapped };
 }
 
-async function sync(admin: SupabaseClient, calendarIds?: string[]) {
+async function sync(admin: SupabaseClient, calendarIds?: string[], skipRecentlySynced = false) {
   const connection = await sharedConnectionFor(admin);
-  return syncConnection(admin, connection, calendarIds);
+  return syncConnection(admin, connection, calendarIds, skipRecentlySynced);
 }
 
-async function syncConnection(admin: SupabaseClient, connection: Record<string, unknown>, calendarIds?: string[]) {
-  let query = admin.from("calendars").select("id,google_calendar_id,sync_token,employees!employees_resource_calendar_id_fkey(contract_type)")
+async function syncConnection(admin: SupabaseClient, connection: Record<string, unknown>, calendarIds?: string[], skipRecentlySynced = false) {
+  let query = admin.from("calendars").select("id,google_calendar_id,sync_token,last_synced_at,employees!employees_resource_calendar_id_fkey(contract_type)")
     .eq("connection_id", connection.id).eq("is_resource", true).eq("enabled", true);
   if (calendarIds?.length) query = query.in("id", calendarIds);
   const { data: calendars, error } = await query;
   if (error) throw error;
+  const results: Record<string, unknown>[] = [];
+  const calendarsToSync = (calendars ?? []).filter((calendar) => {
+    if (!skipRecentlySynced || !wasSyncedRecently(calendar.last_synced_at)) return true;
+    results.push({ calendarId: calendar.id, skipped: "recently_synced" });
+    return false;
+  });
+  if (!calendarsToSync.length) return { results };
   const token = await getAccessToken(admin, connection.id);
   const { data: rules, error: rulesError } = await admin.from("coefficient_rules")
     .select("id,google_calendar_id").eq("active", true).not("hour_category", "is", null);
   if (rulesError) throw rulesError;
   const ruleByGoogleId = new Map((rules ?? []).map((rule) => [normalizeEmail(rule.google_calendar_id), { id: rule.id }]));
-  const results = [];
-  for (const calendar of calendars ?? []) {
+  for (const calendar of calendarsToSync) {
     const now = new Date().toISOString();
     const lockUntil = new Date(Date.now() + 10 * 60_000).toISOString();
     const { data: locked, error: lockError } = await admin.from("calendars")
@@ -866,6 +873,7 @@ async function processReplacements(admin: SupabaseClient, body: Record<string, u
     try {
       const outcome = await processReplacement(admin, connection.id, resources, {
         eventId: item.eventId,
+        sourceResourceCalendarId: absenceAttendee,
         absenceAttendee,
         replacementAttendee: item.replacementResourceId,
       });
@@ -879,8 +887,30 @@ async function processReplacements(admin: SupabaseClient, body: Record<string, u
     }
   }
   const done = results.length - failed;
+  const resourceGoogleIds = new Set<string>([absenceAttendee]);
+  for (const assignment of body.assignments) {
+    const replacementResourceId = (assignment as Record<string, unknown> | null)?.replacementResourceId;
+    if (typeof replacementResourceId === "string" && resources.some((resource) => resource.google_calendar_id === replacementResourceId)) {
+      resourceGoogleIds.add(replacementResourceId);
+    }
+  }
+  let syncWarning: string | null = null;
+  try {
+    const { data: affectedCalendars, error: affectedError } = await admin.from("calendars").select("id")
+      .eq("connection_id", connection.id).eq("is_resource", true).eq("enabled", true)
+      .in("google_calendar_id", [...resourceGoogleIds]);
+    if (affectedError) throw affectedError;
+    const synchronization = await syncConnection(admin, connection, (affectedCalendars ?? []).map((calendar) => String(calendar.id)));
+    if (synchronization.results.some((result) => "error" in result && result.error)) {
+      syncWarning = "Certaines données du site n’ont pas pu être actualisées. Vérifiez Google avant de réessayer.";
+    }
+  } catch {
+    syncWarning = "Les données du site n’ont pas pu être actualisées. Vérifiez Google avant de réessayer.";
+  }
   return {
     results,
+    failed,
+    syncWarning,
     message: failed === 0
       ? `${done} remplacement(s) enregistré(s).`
       : `${done} remplacement(s) enregistré(s), ${failed} en erreur.`,
@@ -978,20 +1008,7 @@ Deno.serve(async (req) => {
     const { user, role, admin } = await requireActiveUser(req);
     if (body.action === "sync") {
       if (role !== "admin") return json(await syncEmployeeCalendar(admin, user.id, body.mode));
-      // Resynchronisation complète automatique quand des événements à venir n'ont
-      // encore aucune donnée d'attendees (historique antérieur au champ élargi).
-      const { data: staleCount, error: staleError } = await admin
-        .rpc("internal_count_stale_attendee_events", { p_connection_id: (await sharedConnectionFor(admin)).id });
-      if (staleError) throw staleError;
-      if (Number(staleCount ?? 0) > 0) {
-        const connection = await sharedConnectionFor(admin);
-        const { error: resetError } = await admin.from("calendars").update({ sync_token: null })
-          .eq("connection_id", connection.id).eq("is_resource", true).eq("enabled", true);
-        if (resetError) throw resetError;
-        const full = await syncConnection(admin, { id: connection.id });
-        return json({ ...full, mode: "full" });
-      }
-      return json(await sync(admin, body.calendarIds));
+      return json(await sync(admin, body.calendarIds, body.mode === "automatic"));
     }
     if (role !== "admin") throw new HttpError(403, "Accès administrateur requis");
     if (body.action === "connectionInfo") {
