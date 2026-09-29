@@ -316,12 +316,37 @@ tbody tr:last-child td { border-bottom: 0; }
 .replacement-absence-month__heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px 24px; border-bottom: 1px solid var(--line); background: #f4f7f5; }
 .replacement-absence-month__heading .eyebrow { margin-bottom: 4px; }
 .replacement-absence-month__heading h2 { margin: 0; }
+.replacement-absence-month__actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; }
+.replacement-absence-copy-status { color: var(--muted); font: 500 .65rem "DM Mono", monospace; text-transform: uppercase; letter-spacing: .06em; }
+.replacement-absence-copy-status--error { color: var(--danger); text-transform: none; letter-spacing: 0; }
 .replacement-absence-month__totals, .replacement-absence-values { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 7px; }
 .replacement-absence-month__totals > span { margin-right: 4px; color: var(--muted); font: 500 .65rem "DM Mono", monospace; text-transform: uppercase; letter-spacing: .06em; }
 .replacement-absence-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
-.replacement-absence-list li { display: grid; grid-template-columns: minmax(180px, 1fr) auto; align-items: center; gap: 18px; padding: 16px 24px; border-bottom: 1px solid var(--line); }
+.replacement-absence-list li { border-bottom: 1px solid var(--line); }
 .replacement-absence-list li:last-child { border-bottom: 0; }
-.replacement-absence-list li > strong { min-width: 0; overflow-wrap: anywhere; font-size: .82rem; }
+.replacement-absence-monitor { display: grid; grid-template-columns: minmax(180px, 1fr) auto auto; align-items: center; gap: 18px; width: 100%; padding: 16px 24px; color: var(--ink); border: 0; background: none; font: inherit; text-align: left; cursor: pointer; }
+.replacement-absence-monitor:hover { background: #f7faf8; }
+.replacement-absence-monitor:focus-visible { outline: 3px solid var(--glacier); outline-offset: -3px; }
+.replacement-absence-monitor strong { min-width: 0; overflow-wrap: anywhere; font-size: .82rem; }
+.replacement-absence-monitor svg { width: 17px; color: var(--muted); transition: transform .18s; }
+.replacement-absence-monitor[aria-expanded="true"] svg { transform: rotate(180deg); }
+.replacement-absence-detail { display: grid; gap: 12px; padding: 14px 24px 18px; border-top: 1px dashed var(--line); background: #fbfcfa; }
+.replacement-absence-detail[hidden] { display: none; }
+.replacement-absence-detail__note { margin: 0; color: var(--muted); font-size: .74rem; }
+.replacement-absence-detail__error { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.replacement-absence-detail__error p { margin: 0; color: var(--danger); font-size: .74rem; }
+.replacement-absence-group { overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); }
+.replacement-absence-group__heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 13px; }
+.replacement-absence-group__heading h3 { margin: 0; font: 700 .68rem "DM Mono", monospace; text-transform: uppercase; letter-spacing: .07em; }
+.replacement-absence-group__heading b { font: 700 .74rem "DM Mono", monospace; }
+.replacement-absence-group--absence .replacement-absence-group__heading { color: #265a49; background: #e4f0eb; }
+.replacement-absence-group--replacement .replacement-absence-group__heading { color: #8a4720; background: #fae2c8; }
+.replacement-absence-group ul { margin: 0; padding: 0; list-style: none; }
+.replacement-absence-group li { display: grid; grid-template-columns: minmax(130px, auto) minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 8px 13px; border-top: 1px solid var(--line); font-size: .75rem; }
+.replacement-absence-group time { color: var(--muted); font: 500 .66rem "DM Mono", monospace; white-space: nowrap; }
+.replacement-absence-group__title { min-width: 0; overflow-wrap: anywhere; }
+.replacement-absence-group__hours { font: 700 .74rem "DM Mono", monospace; white-space: nowrap; }
+.replacement-absence-group__empty { margin: 0; padding: 11px 13px; border-top: 1px solid var(--line); color: var(--muted); font-size: .72rem; }
 .replacement-absence-value { display: inline-flex; align-items: baseline; gap: 6px; padding: 7px 9px; border-radius: 6px; font-size: .66rem; white-space: nowrap; }
 .replacement-absence-value b, .replacement-absence-value strong { font: 700 .72rem "DM Mono", monospace; }
 .replacement-absence-value--absence { color: #265a49; background: #e4f0eb; }
@@ -651,7 +676,7 @@ tbody tr:last-child td { border-bottom: 0; }
   .mobile-nav__sheet { position: absolute; z-index: 25; right: 10px; bottom: calc(100% + 10px); left: 10px; display: grid; padding: 8px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,254,250,.98); box-shadow: 0 10px 30px rgba(20,44,36,.16); backdrop-filter: blur(10px); }
   .mobile-nav__sheet-item { display: flex; align-items: center; gap: 12px; padding: 12px 10px; color: var(--ink); border-radius: 8px; text-decoration: none; font-size: .8rem; }.mobile-nav__sheet-item svg { width: 18px; color: var(--muted); }.mobile-nav__sheet-item.active { color: var(--pine); font-weight: 700; }.mobile-nav__sheet-item:active { background: var(--paper); }
   .page { padding: 35px 24px 100px; }.metric-grid { grid-template-columns: 1fr 1fr; }.metric--lead { grid-column: 1 / -1; }
-  .replacement-absence-month__heading { align-items: flex-start; flex-direction: column; padding: 18px; }.replacement-absence-month__totals, .replacement-absence-values { justify-content: flex-start; }.replacement-absence-list li { display: flex; align-items: flex-start; flex-direction: column; gap: 11px; padding: 15px 18px; }.replacement-absence-value { white-space: normal; }
+  .replacement-absence-month__heading { align-items: flex-start; flex-direction: column; padding: 18px; }.replacement-absence-month__actions, .replacement-absence-month__totals, .replacement-absence-values { justify-content: flex-start; }.replacement-absence-monitor { grid-template-columns: minmax(0, 1fr) auto; gap: 10px 14px; padding: 15px 18px; }.replacement-absence-monitor .replacement-absence-values { grid-row: 2; grid-column: 1 / -1; }.replacement-absence-monitor svg { grid-row: 1; grid-column: 2; }.replacement-absence-value { white-space: normal; }.replacement-absence-detail { padding: 12px 18px 16px; }.replacement-absence-group li { grid-template-columns: minmax(0, 1fr) auto; }.replacement-absence-group time { grid-row: 1; grid-column: 1; }.replacement-absence-group__hours { grid-row: 1; grid-column: 2; }.replacement-absence-group__title { grid-row: 2; grid-column: 1 / -1; }
   .calendar-head { display: none; }.calendar-row { grid-template-columns: 1fr 1fr; padding: 18px; }.calendar-identity, .email-input { grid-column: 1 / -1; }.resource-groups, .unused-resources__cards { grid-template-columns: 1fr; }.kanban-instructions { grid-template-columns: auto 32px auto; }.kanban-instructions p { grid-column: 1 / -1; justify-self: start; }.kanban-stage__grid--categories { grid-template-columns: repeat(2, minmax(0, 1fr)); }.configuration-warning, .unassigned-warning, .validation-warning { align-items: flex-start; flex-wrap: wrap; }.configuration-warning > span, .unassigned-warning > span, .validation-warning > span { min-width: calc(100% - 40px); }.configuration-warning .button, .unassigned-warning .button, .validation-warning .button { width: 100%; }.month-validation-card { align-items: stretch; flex-direction: column; }.validation-review__content li { align-items: stretch; flex-direction: column; }.validation-review__content .button { width: 100%; }
   .annual-scoreboard { grid-template-columns: repeat(2, minmax(0, 1fr)); }.annual-breakdown-card__calculations { grid-template-columns: 1fr; }.annual-breakdown-card__calculations > i { justify-self: start; transform: rotate(90deg); }.contract-strip { flex-wrap: wrap; }.tracking-filters { grid-template-columns: 1fr 1fr; }.holiday-calendar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .worker-row { grid-template-columns: minmax(170px, 1.2fr) repeat(3, minmax(100px, .7fr)); grid-template-areas: "identity contract paid actual" "details details details details" "difference difference difference difference"; row-gap: 13px; }.worker-difference { min-height: 0; }
