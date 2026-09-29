@@ -6,9 +6,12 @@ const slotDate = new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: '2-di
 const slotTime = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })
 const monthTitle = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'Europe/Paris' })
 
-/** Jeu. 03/09 09:00–11:00 */
+/** jeu. 03/09 09:00–11:00 — écran. */
 export const eventSlotLabel = (event: MonthlyEventHour) =>
   `${slotDate.format(new Date(event.startsAt))} ${slotTime.format(new Date(event.startsAt))}–${slotTime.format(new Date(event.endsAt))}`
+
+/** jeu. 03/09 — rapport PSA : la date suffit, les horaires et l'intitulé noient l'information. */
+const eventDayLabel = (event: MonthlyEventHour) => slotDate.format(new Date(event.startsAt))
 
 /** 2:30 (2:00 × 1,25) — format horaire de l'écran, identique au reste de l'application. */
 export const eventClockLabel = (event: MonthlyEventHour) =>
@@ -47,20 +50,18 @@ function apportionHundredths(events: MonthlyEventHour[]): number[] {
   return rounded
 }
 
-const reportHoursLabel = (event: MonthlyEventHour, hundredths: number) =>
-  event.coefficient === 1.25 ? `${hundredthsLabel(hundredths)} (× 1,25)` : hundredthsLabel(hundredths)
-
 export type AbsenceMonthMonitor = { employee: EmployeeSummary; events: MonthlyEventHour[] }
 
 /**
  * Rapport texte d'un mois complet, prêt à coller pour PSA :
  * moniteur par moniteur, absences et remplacements strictement séparés,
- * heures en décimales avec le coefficient de préparation inclus.
+ * une ligne par créneau au format « jeu. 03/09 · 2,50 h » (heures décimales,
+ * coefficient de préparation déjà inclus). Trop d'information tue l'information.
  * Les totaux sont exactement ceux de `monthly_hours`, et les lignes additionnent exactement.
  */
 export function buildAbsenceMonthReport(schoolYear: number, month: number, monitors: AbsenceMonthMonitor[]): string {
   const title = monthTitle.format(new Date(Date.UTC(calendarYearFor(schoolYear, month), month - 1, 1)))
-  const lines = [`Absences et remplacements — ${title}`, `Saison ${schoolYear}–${schoolYear + 1}`, '']
+  const lines = [`Absences et remplacements — ${title}`, '']
   let absenceTotal = 0
   let replacementTotal = 0
 
@@ -74,9 +75,9 @@ export function buildAbsenceMonthReport(schoolYear: number, month: number, monit
     replacementTotal += monitorReplacementTotal
     lines.push(employee.name)
     lines.push(`Absences — ${hundredthsLabel(monitorAbsenceTotal)}`)
-    absences.forEach((event, index) => lines.push(`  ${eventSlotLabel(event)} · ${event.title} · ${reportHoursLabel(event, absenceHours[index])}`))
+    absences.forEach((event, index) => lines.push(`  ${eventDayLabel(event)} · ${hundredthsLabel(absenceHours[index])}`))
     lines.push(`Remplacements — ${hundredthsLabel(monitorReplacementTotal)}`)
-    replacements.forEach((event, index) => lines.push(`  ${eventSlotLabel(event)} · ${event.title} · ${reportHoursLabel(event, replacementHours[index])}`))
+    replacements.forEach((event, index) => lines.push(`  ${eventDayLabel(event)} · ${hundredthsLabel(replacementHours[index])}`))
     lines.push('')
   }
 
