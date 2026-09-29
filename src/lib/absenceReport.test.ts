@@ -27,16 +27,43 @@ describe('buildAbsenceMonthReport', () => {
       { employee: monitor('employee-2', 'Morgan Durand'), events: [{ ...replacementSlot, id: 'event-morgan', title: 'Accompagnement', weightedHours: 3, rawHours: 3 }] },
     ])
 
-    expect(report).toMatch(/^Absences et remplacements — septembre 2026\nSaison 2026–2027\n/)
+    expect(report).toMatch(/^Absences et remplacements — septembre 2026\n\n/)
+    expect(report).not.toContain('Saison')
     expect(report).toContain('Camille Martin\nAbsences — 2,50 h')
-    expect(report).toMatch(/03\/09 09:00–11:00 · Stage arkose · 2,50 h \(× 1,25\)/)
+    expect(report).toContain('  jeu. 03/09 · 2,50 h')
     expect(report).toContain('Remplacements — 1,25 h')
-    expect(report).toMatch(/05\/09 15:00–16:15 · Cours bébés · 1,25 h/)
+    expect(report).toContain('  sam. 05/09 · 1,25 h')
     expect(report).toContain('Morgan Durand\nAbsences — 0,00 h')
-    expect(report).toContain('Accompagnement · 3,00 h')
+    expect(report).toContain('  sam. 05/09 · 3,00 h')
     expect(report).toContain('Total septembre 2026 — Absences : 2,50 h · Remplacements : 4,25 h')
-    expect(report.indexOf('Stage arkose')).toBeLessThan(report.indexOf('Cours bébés'))
+    expect(report.indexOf('jeu. 03/09')).toBeLessThan(report.indexOf('sam. 05/09'))
     expect(report.indexOf('Camille Martin')).toBeLessThan(report.indexOf('Morgan Durand'))
+  })
+
+  it('renders the whole report with the exact structure expected by the payroll company', () => {
+    const report = buildAbsenceMonthReport(2026, 9, [{ employee: monitor('employee-1', 'Camille Martin'), events: [absenceSlot, replacementSlot] }])
+
+    expect(report).toBe([
+      'Absences et remplacements — septembre 2026',
+      '',
+      'Camille Martin',
+      'Absences — 2,50 h',
+      '  jeu. 03/09 · 2,50 h',
+      'Remplacements — 1,25 h',
+      '  sam. 05/09 · 1,25 h',
+      '',
+      'Total septembre 2026 — Absences : 2,50 h · Remplacements : 1,25 h',
+    ].join('\n'))
+  })
+
+  it('keeps a copied line down to the date and the decimal hours only', () => {
+    const report = buildAbsenceMonthReport(2026, 9, [{ employee: monitor('employee-1', 'Camille Martin'), events: [absenceSlot, replacementSlot] }])
+
+    expect(report).toContain('  jeu. 03/09 · 2,50 h')
+    expect(report).not.toContain('–')
+    expect(report).not.toContain('Stage arkose')
+    expect(report).not.toContain('× 1,25')
+    expect(report).not.toContain('Saison')
   })
 
   it('keeps absence slots out of the replacement block even when categories mix', () => {
@@ -45,10 +72,10 @@ describe('buildAbsenceMonthReport', () => {
     const absenceBlock = report.slice(report.indexOf('Absences —'), report.indexOf('Remplacements —'))
     const replacementBlock = report.slice(report.indexOf('Remplacements —'), report.indexOf('Total septembre'))
 
-    expect(absenceBlock).toContain('Stage arkose')
-    expect(absenceBlock).not.toContain('Cours bébés')
-    expect(replacementBlock).toContain('Cours bébés')
-    expect(replacementBlock).not.toContain('Stage arkose')
+    expect(absenceBlock).toContain('jeu. 03/09')
+    expect(absenceBlock).not.toContain('sam. 05/09')
+    expect(replacementBlock).toContain('sam. 05/09')
+    expect(replacementBlock).not.toContain('jeu. 03/09')
   })
 
   it('rounds each slot to the centième while the totals stay the exact sum of the lines', () => {
@@ -57,7 +84,8 @@ describe('buildAbsenceMonthReport', () => {
 
     // 3,3333 h : monthly_hours affiche 3,33 h — les lignes doivent additionner à ce même total.
     expect(report).toContain('Absences — 3,33 h')
-    expect(report).toContain('Stage arkose · 1,67 h (× 1,25)')
+    expect(report).toContain('  jeu. 03/09 · 1,67 h')
+    expect(report).toContain('  jeu. 03/09 · 1,66 h')
     expect(report).toContain('Total septembre 2026 — Absences : 3,33 h · Remplacements : 0,00 h')
   })
 
