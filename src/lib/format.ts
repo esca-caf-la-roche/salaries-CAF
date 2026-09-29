@@ -3,6 +3,8 @@ export const schoolMonths = [9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8] as const
 
 export const monthLabel = (month: number) => frenchMonths[month - 1] ?? ''
 
+export const calendarYearFor = (schoolYear: number, month: number) => (month >= 9 ? schoolYear : schoolYear + 1)
+
 export const schoolYearForDate = (date: Date) =>
   date.getMonth() + 1 >= 9 ? date.getFullYear() : date.getFullYear() - 1
 
