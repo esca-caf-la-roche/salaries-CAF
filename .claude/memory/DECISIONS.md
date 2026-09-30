@@ -21,3 +21,4 @@
 | Round each copied slot to the centième with largest-remainder apportionment | Guarantees the printed lines add up exactly to `monthly_hours`, the figure shown on screen. | 2026-09-29 |
 | Keep absences and replacements in two separate groups in both the UI and the copy report | The product owner requires them never mixed for the PSA handoff. | 2026-09-29 |
 | One line per slot in the PSA copy: date + decimal hours only (no times, no title, no coefficient mention, no season line) | The product owner reviewed the real output: too much information drowned the figures. | 2026-09-29 |
+| Merge all the slots of one day into a single copied line (`lun. 21/09 · 4,38 h`), per category | One absence day is often stored as two consecutive Google events (one with prépa, one without); two lines for the same day read as a duplication. | 2026-09-30 |

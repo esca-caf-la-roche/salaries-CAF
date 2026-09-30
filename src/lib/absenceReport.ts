@@ -13,6 +13,24 @@ export const eventSlotLabel = (event: MonthlyEventHour) =>
 /** jeu. 03/09 — rapport PSA : la date suffit, les horaires et l'intitulé noient l'information. */
 const eventDayLabel = (event: MonthlyEventHour) => slotDate.format(new Date(event.startsAt))
 
+const dayKey = new Intl.DateTimeFormat('fr-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Europe/Paris' })
+
+/**
+ * Regroupe les créneaux d'une même journée : deux absences qui se suivent (17:00–19:30 puis
+ * 19:30–20:45) ne font qu'une ligne « lun. 21/09 · 4,38 h ». L'ordre d'apparition est conservé.
+ */
+const groupByDay = (events: MonthlyEventHour[]): MonthlyEventHour[][] => {
+  const days = new Map<string, MonthlyEventHour[]>()
+  for (const event of events) {
+    const key = dayKey.format(new Date(event.startsAt))
+    const group = days.get(key)
+    if (group) group.push(event)
+    else days.set(key, [event])
+  }
+  // Clés AAAA-MM-JJ : le tri lexicographique est un tri chronologique, sans dépendre de l'ordre d'entrée.
+  return [...days.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([, group]) => group)
+}
+
 /** 2:30 (2:00 × 1,25) — format horaire de l'écran, identique au reste de l'application. */
 export const eventClockLabel = (event: MonthlyEventHour) =>
   event.coefficient === 1.25
@@ -31,12 +49,12 @@ const hundredthsLabel = (hundredths: number) =>
   `${(hundredths / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} h`
 
 /**
- * Arrondit chaque créneau au centième en répartissant le reliquat (plus grand reste)
+ * Arrondit chaque ligne au centième en répartissant le reliquat (plus grand reste)
  * pour que la somme des lignes affichées soit exactement l'arrondi de la somme réelle —
  * donc exactement le total de `monthly_hours` affiché à l'écran.
  */
-function apportionHundredths(events: MonthlyEventHour[]): number[] {
-  const exact = events.map((event) => event.weightedHours * 100)
+function apportionHundredths(values: number[]): number[] {
+  const exact = values.map((value) => value * 100)
   const rounded = exact.map((value) => Math.floor(value))
   let residual = Math.round(exact.reduce((total, value) => total + value, 0)) - rounded.reduce((total, value) => total + value, 0)
   const byRemainder = exact
@@ -55,8 +73,8 @@ export type AbsenceMonthMonitor = { employee: EmployeeSummary; events: MonthlyEv
 /**
  * Rapport texte d'un mois complet, prêt à coller pour PSA :
  * moniteur par moniteur, absences et remplacements strictement séparés,
- * une ligne par créneau au format « jeu. 03/09 · 2,50 h » (heures décimales,
- * coefficient de préparation déjà inclus). Trop d'information tue l'information.
+ * une ligne par jour au format « lun. 21/09 · 4,38 h » — les créneaux d'une même
+ * journée sont rassemblés (heures décimales, coefficient de préparation inclus).
  * Les totaux sont exactement ceux de `monthly_hours`, et les lignes additionnent exactement.
  */
 export function buildAbsenceMonthReport(schoolYear: number, month: number, monitors: AbsenceMonthMonitor[]): string {
@@ -67,17 +85,19 @@ export function buildAbsenceMonthReport(schoolYear: number, month: number, monit
 
   for (const { employee, events } of monitors) {
     const { absences, replacements } = splitByCategory(events)
-    const absenceHours = apportionHundredths(absences)
-    const replacementHours = apportionHundredths(replacements)
+    const absenceDays = groupByDay(absences)
+    const replacementDays = groupByDay(replacements)
+    const absenceHours = apportionHundredths(absenceDays.map(sumWeightedHours))
+    const replacementHours = apportionHundredths(replacementDays.map(sumWeightedHours))
     const monitorAbsenceTotal = absenceHours.reduce((total, value) => total + value, 0)
     const monitorReplacementTotal = replacementHours.reduce((total, value) => total + value, 0)
     absenceTotal += monitorAbsenceTotal
     replacementTotal += monitorReplacementTotal
     lines.push(employee.name)
     lines.push(`Absences — ${hundredthsLabel(monitorAbsenceTotal)}`)
-    absences.forEach((event, index) => lines.push(`  ${eventDayLabel(event)} · ${hundredthsLabel(absenceHours[index])}`))
+    absenceDays.forEach((day, index) => lines.push(`  ${eventDayLabel(day[0])} · ${hundredthsLabel(absenceHours[index])}`))
     lines.push(`Remplacements — ${hundredthsLabel(monitorReplacementTotal)}`)
-    replacements.forEach((event, index) => lines.push(`  ${eventDayLabel(event)} · ${hundredthsLabel(replacementHours[index])}`))
+    replacementDays.forEach((day, index) => lines.push(`  ${eventDayLabel(day[0])} · ${hundredthsLabel(replacementHours[index])}`))
     lines.push('')
   }
 
