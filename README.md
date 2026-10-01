@@ -20,10 +20,21 @@ Les synthèses annuelles suivent la saison scolaire : du **1er septembre** d'une
 
 La page **Suivi des heures** propose désormais deux lectures complémentaires :
 
-- le détail mensuel événement par événement, avec durée brute, coefficient de préparation, durée pondérée et rubrique ; les heures travaillées d'un CDI ou d'un CDII sont les heures du contrat plus les remplacements plus l'arrêt maladie, sans déduction des absences ;
+- le détail mensuel événement par événement, avec durée brute, coefficient de préparation, durée pondérée et rubrique ; les heures travaillées d'un CDI sont les heures du contrat plus les remplacements plus l'arrêt maladie, sans déduction des absences ; celles d'un CDII y ajoutent les jours fériés du calendrier ;
 - la synthèse annuelle septembre–août, avec les totaux mensuels du contrat, des absences, des remplacements et des fériés, sans séparation par préparation, ainsi que les heures réalisées selon la formule du type de contrat, les semaines CDII et la saisie des heures des bulletins.
 
-Les saisies contractuelles et de bulletin sont conservées par salarié et par saison, en minutes entières. Pour un CDI ou un CDII, les heures travaillées correspondent à `heures du contrat + remplacements + arrêt maladie` ; les absences ne sont jamais soustraites de ce total et l'arrêt maladie compte aussi comme des heures de bulletin. L'objectif annuel vaut `contrat annuel - absences + remplacements`, et le reste à réaliser vaut `objectif annuel - heures travaillées`. Pour un CDI, la base garantie vaut l'objectif annuel s'il reste des heures, sinon les heures travaillées, plus les fériés calculés ; le total dû ajoute à cette base soit 10 % de congés théoriques, soit les congés payés des bulletins selon le choix affiché. Pour un CDII, les fériés configurés dans Google Calendar sont comptés comme des heures travaillées, la base garantie vaut l'objectif annuel s'il reste des heures, sinon les heures travaillées, et aucun congé n'est ajouté. Les jours fériés métropolitains des CDI viennent de `calendrier.api.gouv.fr` : ils restent tous visibles, mais seuls ceux du lundi au vendredi comptent. Chaque jour ouvré vaut `7 h × coefficient`, calculé selon la règle de coefficient existante. La formule active est rappelée directement sous la synthèse pour rester contrôlable.
+Les saisies contractuelles et de bulletin sont conservées par salarié et par saison, en minutes entières. Les calculs suivent la convention suivante :
+
+- **HCA** : heures du contrat annuel.
+- **HCAR** : `HCA - absences + remplacements` (heures du contrat annuel réelles).
+- **HT** : heures réellement travaillées. Pour un CDI, `heures du contrat + remplacements + arrêt maladie`, hors absences, congés payés et jours fériés. Pour un CDII, `heures du contrat + remplacements + fériés du calendrier + arrêt maladie` (les fériés sont comptés comme du travail et il n'y a pas de congés payés).
+- **Reste à réaliser** : `HCAR - HT`, affiché en rouge tant qu'il est positif. **Heures en plus** : `HT - HCAR`. Une fois le contrat atteint, la card devient verte et le reste affiche `0:00`.
+
+Pour un **CDI**, la base garantie vaut `max(HCAR, HT) + fériés`. Les congés payés théoriques valent **10 % de la base seule `max(HCAR, HT)`, hors fériés** ; ils sont remplacés par la somme des congés payés saisis au bulletin quand cette source est choisie. Le total dû vaut donc `base garantie + congés`. Les jours fériés métropolitains viennent de `calendrier.api.gouv.fr` : ils restent tous visibles, mais seuls ceux du lundi au vendredi comptent, et chaque jour ouvré vaut `7 h × coefficient`, avec `coefficient = max(HCAR, HT) / 1582`. Le reste à payer vaut `total dû - total des bulletins`.
+
+Pour un **CDII**, il n'y a aucun congé payé et les fériés du calendrier sont déjà dans HT : `total dû = max(HCAR, HT)`. Le reste à payer vaut `total dû - total des bulletins`.
+
+Les formules détaillées (base retenue, coefficient des fériés, décomposition du reste et du total dû) sont rappelées directement sous la synthèse pour rester contrôlables par l'administrateur comme par le salarié.
 
 La synthèse annuelle regroupe les totaux contrat, absences, remplacements et fériés dans une seule card. Elle affiche les heures travaillées CDI et décompose le passage de l'objectif annuel ajusté au reste à réaliser, sans ligne supplémentaire « heures imputées au contrat » dans le tableau des mois. Le graphe mensuel affiche les heures pondérées. Le reste à réaliser est signalé en rouge tant qu'il est positif ; une fois le contrat atteint, la card devient verte et reste à `0:00`. Le bouton **Actualiser Google** relance la synchronisation puis recharge les données du suivi.
 

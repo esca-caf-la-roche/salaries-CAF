@@ -61,13 +61,14 @@ describe('calculateAnnualSummary', () => {
     expect(result).toMatchObject({
       contractualRealizedHours: 901 + 56 / 60,
       guaranteedBaseHours: 939,
+      paidLeaveBaseHours: 925,
       overtimeHours: 0,
-      paidLeaveDueHours: 93.9,
+      paidLeaveDueHours: 92.5,
       publicHolidayDueHours: 14,
-      totalDueHours: 1032.9,
+      totalDueHours: 1031.5,
       payslipTotalHours: 1020,
     })
-    expect(result.payBalanceHours).toBeCloseTo(12.9)
+    expect(result.payBalanceHours).toBeCloseTo(11.5)
     expect(result.remainingToWorkHours).toBeCloseTo(37 + 4 / 60)
   })
 
@@ -108,9 +109,10 @@ describe('calculateAnnualSummary', () => {
     expect(result.workedHours).toBe(113)
     expect(result.contractualRealizedHours).toBe(115)
     expect(result.adjustedContractHours).toBe(98)
+    expect(result.paidLeaveBaseHours).toBe(113)
     expect(result.overtimeHours).toBe(15)
-    expect(result.paidLeaveDueHours).toBe(12)
-    expect(result.totalDueHours).toBe(132)
+    expect(result.paidLeaveDueHours).toBe(11.3)
+    expect(result.totalDueHours).toBe(131.3)
     expect(result.remainingToWorkHours).toBe(0)
   })
 
@@ -133,15 +135,17 @@ describe('calculateAnnualSummary', () => {
     expect(result.remainingToWorkHours).toBe(30)
   })
 
-  it('guarantees adjusted CDI hours, adds holidays once and calculates ten percent leave before comparing payslips', () => {
+  it('guarantees adjusted CDI hours, adds holidays once and applies ten percent on the base only', () => {
     const result = calculateAnnualSummary({ ...baseInput, annualContractHours: 100,
       calendarContractHours: 60, calendarAbsenceHours: 10, calendarReplacementHours: 5,
       calendarPublicHolidayHours: 7, payslipHours: 90, payslipPaidLeaveHours: 3 })
     expect(result.guaranteedBaseHours).toBe(102)
-    expect(result.paidLeaveDueHours).toBeCloseTo(10.2)
-    expect(result.totalDueHours).toBeCloseTo(112.2)
+    // The 10% is computed on the base alone (95), not on base + holidays (102).
+    expect(result.paidLeaveBaseHours).toBe(95)
+    expect(result.paidLeaveDueHours).toBeCloseTo(9.5)
+    expect(result.totalDueHours).toBeCloseTo(111.5)
     expect(result.payslipTotalHours).toBe(93)
-    expect(result.payBalanceHours).toBeCloseTo(19.2)
+    expect(result.payBalanceHours).toBeCloseTo(18.5)
     // The UI's bulletin-leave selection uses the same guaranteed base plus the recorded leave.
     expect(result.guaranteedBaseHours + 3 - result.payslipTotalHours).toBe(12)
   })
@@ -218,32 +222,61 @@ describe('calculateAnnualSummary', () => {
 })
 
 describe('calculateCdiPublicHolidayHours', () => {
-  it('uses the annual contract coefficient while realized hours stay below the contract', () => {
+  it('uses the adjusted contract (HCAR) coefficient while worked hours stay below it', () => {
     const result = calculateCdiPublicHolidayHours({
-      annualContractHours: 925,
+      adjustedContractHours: 925,
       fullTimeAnnualHours: 1582,
       realizedHoursExcludingHolidays: 800,
       weekdayHolidayCount: 9,
     })
 
     expect(result.basis).toBe('contract')
+    expect(result.coefficientBaseHours).toBe(925)
     expect(result.coefficient).toBeCloseTo(925 / 1582)
     expect(result.hoursPerHoliday).toBeCloseTo(7 * 925 / 1582)
-    expect(result.realizedHours).toBeCloseTo(800 + 9 * 7 * 925 / 1582)
+    expect(result.totalHours).toBeCloseTo(9 * 7 * 925 / 1582)
   })
 
-  it('uses the self-consistent realized-hours coefficient once the contract is reached', () => {
+  it('uses the worked hours (HT) coefficient once they exceed the adjusted contract', () => {
     const result = calculateCdiPublicHolidayHours({
-      annualContractHours: 100,
+      adjustedContractHours: 100,
       fullTimeAnnualHours: 1582,
       realizedHoursExcludingHolidays: 200,
       weekdayHolidayCount: 10,
     })
 
     expect(result.basis).toBe('realized')
-    expect(result.coefficient).toBeCloseTo(result.realizedHours / 1582)
-    expect(result.totalHours).toBeCloseTo(result.hoursPerHoliday * 10)
-    expect(result.realizedHours).toBeCloseTo(200 + result.totalHours)
+    expect(result.coefficientBaseHours).toBe(200)
+    expect(result.coefficient).toBeCloseTo(200 / 1582)
+    expect(result.totalHours).toBeCloseTo(10 * 7 * 200 / 1582)
+  })
+
+  it('falls back to the adjusted contract basis when worked hours equal it exactly', () => {
+    const result = calculateCdiPublicHolidayHours({
+      adjustedContractHours: 95,
+      fullTimeAnnualHours: 1582,
+      realizedHoursExcludingHolidays: 95,
+      weekdayHolidayCount: 1,
+    })
+
+    expect(result.basis).toBe('contract')
+    expect(result.coefficientBaseHours).toBe(95)
+    expect(result.coefficient).toBeCloseTo(95 / 1582)
+  })
+
+  it('keeps the 10% leave base and the holiday coefficient on the same base', () => {
+    const summary = calculateAnnualSummary({ ...baseInput, annualContractHours: 100,
+      calendarContractHours: 60, calendarAbsenceHours: 10, calendarReplacementHours: 5,
+      calendarPublicHolidayHours: 7, sickLeaveHours: 0 })
+    const holidays = calculateCdiPublicHolidayHours({
+      adjustedContractHours: summary.adjustedContractHours,
+      fullTimeAnnualHours: 1582,
+      realizedHoursExcludingHolidays: summary.workedHours,
+      weekdayHolidayCount: 1,
+    })
+
+    expect(holidays.coefficientBaseHours).toBe(summary.paidLeaveBaseHours)
+    expect(holidays.coefficient).toBeCloseTo(summary.paidLeaveBaseHours / 1582)
   })
 })
 
