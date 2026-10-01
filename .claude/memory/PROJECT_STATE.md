@@ -5,7 +5,8 @@
 - Current branch: `main`, tracking `origin/main`
 - Current focus: PSA payroll-detail feature shipped (PR #9 merged 2026-09-29, format slimmed in PR #10, same-day merge in PR #11 — live on GitHub Pages). The Absences & remplacements page expands per monitor into two strictly separate slot groups (Absences / Remplacements) plus a "Copier le mois" button producing the monthly plain-text report for PSA.
 - Deployment: GitHub Pages through `.github/workflows/deploy-pages.yml` after lint, tests, and build.
-- Pending decisions before resuming the replacement feature: (A) screen only handles "absent person → replacement", or (B) also handle direct assignment of unassigned ("À déterminer") sessions; Google scope change requires one-time reconnection of existing accounts.
+- Replacement feature: scope decided 2026-10-01 = **option A** (absent person → replacement only; "À déterminer" sessions stay on the dashboard page). Front/back realignment verified already done on `main`; branch `wip/gestion-remplacements` is superseded.
+- Quality gates: on 2026-10-01, 6 date-dependent tests (TimeTrackingPage, PayrollEntryPage) broke at month rollover because they assumed "today = September". Fixed by freezing `Date` in `src/test/setup.ts` to 2026-09-30; lint + tests (160/160) + build all green. Fix still uncommitted — pending commit + PR.
 
 ## Recent completed work
 
