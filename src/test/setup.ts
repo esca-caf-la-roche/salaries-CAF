@@ -1,4 +1,10 @@
 import '@testing-library/jest-dom/vitest'
+import { configure } from '@testing-library/react'
+
+// CI runners are slower than dev machines: the default 1000 ms async query timeout
+// occasionally flaked on findByText under load (e.g. the monthly ledger test). Give
+// async queries more headroom; passing tests still resolve as soon as the element appears.
+configure({ asyncUtilTimeout: 5000 })
 
 // Freeze "today" so date-dependent views (default month, J-7 windows, previous-month
 // validation) render the same state on every run. 2026-09-30 is a date the full suite
