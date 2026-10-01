@@ -2,10 +2,10 @@
 
 ## Immediate
 
-- [ ] Review the local CDI/CDII annual-target and total-due follow-up before any requested deployment; reconcile Jérôme's September totals when production data is available.
+- [ ] Reconcile Jérôme's September events and decimal-hour figures with the new CDI/CDII annual rules; no production data was available locally.
 
-- [ ] Reconcile Jérôme's September events and decimal-hour figures with the new CDI worked-hours and contract-credit displays; no production data was available locally.
-- [ ] Merge branch `fix/cdi-worked-hours-separate-contract` through a PR and verify Pages deployment; 163 tests, lint and build passed locally on 2026-10-01.
+- [x] Annual-hours review shipped: PR #18 merged 2026-10-01 (merge commit `b3626fb4`), Pages redeployed (run 36896213304 success). CDI paid leave = **10 % of `max(HCAR, HT)` alone, excluding holidays**; CDI holiday coefficient base = `max(HCAR, HT) / 1582`. HCAR/HT centralized in `resolveContractBases`. Antagonist + tech-lead reviews approved. 170 tests, lint and build green.
+- [x] Merge branch `fix/cdi-worked-hours-separate-contract` through PR #17 (2026-10-01).
 
 - [x] Test date-freeze shipped: PR #12 merged into `main` on 2026-10-01 (commit `9f614cc`), CI green, GitHub Pages redeployed. `src/test/setup.ts` pins "today" to 2026-09-30 (local components).
 - [x] Validate the new "Copier le mois" report against real data — tested by the user on 2026-10-01, OK (decimal format confirmed 2026-09-29).
