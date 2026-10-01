@@ -104,10 +104,22 @@ describe('calculateAnnualSummary', () => {
     })
 
     expect(result.guaranteedBaseHours).toBe(115)
+    expect(result.workedHours).toBe(113)
+    expect(result.contractualRealizedHours).toBe(115)
     expect(result.overtimeHours).toBe(15)
     expect(result.paidLeaveDueHours).toBe(11.5)
     expect(result.totalDueHours).toBe(126.5)
     expect(result.remainingToWorkHours).toBe(0)
+  })
+
+  it('keeps CDI worked time stable when absences change while adjusting the contractual balance', () => {
+    const input = { ...baseInput, annualContractHours: 100, calendarContractHours: 75.125,
+      calendarReplacementHours: 2, calendarAbsenceHours: 6.6, calendarPublicHolidayHours: 0 }
+    const withAbsence = calculateAnnualSummary(input)
+    const withoutAbsence = calculateAnnualSummary({ ...input, calendarAbsenceHours: 0 })
+    expect(withAbsence.workedHours).toBeCloseTo(77.125)
+    expect(withoutAbsence.workedHours).toBeCloseTo(withAbsence.workedHours)
+    expect(withAbsence.remainingToWorkHours - withoutAbsence.remainingToWorkHours).toBeCloseTo(6.6)
   })
 
   it.each(['CDII', 'CDD'] as const)(

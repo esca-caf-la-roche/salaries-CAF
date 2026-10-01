@@ -20,6 +20,7 @@ export interface AnnualSummaryInput {
 }
 
 export interface AnnualSummary {
+  workedHours: number
   contractualRealizedHours: number
   guaranteedBaseHours: number
   overtimeHours: number
@@ -193,6 +194,7 @@ export function calculateAnnualSummary(input: AnnualSummaryInput): AnnualSummary
     const realizedHours = input.calendarContractHours + input.calendarAbsenceHours
       + input.calendarReplacementHours + input.calendarPublicHolidayHours
     return {
+      workedHours: realizedHours,
       contractualRealizedHours: realizedHours,
       guaranteedBaseHours: realizedHours,
       overtimeHours: 0,
@@ -220,6 +222,7 @@ export function calculateAnnualSummary(input: AnnualSummaryInput): AnnualSummary
   const payslipTotalHours = input.payslipHours + input.payslipPaidLeaveHours
 
   return {
+    workedHours: isCdi ? input.calendarContractHours + input.calendarReplacementHours : contractualRealizedHours,
     contractualRealizedHours,
     guaranteedBaseHours,
     overtimeHours,

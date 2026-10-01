@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BadgeCheck, BellRing, ChevronDown, CircleAlert, RefreshCw, UsersRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { formatHoursMinutes } from '../lib/annualSummary'
+import { formatHoursMinutes, getFrenchPublicHolidaysForSchoolSeason, type FrenchPublicHoliday } from '../lib/annualSummary'
 import { contractTypeLabel } from '../lib/contracts'
 import { formatSyncDate, monthLabel, schoolYearForDate } from '../lib/format'
 import { eventStart, formatEventDate, isEventWithinNextDays } from '../lib/unassignedEvents'
@@ -9,6 +9,7 @@ import { buildWorkerRecap } from '../lib/workerRecap'
 import { approveTimeMonthChange, getDeclinedResourceEvents, getCoefficientCalendars, getEmployeeSummaries, getMonthlyTimeValidations, getUnassignedEvents, repairResourceEvent, runIncrementalSync } from '../services/api'
 import type { DeclinedResourceEvent, EmployeeSummary, MonthlyTimeValidation, SyncState, UnassignedEvent, UsedCalendarCoefficient } from '../types'
 import { useAuth } from '../context/AuthContext'
+import { getGovernmentPublicHolidaysForSchoolSeason } from '../services/publicHolidays'
 
 const currentSchoolYear = schoolYearForDate(new Date())
 
@@ -20,6 +21,9 @@ function signedHours(hours: number) {
 export function DashboardPage() {
   const { user } = useAuth()
   const [schoolYear, setSchoolYear] = useState(currentSchoolYear)
+  const [holidayState, setHolidayState] = useState<{ schoolYear: number; holidays: FrenchPublicHoliday[] }>(() => ({
+    schoolYear: currentSchoolYear, holidays: getFrenchPublicHolidaysForSchoolSeason({ startYear: currentSchoolYear }),
+  }))
   const [employees, setEmployees] = useState<EmployeeSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -50,7 +54,9 @@ export function DashboardPage() {
     void getDeclinedResourceEvents().then(setDeclinedEvents).catch(() => setDeclinedEvents([]))
   }, [user?.role])
 
-  const workers = useMemo(() => employees.map((employee) => buildWorkerRecap(employee, schoolYear)), [employees, schoolYear])
+  const publicHolidays = useMemo(() => holidayState.schoolYear === schoolYear
+    ? holidayState.holidays : getFrenchPublicHolidaysForSchoolSeason({ startYear: schoolYear }), [holidayState, schoolYear])
+  const workers = useMemo(() => employees.map((employee) => buildWorkerRecap(employee, schoolYear, publicHolidays)), [employees, schoolYear, publicHolidays])
   const calendarsWithoutType = usedCalendars.filter((calendar) => calendar.hourCategory == null)
   const calendarsWithoutCoefficient = usedCalendars.filter((calendar) => calendar.coefficient == null)
   const urgentUnassignedEvents = unassignedEvents.filter((event) => isEventWithinNextDays(event, new Date(), 7)).sort((a, b) => eventStart(a).getTime() - eventStart(b).getTime())
@@ -71,6 +77,15 @@ export function DashboardPage() {
     } catch {
       setSync((state) => ({ ...state, status: 'error', message: mode === 'automatic' ? 'La synchronisation automatique a échoué. Les dernières données disponibles restent affichées.' : 'La synchronisation a échoué. Vérifiez la connexion Google.' }))
     }
+  }, [schoolYear])
+
+  useEffect(() => {
+    let active = true
+    setHolidayState({ schoolYear, holidays: getFrenchPublicHolidaysForSchoolSeason({ startYear: schoolYear }) })
+    void getGovernmentPublicHolidaysForSchoolSeason({ startYear: schoolYear })
+      .then((holidays) => { if (active) setHolidayState({ schoolYear, holidays }) })
+      .catch(() => { /* Use the same metropolitan fallback as the tracking page. */ })
+    return () => { active = false }
   }, [schoolYear])
 
   useEffect(() => {
@@ -136,16 +151,16 @@ export function DashboardPage() {
     <section className="team-overview" aria-labelledby="team-overview-title">
       <div className="team-overview__heading"><div><p className="eyebrow">Saison {schoolYear}–{schoolYear + 1}</p><h2 id="team-overview-title">Salariés et indépendants</h2></div><span><UsersRound aria-hidden="true" />{employees.length} personne{employees.length > 1 ? 's' : ''}</span></div>
       {loading ? <div className="skeleton-list" aria-label="Chargement du récapitulatif"><i /><i /><i /></div> : workers.length === 0 ? <p className="overview-empty">Aucune ressource active pour cette saison.</p> : <div className="worker-list">
-        {workers.map(({ employee, contractHours, actualHours, differenceHours, absenceHours, replacementHours, publicHolidayHours }) => {
+        {workers.map(({ employee, contractHours, actualHours, contractualHoursCredited, differenceHours, absenceHours, replacementHours, publicHolidayHours }) => {
           const differenceTone = differenceHours == null ? 'neutral' : differenceHours >= 0 ? 'positive' : 'negative'
           const differenceLabel = differenceHours == null ? 'Sans objectif contractuel' : differenceHours >= 0 ? `${signedHours(differenceHours)} au-dessus du contrat` : `${signedHours(differenceHours)} en dessous du contrat`
           return <article className="worker-row" key={employee.id}>
             <div className="worker-identity"><strong>{employee.name}</strong><span>{contractTypeLabel(employee.contractType)}</span></div>
             <div className="worker-value"><span>Contrat annuel</span><strong>{employee.contractType === 'INDEP' ? '—' : `${formatHoursMinutes(contractHours)} h`}</strong></div>
-            <div className="worker-value"><span>Heures réelles</span><strong>{formatHoursMinutes(actualHours)} h</strong></div>
+            <div className="worker-value"><span>Heures travaillées</span><strong>{formatHoursMinutes(actualHours)} h</strong></div>
             <div className="worker-value"><span>Répartition</span><strong>{employee.contractType === 'INDEP' ? '—' : `${employee.paidMonths} mois`}</strong></div>
             <div className={`worker-difference worker-difference--${differenceTone}`} aria-label={differenceLabel}><span>Écart au contrat</span><strong>{differenceHours == null ? 'Non applicable' : signedHours(differenceHours)}</strong><small>{differenceHours == null ? 'Temps réel' : differenceHours >= 0 ? 'Contrat atteint' : 'Reste à réaliser'}</small></div>
-            <div className="worker-details" aria-label={`Détail des heures de ${employee.name}`}><span>Absence <strong>{formatHoursMinutes(absenceHours)} h</strong></span><span>Remplacement <strong>{formatHoursMinutes(replacementHours)} h</strong></span><span>Jours fériés <strong>{formatHoursMinutes(publicHolidayHours)} h</strong></span></div>
+            <div className="worker-details" aria-label={`Détail des heures de ${employee.name}`}><span>Absence <strong>{formatHoursMinutes(absenceHours)} h</strong></span><span>Remplacement <strong>{formatHoursMinutes(replacementHours)} h</strong></span><span>Jours fériés <strong>{formatHoursMinutes(publicHolidayHours)} h</strong></span>{employee.contractType === 'CDI' && <span>Imputées au contrat <strong>{formatHoursMinutes(contractualHoursCredited)} h</strong></span>}</div>
           </article>
         })}
       </div>}
