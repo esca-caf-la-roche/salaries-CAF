@@ -68,18 +68,19 @@ describe('calculateAnnualSummary', () => {
       payslipTotalHours: 1020,
     })
     expect(result.payBalanceHours).toBeCloseTo(12.9)
-    expect(result.remainingToWorkHours).toBeCloseTo(23 + 4 / 60)
+    expect(result.remainingToWorkHours).toBeCloseTo(37 + 4 / 60)
   })
 
-  it.each(['CDI', 'CDII', 'CDD'] as const)('counts %s sick leave as annual worked time without adding it to payslips', (contractType) => {
+  it.each(['CDI', 'CDII', 'CDD'] as const)('counts %s sick leave as worked time and as bulletin hours', (contractType) => {
     const result = calculateAnnualSummary({
       ...baseInput, contractType, annualContractHours: 1000, calendarContractHours: 750,
       calendarAbsenceHours: 0, calendarReplacementHours: 0, calendarPublicHolidayHours: 0,
       sickLeaveHours: 250, payslipHours: 750, payslipPaidLeaveHours: 0,
     })
     expect(result.contractualRealizedHours).toBe(1000)
+    expect(result.workedHours).toBe(1000)
     expect(result.remainingToWorkHours).toBe(0)
-    expect(result.payslipTotalHours).toBe(750)
+    expect(result.payslipTotalHours).toBe(1000)
   })
 
   it('keeps hundredth-hour precision when computing the remaining annual work', () => {
@@ -107,8 +108,7 @@ describe('calculateAnnualSummary', () => {
     expect(result.workedHours).toBe(113)
     expect(result.contractualRealizedHours).toBe(115)
     expect(result.adjustedContractHours).toBe(98)
-    expect(result.hoursTowardsContract).toBe(120)
-    expect(result.overtimeHours).toBe(22)
+    expect(result.overtimeHours).toBe(15)
     expect(result.paidLeaveDueHours).toBe(12)
     expect(result.totalDueHours).toBe(132)
     expect(result.remainingToWorkHours).toBe(0)
@@ -130,7 +130,6 @@ describe('calculateAnnualSummary', () => {
       calendarPublicHolidayHours: 0, sickLeaveHours: 0 })
     expect(result.adjustedContractHours).toBe(95)
     expect(result.workedHours).toBe(65)
-    expect(result.hoursTowardsContract).toBe(65)
     expect(result.remainingToWorkHours).toBe(30)
   })
 
@@ -189,7 +188,7 @@ describe('calculateAnnualSummary', () => {
       calendarContractHours: 90, calendarAbsenceHours: 30, calendarReplacementHours: 0,
       calendarPublicHolidayHours: 0, sickLeaveHours: 0, payslipHours: 0, payslipPaidLeaveHours: 0 })
     expect(result.adjustedContractHours).toBe(70)
-    expect(result.hoursTowardsContract).toBe(90)
+    expect(result.workedHours).toBe(90)
     expect(result.totalDueHours).toBe(90)
   })
 
