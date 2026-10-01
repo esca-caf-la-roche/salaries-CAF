@@ -2,7 +2,7 @@
 
 ## Immediate
 
-- [ ] Commit + PR the test date-freeze fix (`src/test/setup.ts` pins "today" to 2026-09-30): 6 tests in `TimeTrackingPage` / `PayrollEntryPage` were silently date-dependent and broke on 2026-10-01 (they expected September). Lint + build + 160/160 tests green locally on 2026-10-01. Push to `main` requires the usual PR flow.
+- [ ] Merge the test date-freeze PR (`fix/tests-freeze-date`: `src/test/setup.ts` pins "today" to 2026-09-30) — committed, both reviews done (antagonist: no blocker; tech-lead: safe to merge after doc fixes, applied), PR to open/push. Lint + build + 160/160 tests green locally on 2026-10-01.
 - [x] Validate the new "Copier le mois" report against real data — tested by the user on 2026-10-01, OK (decimal format confirmed 2026-09-29).
 - [x] Feature scope decided (2026-10-01): **option A** — absent-person-only workflow. Unassigned ("À déterminer") sessions stay on the existing dashboard page; no direct assignment in the replacement wizard.
 - [x] Front/back realignment — turned out to be ALREADY DONE on `main`: the wizard (`be1686f`, refreshed by `44feb41`) calls `replacementMonthEvents` / `replacementAvailability` / `processReplacements` with exactly the signatures the edge function expects (month is sent 1-based, page passes `getMonth() + 1`). Branch `wip/gestion-remplacements` (commit `1bb9adc`) is the superseded pre-alignment state — safe to delete.
@@ -17,4 +17,5 @@
 
 ## Backlog
 
+- [ ] Add at least one explicitly-dated first-of-month boundary test: with the clock pinned to month-end (Sept 30), first-of-month paths (`previousSchoolMonth` on the 1st, default-month selection on the 1st) are never exercised.
 - [ ] If required, turn J-7 monitor gaps into persisted/scheduled notifications rather than dashboard-only tasks.
