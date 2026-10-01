@@ -70,7 +70,7 @@ describe('DashboardPage', () => {
     const holidays = [{ name: 'Férié test', date: new Date('2026-09-01T00:00:00Z') }]
     const cdi = employee('CDI', 100, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 99 })
     const recap = buildWorkerRecap(cdi, 2026, holidays)
-    const holiday = calculateCdiPublicHolidayHours({ annualContractHours: 100, fullTimeAnnualHours: 1582,
+    const holiday = calculateCdiPublicHolidayHours({ adjustedContractHours: 95, fullTimeAnnualHours: 1582,
       realizedHoursExcludingHolidays: 95, weekdayHolidayCount: 1 })
     const tracking = calculateAnnualSummary({ contractType: 'CDI', annualContractHours: 100,
       calendarContractHours: 90, calendarAbsenceHours: 10, calendarReplacementHours: 5,
@@ -89,7 +89,7 @@ describe('DashboardPage', () => {
     getGovernmentPublicHolidaysForSchoolSeason.mockImplementationOnce(() => new Promise(() => {}))
     render(<MemoryRouter><DashboardPage /></MemoryRouter>)
     expect(await screen.findByText('Salarié CDI')).toBeInTheDocument()
-    await waitFor(() => expect(screen.getByLabelText('Détail des heures de Salarié CDI')).toHaveTextContent('Jours fériés 0:27 h'))
+    await waitFor(() => expect(screen.getByLabelText('Détail des heures de Salarié CDI')).toHaveTextContent('Jours fériés 0:28 h'))
     const season = screen.getByRole('combobox', { name: 'Saison' })
     const nextYear = Number((season as HTMLSelectElement).value) + 1
     fireEvent.change(season, { target: { value: String(nextYear) } })

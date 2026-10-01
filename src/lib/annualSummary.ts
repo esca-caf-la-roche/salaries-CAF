@@ -20,10 +20,15 @@ export interface AnnualSummaryInput {
 }
 
 export interface AnnualSummary {
+  /** HT: worked hours, excluding absences, paid leave and (for a CDI) public holidays. */
   workedHours: number
+  /** HCAR: annual contract adjusted by absences and replacements. */
   adjustedContractHours: number
   contractualRealizedHours: number
+  /** Guaranteed base including calculated public holidays for a CDI. */
   guaranteedBaseHours: number
+  /** Base used for the 10% paid leave (maximum of HCAR and HT), excluding public holidays. */
+  paidLeaveBaseHours: number
   overtimeHours: number
   paidLeaveDueHours: number
   publicHolidayDueHours: number
@@ -43,7 +48,8 @@ export interface CdiPublicHolidayCalculation {
   coefficient: number
   hoursPerHoliday: number
   totalHours: number
-  realizedHours: number
+  /** Base of the coefficient: the higher of the adjusted contract and the worked hours. */
+  coefficientBaseHours: number
   basis: 'contract' | 'realized'
 }
 
@@ -131,27 +137,33 @@ export function isWeekday(date: Date): boolean {
   return day >= 1 && day <= 5
 }
 
+/**
+ * Public holidays for a CDI follow the annual contract coefficient: each worked holiday is worth
+ * `7 × coefficient`, where `coefficient = base / full-time annual hours`. The base is the adjusted
+ * contract (HCAR) while the worked hours (HT) stay below it, then the worked hours once they exceed
+ * the adjusted contract. This keeps the rule "HCAR/1582 below, HT/1582 above" explicit and simple.
+ */
 export function calculateCdiPublicHolidayHours({
-  annualContractHours,
+  adjustedContractHours,
   fullTimeAnnualHours = CDI_FULL_TIME_ANNUAL_HOURS,
   realizedHoursExcludingHolidays,
   weekdayHolidayCount,
 }: {
-  annualContractHours: number
+  adjustedContractHours: number
   fullTimeAnnualHours?: number
   realizedHoursExcludingHolidays: number
   weekdayHolidayCount: number
 }): CdiPublicHolidayCalculation {
   for (const [name, value] of [
-    ['annualContractHours', annualContractHours],
+    ['adjustedContractHours', adjustedContractHours],
     ['fullTimeAnnualHours', fullTimeAnnualHours],
     ['weekdayHolidayCount', weekdayHolidayCount],
   ] as Array<[string, number]>) {
     if (!Number.isFinite(value) || value < 0) throw new RangeError(`${name} must be a finite, non-negative number`)
   }
   if (fullTimeAnnualHours <= 0) throw new RangeError('fullTimeAnnualHours must be greater than zero')
-  if (!Number.isFinite(realizedHoursExcludingHolidays)) {
-    throw new RangeError('realizedHoursExcludingHolidays must be finite')
+  if (!Number.isFinite(realizedHoursExcludingHolidays) || realizedHoursExcludingHolidays < 0) {
+    throw new RangeError('realizedHoursExcludingHolidays must be a finite, non-negative number')
   }
 
   const holidayFullTimeHours = weekdayHolidayCount * 7
@@ -159,32 +171,68 @@ export function calculateCdiPublicHolidayHours({
     throw new RangeError('weekdayHolidayCount produces an invalid full-time reference')
   }
 
-  const contractCoefficient = annualContractHours / fullTimeAnnualHours
-  const contractHolidayHours = holidayFullTimeHours * contractCoefficient
-  const realizedWithContractCoefficient = realizedHoursExcludingHolidays + contractHolidayHours
-
-  if (realizedWithContractCoefficient < annualContractHours) {
-    return {
-      coefficient: contractCoefficient,
-      hoursPerHoliday: 7 * contractCoefficient,
-      totalHours: contractHolidayHours,
-      realizedHours: realizedWithContractCoefficient,
-      basis: 'contract',
-    }
-  }
-
-  // Once the annual contract is reached, the coefficient is based on the real total.
-  // As that total includes the holidays themselves, solve R = base + 7n × R / full-time.
-  const realizedHours = realizedHoursExcludingHolidays / (1 - holidayFullTimeHours / fullTimeAnnualHours)
-  const coefficient = realizedHours / fullTimeAnnualHours
-  const totalHours = holidayFullTimeHours * coefficient
+  const coefficientBaseHours = Math.max(adjustedContractHours, realizedHoursExcludingHolidays)
+  const coefficient = coefficientBaseHours / fullTimeAnnualHours
+  const hoursPerHoliday = 7 * coefficient
 
   return {
     coefficient,
-    hoursPerHoliday: 7 * coefficient,
-    totalHours,
-    realizedHours,
-    basis: 'realized',
+    hoursPerHoliday,
+    totalHours: weekdayHolidayCount * hoursPerHoliday,
+    coefficientBaseHours,
+    basis: realizedHoursExcludingHolidays > adjustedContractHours ? 'realized' : 'contract',
+  }
+}
+
+export interface ContractBasesInput {
+  contractType: ContractType
+  annualContractHours: number
+  calendarContractHours: number
+  calendarAbsenceHours: number
+  calendarReplacementHours: number
+  calendarPublicHolidayHours: number
+  sickLeaveHours: number
+}
+
+export interface ContractBases {
+  /** HCAR: annual contract − absences + replacements, clamped to zero when negative. */
+  adjustedContractHours: number
+  /** HT: worked hours, excluding absences, paid leave and (for a CDI) public holidays. */
+  workedHours: number
+  /**
+   * Raw realized hours used by the CDD and independent formulas (a CDI's CDI rules never use it;
+   * its holiday-inclusive total is rebuilt by calculateCdiPublicHolidayHours instead).
+   */
+  contractualRealizedHours: number
+}
+
+/**
+ * Single source of truth for HCAR and HT. Both the annual summary and the
+ * dashboard/tracking views derive the holiday coefficient from these values, so the
+ * rule must only live here.
+ */
+export function resolveContractBases(input: ContractBasesInput): ContractBases {
+  const isCdi = input.contractType === 'CDI'
+  const isCdii = input.contractType === 'CDII'
+  const adjustsAnnualTarget = isCdi || isCdii
+  const contractualRealizedHours = input.contractType === 'INDEP'
+    ? input.calendarContractHours + input.calendarAbsenceHours + input.calendarReplacementHours + input.calendarPublicHolidayHours
+    : isCdi
+      ? input.calendarContractHours + input.calendarPublicHolidayHours + input.calendarReplacementHours - input.calendarAbsenceHours + input.sickLeaveHours
+      : input.calendarContractHours + input.calendarAbsenceHours + input.sickLeaveHours + input.calendarPublicHolidayHours
+  // Sick leave counts as worked time. For a CDII the calendar public holidays are also worked time;
+  // for a CDI they are added separately to the guaranteed base.
+  const workedHours = isCdi
+    ? input.calendarContractHours + input.calendarReplacementHours + input.sickLeaveHours
+    : isCdii
+      ? input.calendarContractHours + input.calendarReplacementHours + input.calendarPublicHolidayHours + input.sickLeaveHours
+      : contractualRealizedHours
+  return {
+    adjustedContractHours: adjustsAnnualTarget
+      ? Math.max(0, input.annualContractHours - input.calendarAbsenceHours + input.calendarReplacementHours)
+      : input.annualContractHours,
+    workedHours,
+    contractualRealizedHours,
   }
 }
 
@@ -192,13 +240,21 @@ export function calculateAnnualSummary(input: AnnualSummaryInput): AnnualSummary
   validateInput(input)
 
   if (input.contractType === 'INDEP') {
-    const realizedHours = input.calendarContractHours + input.calendarAbsenceHours
-      + input.calendarReplacementHours + input.calendarPublicHolidayHours
+    const { contractualRealizedHours: realizedHours } = resolveContractBases({
+      contractType: input.contractType,
+      annualContractHours: input.annualContractHours,
+      calendarContractHours: input.calendarContractHours,
+      calendarAbsenceHours: input.calendarAbsenceHours,
+      calendarReplacementHours: input.calendarReplacementHours,
+      calendarPublicHolidayHours: input.calendarPublicHolidayHours,
+      sickLeaveHours: input.sickLeaveHours,
+    })
     return {
       workedHours: realizedHours,
       adjustedContractHours: 0,
       contractualRealizedHours: realizedHours,
       guaranteedBaseHours: realizedHours,
+      paidLeaveBaseHours: 0,
       overtimeHours: 0,
       paidLeaveDueHours: 0,
       publicHolidayDueHours: 0,
@@ -214,28 +270,30 @@ export function calculateAnnualSummary(input: AnnualSummaryInput): AnnualSummary
   const adjustsAnnualTarget = isCdi || isCdii
   const sickLeaveHours = input.sickLeaveHours
   const ordinaryRealizedHours = input.calendarContractHours + input.calendarAbsenceHours + sickLeaveHours
-  const contractualRealizedHours = isCdi
-    ? input.calendarContractHours + input.calendarPublicHolidayHours + input.calendarReplacementHours - input.calendarAbsenceHours + sickLeaveHours
-    : ordinaryRealizedHours + input.calendarPublicHolidayHours
-  // Sick leave counts as worked time. For a CDII, calendar holidays are also worked time;
-  // for a CDI they are added separately to the guaranteed base.
-  const workedHours = isCdi
-    ? input.calendarContractHours + input.calendarReplacementHours + sickLeaveHours
-    : isCdii
-      ? input.calendarContractHours + input.calendarReplacementHours + input.calendarPublicHolidayHours + sickLeaveHours
-      : contractualRealizedHours
-  const adjustedContractHours = adjustsAnnualTarget
-    ? Math.max(0, input.annualContractHours - input.calendarAbsenceHours + input.calendarReplacementHours)
-    : input.annualContractHours
+  const { adjustedContractHours, workedHours, contractualRealizedHours } = resolveContractBases({
+    contractType: input.contractType,
+    annualContractHours: input.annualContractHours,
+    calendarContractHours: input.calendarContractHours,
+    calendarAbsenceHours: input.calendarAbsenceHours,
+    calendarReplacementHours: input.calendarReplacementHours,
+    calendarPublicHolidayHours: input.calendarPublicHolidayHours,
+    sickLeaveHours,
+  })
+  // Base garantie hors fériés : l'objectif ajusté reste garanti tant qu'il n'est pas dépassé,
+  // sinon ce sont les heures réellement travaillées qui comptent.
+  const paidLeaveBaseHours = isCdi
+    ? Math.max(adjustedContractHours, workedHours)
+    : 0
   const guaranteedBaseHours = isCdi
-    ? Math.max(adjustedContractHours, workedHours) + input.calendarPublicHolidayHours
+    ? paidLeaveBaseHours + input.calendarPublicHolidayHours
     : isCdii
       ? Math.max(adjustedContractHours, workedHours)
       : Math.max(input.annualContractHours, ordinaryRealizedHours)
   const overtimeHours = adjustsAnnualTarget
     ? Math.max(0, workedHours - adjustedContractHours)
     : Math.max(0, contractualRealizedHours - input.annualContractHours)
-  const paidLeaveDueHours = isCdi ? guaranteedBaseHours * 0.1 : 0
+  // Congés payés théoriques = 10 % de la base seule (hors fériés).
+  const paidLeaveDueHours = isCdi ? paidLeaveBaseHours * 0.1 : 0
   const publicHolidayDueHours = isCdi ? input.calendarPublicHolidayHours : 0
   const totalDueHours = isCdi
     ? guaranteedBaseHours + paidLeaveDueHours
@@ -249,6 +307,7 @@ export function calculateAnnualSummary(input: AnnualSummaryInput): AnnualSummary
     adjustedContractHours,
     contractualRealizedHours,
     guaranteedBaseHours,
+    paidLeaveBaseHours,
     overtimeHours,
     paidLeaveDueHours,
     publicHolidayDueHours,
