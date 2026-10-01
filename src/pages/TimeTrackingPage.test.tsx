@@ -206,7 +206,7 @@ describe('TimeTrackingPage', () => {
     expect(screen.getByText('Avance payée').closest('article')).toHaveTextContent('89:54')
     const annualCategories = screen.getByRole('region', { name: 'Calcul annuel des heures' })
     expect(screen.getAllByRole('region', { name: 'Calcul annuel des heures' })).toHaveLength(1)
-    expect(annualCategories).toHaveTextContent('Heures contrat887:56')
+    expect(annualCategories).toHaveTextContent('Heures contrat (calendrier)887:56')
     expect(annualCategories).toHaveTextContent('Absences2:00')
     expect(annualCategories).toHaveTextContent('Remplacements3:00')
     expect(annualCategories).toHaveTextContent('Fériés4:06')
@@ -284,7 +284,10 @@ describe('TimeTrackingPage', () => {
       expect(screen.getByRole('rowheader', { name: 'Heures réalisées' }).closest('tr')).toHaveTextContent('117:00')
     }
     expect(annualCalculation).toHaveTextContent('Calcul des heures en plus du contrat')
-    expect(screen.queryByText(`Règle appliquée pour ${contractType}`)).not.toBeInTheDocument()
+    expect(screen.getByText(`Règle appliquée pour ${contractType}`)).toBeInTheDocument()
+    if (contractType === 'CDII') {
+      expect(screen.getByText(/Total dû = max\(objectif ajusté, heures prises en compte\)/)).toBeInTheDocument()
+    }
   })
 
   it('shows a zero balance without a sign when the annual contract is reached exactly', async () => {
