@@ -7,5 +7,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
+    // Keep the per-test timeout clearly above Testing Library's async query timeout
+    // (5 s, see src/test/setup.ts) so a hard failure still surfaces RTL's diagnostics.
+    testTimeout: 15000,
   },
 })
