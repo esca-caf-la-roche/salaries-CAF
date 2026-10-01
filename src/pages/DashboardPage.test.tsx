@@ -61,9 +61,8 @@ describe('DashboardPage', () => {
   it('calculates actual hours with the existing contract-specific rules', () => {
     const cdi = buildWorkerRecap(employee('CDI', 100, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 3 }), 2026, [])
     expect(cdi.actualHours).toBe(95)
-    expect(cdi.contractualHoursCredited).toBe(85)
-    expect(cdi.differenceHours).toBe(-15)
-    expect(buildWorkerRecap(employee('CDII', 100, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 3 }), 2026).actualHours).toBe(103)
+    expect(cdi.differenceHours).toBe(0)
+    expect(buildWorkerRecap(employee('CDII', 100, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 3 }), 2026).actualHours).toBe(95)
     expect(buildWorkerRecap(employee('INDEP', 0, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 3 }), 2026).actualHours).toBe(108)
   })
 
@@ -72,12 +71,12 @@ describe('DashboardPage', () => {
     const cdi = employee('CDI', 100, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 99 })
     const recap = buildWorkerRecap(cdi, 2026, holidays)
     const holiday = calculateCdiPublicHolidayHours({ annualContractHours: 100, fullTimeAnnualHours: 1582,
-      realizedHoursExcludingHolidays: 85, weekdayHolidayCount: 1 })
+      realizedHoursExcludingHolidays: 95, weekdayHolidayCount: 1 })
     const tracking = calculateAnnualSummary({ contractType: 'CDI', annualContractHours: 100,
       calendarContractHours: 90, calendarAbsenceHours: 10, calendarReplacementHours: 5,
       calendarPublicHolidayHours: holiday.totalHours, payslipHours: 0, payslipPaidLeaveHours: 0,
       sickLeaveHours: 0, schoolSeason: { startYear: 2026 } })
-    expect(recap.contractualHoursCredited).toBeCloseTo(tracking.contractualRealizedHours)
+    expect(recap.differenceHours).toBeCloseTo(tracking.hoursTowardsContract - tracking.adjustedContractHours)
     expect(recap.publicHolidayHours).toBeCloseTo(holiday.totalHours)
     expect(recap.actualHours).toBe(95)
   })
@@ -95,7 +94,7 @@ describe('DashboardPage', () => {
     const nextYear = Number((season as HTMLSelectElement).value) + 1
     fireEvent.change(season, { target: { value: String(nextYear) } })
     const expected = buildWorkerRecap(cdi, nextYear, getFrenchPublicHolidaysForSchoolSeason({ startYear: nextYear }))
-    expect(await screen.findByLabelText('Détail des heures de Salarié CDI')).toHaveTextContent(`Imputées au contrat ${formatHoursMinutes(expected.contractualHoursCredited)} h`)
+    expect(await screen.findByLabelText('Détail des heures de Salarié CDI')).toHaveTextContent(`Jours fériés ${formatHoursMinutes(expected.publicHolidayHours)} h`)
     expect(getGovernmentPublicHolidaysForSchoolSeason).toHaveBeenCalledWith({ startYear: nextYear })
   })
 
@@ -133,7 +132,7 @@ describe('DashboardPage', () => {
     expect(screen.getByLabelText(/au-dessus du contrat/)).toHaveClass('worker-difference--positive')
     expect(screen.getByLabelText(/en dessous du contrat/)).toHaveClass('worker-difference--negative')
     expect(screen.getByLabelText('Sans objectif contractuel')).toHaveClass('worker-difference--neutral')
-    expect(screen.getByLabelText('Détail des heures de Salarié CDI')).toHaveTextContent('Absence 2:00 hRemplacement 1:00 hJours fériés 0:00 hImputées au contrat 109:00 h')
+    expect(screen.getByLabelText('Détail des heures de Salarié CDI')).toHaveTextContent('Absence 2:00 hRemplacement 1:00 hJours fériés 0:00 h')
   })
 
   it('groups configuration and J-7 monitor gaps in the task board', async () => {

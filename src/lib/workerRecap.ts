@@ -5,7 +5,6 @@ export interface WorkerRecap {
   employee: EmployeeSummary
   contractHours: number
   actualHours: number
-  contractualHoursCredited: number
   differenceHours: number | null
   absenceHours: number
   replacementHours: number
@@ -23,7 +22,7 @@ export function buildWorkerRecap(employee: EmployeeSummary, schoolYear: number, 
     ? calculateCdiPublicHolidayHours({
       annualContractHours: employee.annualContractHours,
       fullTimeAnnualHours: employee.settings.fullTimeAnnualMinutes / 60,
-      realizedHoursExcludingHolidays: totals.contract + totals.replacement - totals.absence
+      realizedHoursExcludingHolidays: totals.contract + totals.replacement
         + employee.payroll.reduce((sum, entry) => sum + entry.sickLeaveHundredthHours, 0) / 100,
       weekdayHolidayCount: holidays.filter(({ date }) => isWeekday(date)).length,
     }).totalHours
@@ -46,9 +45,8 @@ export function buildWorkerRecap(employee: EmployeeSummary, schoolYear: number, 
   return {
     employee,
     contractHours: employee.annualContractHours,
-    actualHours: employee.contractType === 'CDI' ? summary.workedHours : summary.contractualRealizedHours,
-    contractualHoursCredited: summary.contractualRealizedHours,
-    differenceHours: employee.contractType === 'INDEP' ? null : summary.contractualRealizedHours - employee.annualContractHours,
+    actualHours: employee.contractType === 'CDI' || employee.contractType === 'CDII' ? summary.workedHours : summary.contractualRealizedHours,
+    differenceHours: employee.contractType === 'INDEP' ? null : summary.hoursTowardsContract - summary.adjustedContractHours,
     absenceHours: totals.absence,
     replacementHours: totals.replacement,
     publicHolidayHours,

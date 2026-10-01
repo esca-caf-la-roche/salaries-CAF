@@ -2,6 +2,8 @@
 
 ## Immediate
 
+- [ ] Review the local CDI/CDII annual-target and total-due follow-up before any requested deployment; reconcile Jérôme's September totals when production data is available.
+
 - [ ] Reconcile Jérôme's September events and decimal-hour figures with the new CDI worked-hours and contract-credit displays; no production data was available locally.
 - [ ] Merge branch `fix/cdi-worked-hours-separate-contract` through a PR and verify Pages deployment; 163 tests, lint and build passed locally on 2026-10-01.
 

@@ -21,6 +21,8 @@ export interface AnnualSummaryInput {
 
 export interface AnnualSummary {
   workedHours: number
+  adjustedContractHours: number
+  hoursTowardsContract: number
   contractualRealizedHours: number
   guaranteedBaseHours: number
   overtimeHours: number
@@ -195,6 +197,8 @@ export function calculateAnnualSummary(input: AnnualSummaryInput): AnnualSummary
       + input.calendarReplacementHours + input.calendarPublicHolidayHours
     return {
       workedHours: realizedHours,
+      adjustedContractHours: 0,
+      hoursTowardsContract: realizedHours,
       contractualRealizedHours: realizedHours,
       guaranteedBaseHours: realizedHours,
       overtimeHours: 0,
@@ -208,21 +212,36 @@ export function calculateAnnualSummary(input: AnnualSummaryInput): AnnualSummary
   }
 
   const isCdi = input.contractType === 'CDI'
+  const adjustsAnnualTarget = isCdi || input.contractType === 'CDII'
   const ordinaryRealizedHours = input.calendarContractHours + input.calendarAbsenceHours + input.sickLeaveHours
   const contractualRealizedHours = isCdi
     ? input.calendarContractHours + input.calendarPublicHolidayHours + input.calendarReplacementHours - input.calendarAbsenceHours + input.sickLeaveHours
     : ordinaryRealizedHours + input.calendarPublicHolidayHours
-  const guaranteedBaseHours = Math.max(input.annualContractHours, isCdi ? contractualRealizedHours : ordinaryRealizedHours)
-  const overtimeHours = Math.max(0, contractualRealizedHours - input.annualContractHours)
+  const adjustedContractHours = adjustsAnnualTarget
+    ? Math.max(0, input.annualContractHours - input.calendarAbsenceHours + input.calendarReplacementHours)
+    : input.annualContractHours
+  const hoursTowardsContract = adjustsAnnualTarget
+    ? input.calendarContractHours + input.calendarReplacementHours + input.calendarPublicHolidayHours + input.sickLeaveHours
+    : contractualRealizedHours
+  const guaranteedBaseHours = isCdi
+    ? Math.max(adjustedContractHours, hoursTowardsContract - input.calendarPublicHolidayHours) + input.calendarPublicHolidayHours
+    : input.contractType === 'CDII'
+      ? Math.max(adjustedContractHours, hoursTowardsContract)
+      : Math.max(input.annualContractHours, ordinaryRealizedHours)
+  const overtimeHours = Math.max(0, hoursTowardsContract - adjustedContractHours)
   const paidLeaveDueHours = isCdi ? guaranteedBaseHours * 0.1 : 0
   const publicHolidayDueHours = isCdi ? input.calendarPublicHolidayHours : 0
   const totalDueHours = isCdi
     ? guaranteedBaseHours + paidLeaveDueHours
-    : Math.max(guaranteedBaseHours, contractualRealizedHours) + input.calendarReplacementHours
+    : input.contractType === 'CDII'
+      ? guaranteedBaseHours
+      : Math.max(guaranteedBaseHours, contractualRealizedHours) + input.calendarReplacementHours
   const payslipTotalHours = input.payslipHours + input.payslipPaidLeaveHours
 
   return {
-    workedHours: isCdi ? input.calendarContractHours + input.calendarReplacementHours : contractualRealizedHours,
+    workedHours: adjustsAnnualTarget ? input.calendarContractHours + input.calendarReplacementHours : contractualRealizedHours,
+    adjustedContractHours,
+    hoursTowardsContract,
     contractualRealizedHours,
     guaranteedBaseHours,
     overtimeHours,
@@ -230,7 +249,7 @@ export function calculateAnnualSummary(input: AnnualSummaryInput): AnnualSummary
     publicHolidayDueHours,
     totalDueHours,
     payslipTotalHours,
-    remainingToWorkHours: Math.max(0, input.annualContractHours - contractualRealizedHours),
+    remainingToWorkHours: Math.max(0, adjustedContractHours - hoursTowardsContract),
     payBalanceHours: totalDueHours - payslipTotalHours,
   }
 }
