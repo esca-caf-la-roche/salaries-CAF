@@ -292,6 +292,17 @@ export function TimeTrackingPage() {
     ? annual.guaranteedBaseHours + selectedPaidLeaveHours
     : (annual?.totalDueHours ?? 0)
   const selectedPayBalanceHours = annual ? selectedTotalDueHours - annual.payslipTotalHours : 0
+  // One calculation per line so the annual decomposition stays readable.
+  const annualCalculationLines = annual && employee && !isIndependent
+    ? [
+      employee.contractType === 'CDII'
+        ? `Heures travaillées = ${formatHoursMinutes(totals.contract)} contrat + ${formatHoursMinutes(totals.replacement)} remplacements + ${formatHoursMinutes(totals.holiday)} fériés + ${formatHoursMinutes(sickLeaveHours)} arrêt maladie = ${formatHoursMinutes(annual.workedHours)}`
+        : adjustsAnnualTarget
+          ? `Heures travaillées = ${formatHoursMinutes(totals.contract)} contrat + ${formatHoursMinutes(totals.replacement)} remplacements + ${formatHoursMinutes(sickLeaveHours)} arrêt maladie = ${formatHoursMinutes(annual.workedHours)}`
+          : `Heures réalisées = ${formatHoursMinutes(totals.contract)} contrat + ${formatHoursMinutes(totals.absence)} absences + ${formatHoursMinutes(totals.holiday)} fériés + ${formatHoursMinutes(sickLeaveHours)} arrêt maladie = ${formatHoursMinutes(annual.contractualRealizedHours)}`,
+      ...(adjustsAnnualTarget ? [`Objectif annuel = ${formatHoursMinutes(annualMinutes! / 60)} contrat − ${formatHoursMinutes(totals.absence)} absences + ${formatHoursMinutes(totals.replacement)} remplacements = ${formatHoursMinutes(annual.adjustedContractHours)}`] : []),
+    ]
+    : []
 
   const monthSickLeaveHours = (month: MonthlyHours) => (payrollEntries.find((entry) => entry.month === month.month)?.sickLeaveHundredthHours ?? 0) / 100
   const monthlyWorkedHours = (month: MonthlyHours) => employee?.contractType === 'CDI'
@@ -462,7 +473,7 @@ export function TimeTrackingPage() {
           <article className="metric"><p>Fériés</p><strong>{formatHoursMinutes(monthData.publicHolidayHours)} <small>h</small></strong><span>Total des heures fériées</span></article></>}
         </section>
         <section className={`panel monthly-ledger${isIndependent ? ' monthly-ledger--independent' : ''}`}>
-          <div className="panel-heading"><div><p className="eyebrow">{monthLabel(selectedMonth)} · {employee.name}</p><h2>Détail des événements</h2></div><span className="ledger-total">{isIndependent ? 'Total réel' : 'Total pondéré'} <strong>{formatHoursMinutes(monthData.weightedHours)}</strong></span></div>
+          <div className="panel-heading"><div><p className="eyebrow">{monthLabel(selectedMonth)} · {employee.name}</p><h2>Détail des événements</h2></div>{isIndependent && <span className="ledger-total">Total réel <strong>{formatHoursMinutes(monthData.weightedHours)}</strong></span>}</div>
           <div className="table-scroll"><table><colgroup>{isIndependent
             ? <><col className="monthly-column--calendar" /><col className="monthly-column--title" /><col className="monthly-column--date" /><col className="monthly-column--time" span={2} /><col className="monthly-column--duration" /><col className="monthly-column--status" /></>
             : <><col className="monthly-column--calendar" /><col className="monthly-column--title" /><col className="monthly-column--date" /><col className="monthly-column--time" span={2} /><col className="monthly-column--duration" /><col className="monthly-column--coefficient" /><col className="monthly-column--category" /><col className="monthly-column--status" /></>
@@ -502,13 +513,14 @@ export function TimeTrackingPage() {
             <div><dt>Fériés</dt><dd>{formatHoursMinutes(totals.holiday)}</dd></div>
           </dl>
           <div className="annual-breakdown-card__calculations">
-            <div><span>{adjustsAnnualTarget ? 'Heures travaillées et objectif annuel' : 'Calcul des heures réalisées'}</span><strong>{employee.contractType === 'CDII'
-              ? `${formatHoursMinutes(totals.contract)} contrat + ${formatHoursMinutes(totals.replacement)} remplacements + ${formatHoursMinutes(totals.holiday)} fériés + ${formatHoursMinutes(sickLeaveHours)} arrêt maladie = ${formatHoursMinutes(annual.workedHours)} travaillées. Objectif annuel : ${formatHoursMinutes(annualMinutes! / 60)} contrat − ${formatHoursMinutes(totals.absence)} absences + ${formatHoursMinutes(totals.replacement)} remplacements = ${formatHoursMinutes(annual.adjustedContractHours)}`
-              : adjustsAnnualTarget
-                ? `${formatHoursMinutes(totals.contract)} contrat + ${formatHoursMinutes(totals.replacement)} remplacements + ${formatHoursMinutes(sickLeaveHours)} arrêt maladie = ${formatHoursMinutes(annual.workedHours)} travaillées. Objectif annuel : ${formatHoursMinutes(annualMinutes! / 60)} contrat − ${formatHoursMinutes(totals.absence)} absences + ${formatHoursMinutes(totals.replacement)} remplacements = ${formatHoursMinutes(annual.adjustedContractHours)}`
-                : `${formatHoursMinutes(totals.contract)} contrat + ${formatHoursMinutes(totals.absence)} absences + ${formatHoursMinutes(totals.holiday)} fériés + ${formatHoursMinutes(sickLeaveHours)} arrêt maladie = ${formatHoursMinutes(annual.contractualRealizedHours)}`}</strong>
-              {employee.contractType === 'CDI' && <small>Base garantie = {formatHoursMinutes(annual.guaranteedBaseHours)} ({annual.remainingToWorkHours > 0 ? 'objectif annuel' : 'heures travaillées'} + {formatHoursMinutes(totals.holiday)} fériés). Congés théoriques = 10 % de la base seule {formatHoursMinutes(annual.paidLeaveBaseHours)} (hors fériés). Total dû = base garantie + congés ({paidLeaveSource === 'theoretical' ? `10 % de la base ${formatHoursMinutes(annual.paidLeaveBaseHours)}` : 'des bulletins'}).</small>}
-              {employee.contractType === 'CDII' && <small>Total dû = si reste à réaliser : {formatHoursMinutes(annual.adjustedContractHours)} objectif annuel, sinon {formatHoursMinutes(annual.workedHours)} travaillées (fériés du calendrier inclus) ; aucun congé ajouté.</small>}
+            <div>
+              <span>{adjustsAnnualTarget ? 'Calcul des heures' : 'Calcul des heures réalisées'}</span>
+              {annualCalculationLines.map((line, index) => <strong key={index}>{line}</strong>)}
+              {employee.contractType === 'CDI' && <>
+                <small>Base garantie = {formatHoursMinutes(annual.guaranteedBaseHours)} ({annual.remainingToWorkHours > 0 ? 'objectif annuel' : 'heures travaillées'} + {formatHoursMinutes(totals.holiday)} fériés).</small>
+                <small>Total dû = base garantie + congés {paidLeaveSource === 'theoretical' ? `(10 % de la base ${formatHoursMinutes(annual.paidLeaveBaseHours)} = ${formatHoursMinutes(annual.paidLeaveDueHours)})` : '(congés des bulletins)'}.</small>
+              </>}
+              {employee.contractType === 'CDII' && <small>Total dû = {annual.remainingToWorkHours > 0 ? `${formatHoursMinutes(annual.adjustedContractHours)} objectif annuel` : `${formatHoursMinutes(annual.workedHours)} travaillées (fériés du calendrier inclus)`}.</small>}
               {employee.contractType === 'CDD' && <small>Les {formatHoursMinutes(totals.replacement)} de remplacements sont payées en plus et n’entrent pas dans le calcul du reste. Total dû = max({formatHoursMinutes(annualMinutes! / 60)} contrat, {formatHoursMinutes(annual.contractualRealizedHours)} réalisées) + {formatHoursMinutes(totals.replacement)} remplacements = {formatHoursMinutes(annual.totalDueHours)}.</small>}
             </div>
             <i aria-hidden="true">→</i>
@@ -545,7 +557,7 @@ export function TimeTrackingPage() {
         <section className="annual-scoreboard" aria-label="Régularisation annuelle">
           {!isIndependent && <article className={annual.remainingToWorkHours > 0 ? 'annual-scoreboard__progress--due' : 'annual-scoreboard__progress--complete'}><span>Reste à réaliser</span><strong>{formatHoursMinutes(annual.remainingToWorkHours)}</strong><small>{annual.overtimeHours > 0 ? `${formatHoursMinutes(annual.overtimeHours)} en plus de l’objectif` : annual.remainingToWorkHours === 0 ? 'objectif atteint exactement' : `${formatHoursMinutes(annual.workedHours)} ${adjustsAnnualTarget ? 'travaillées' : 'réalisées'} sur ${formatHoursMinutes(adjustsAnnualTarget ? annual.adjustedContractHours : annualMinutes! / 60)}`}</small></article>}
           <article><span>Total dû</span><strong>{formatHoursMinutes(selectedTotalDueHours)}</strong><small>{employee.contractType === 'CDI' ? `base garantie + congés ${paidLeaveSource === 'theoretical' ? 'théoriques' : 'des bulletins'}` : isIndependent ? 'durée réelle des événements' : employee.contractType === 'CDII' ? (annual.remainingToWorkHours > 0 ? `${formatHoursMinutes(annual.adjustedContractHours)} objectif annuel` : `${formatHoursMinutes(annual.workedHours)} travaillées`) : 'garantie + compléments'}</small></article>
-          <article><span>Total bulletins</span><strong>{formatDecimalHours(annual.payslipTotalHours)}</strong><small>{isIndependent ? 'heures saisies' : 'heures + congés + arrêt maladie saisis'}</small></article>
+          <article><span>Total bulletins</span><strong>{formatDecimalHours(annual.payslipTotalHours)}</strong><small>{isIndependent ? 'heures saisies' : employee.contractType === 'CDI' ? 'heures + congés + arrêt maladie saisis' : 'heures + arrêt maladie saisis'}</small></article>
           <article className={selectedPayBalanceHours > 0 ? 'annual-scoreboard__balance--due' : 'annual-scoreboard__balance--settled'}><span>{selectedPayBalanceHours > 0 ? 'Reste à payer' : selectedPayBalanceHours < 0 ? 'Avance payée' : 'Solde'}</span><strong>{formatHoursMinutes(Math.abs(selectedPayBalanceHours))}</strong><small>{selectedPayBalanceHours === 0 ? 'saison équilibrée' : employee.contractType === 'CDI' ? `total dû avec congés ${paidLeaveSource === 'theoretical' ? 'théoriques' : 'des bulletins'} − bulletins` : 'écart avec les bulletins'}</small></article>
         </section>
 
@@ -605,7 +617,7 @@ export function TimeTrackingPage() {
                 : `les heures travaillées restent au plus égales à l’objectif annuel ajusté : la base du coefficient férié est donc l’objectif annuel (${formatHoursMinutes(cdiHolidayCalculation?.coefficientBaseHours ?? 0)} / 1582).`} Chaque férié du lundi au vendredi vaut 7 h × ce coefficient. Total dû = base garantie + congés : soit 10 % de la base seule (hors fériés), soit les congés payés saisis au bulletin. La base garantie vaut l’objectif annuel + fériés s’il reste des heures, sinon les heures travaillées + fériés.</p>
             </>
             : employee.contractType === 'CDII'
-              ? <p>Heures travaillées = {formatHoursMinutes(totals.contract)} du contrat + {formatHoursMinutes(totals.replacement)} de remplacements + {formatHoursMinutes(totals.holiday)} fériés du calendrier + {formatHoursMinutes(sickLeaveHours)} arrêt maladie = {formatHoursMinutes(annual.workedHours)}. Objectif annuel = {formatHoursMinutes(annualMinutes! / 60)} contrat − {formatHoursMinutes(totals.absence)} absences + {formatHoursMinutes(totals.replacement)} remplacements = {formatHoursMinutes(annual.adjustedContractHours)}. Reste à réaliser = objectif annuel − heures travaillées. Total dû = objectif annuel s’il reste des heures, sinon les heures travaillées ; aucun congé payé n’est ajouté.</p>
+              ? <p>Heures travaillées = {formatHoursMinutes(totals.contract)} du contrat + {formatHoursMinutes(totals.replacement)} de remplacements + {formatHoursMinutes(totals.holiday)} fériés du calendrier + {formatHoursMinutes(sickLeaveHours)} arrêt maladie = {formatHoursMinutes(annual.workedHours)}. Objectif annuel = {formatHoursMinutes(annualMinutes! / 60)} contrat − {formatHoursMinutes(totals.absence)} absences + {formatHoursMinutes(totals.replacement)} remplacements = {formatHoursMinutes(annual.adjustedContractHours)}. Reste à réaliser = objectif annuel − heures travaillées. Total dû = objectif annuel s’il reste des heures, sinon les heures travaillées.</p>
               : employee.contractType === 'CDD'
                 ? <p>Heures réalisées = {formatHoursMinutes(totals.contract)} du contrat + {formatHoursMinutes(totals.absence)} absences + {formatHoursMinutes(totals.holiday)} fériés + {formatHoursMinutes(sickLeaveHours)} arrêt maladie = {formatHoursMinutes(annual.contractualRealizedHours)}. Les {formatHoursMinutes(totals.replacement)} de remplacements sont payés en plus du contrat. Total dû = max({formatHoursMinutes(annualMinutes! / 60)} contrat, {formatHoursMinutes(annual.contractualRealizedHours)} réalisées) + {formatHoursMinutes(totals.replacement)} remplacements = {formatHoursMinutes(annual.totalDueHours)}.</p>
                 : <p>Heures réalisées = somme des durées réelles des événements = {formatHoursMinutes(annual.contractualRealizedHours)}. Aucune majoration de préparation, garantie annuelle ou heure de congé ou de férié automatique n’est ajoutée.</p>}
