@@ -208,7 +208,6 @@ export function calculateAnnualSummary(input: AnnualSummaryInput): AnnualSummary
   }
 
   const isCdi = input.contractType === 'CDI'
-  const workedHours = input.calendarContractHours + input.calendarReplacementHours
   const ordinaryRealizedHours = input.calendarContractHours + input.calendarAbsenceHours + input.sickLeaveHours
   const contractualRealizedHours = isCdi
     ? input.calendarContractHours + input.calendarPublicHolidayHours + input.calendarReplacementHours - input.calendarAbsenceHours + input.sickLeaveHours
@@ -223,7 +222,7 @@ export function calculateAnnualSummary(input: AnnualSummaryInput): AnnualSummary
   const payslipTotalHours = input.payslipHours + input.payslipPaidLeaveHours
 
   return {
-    workedHours,
+    workedHours: isCdi ? input.calendarContractHours + input.calendarReplacementHours : contractualRealizedHours,
     contractualRealizedHours,
     guaranteedBaseHours,
     overtimeHours,

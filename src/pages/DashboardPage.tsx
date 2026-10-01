@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BadgeCheck, BellRing, ChevronDown, CircleAlert, RefreshCw, UsersRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { formatHoursMinutes } from '../lib/annualSummary'
+import { formatHoursMinutes, getFrenchPublicHolidaysForSchoolSeason, type FrenchPublicHoliday } from '../lib/annualSummary'
 import { contractTypeLabel } from '../lib/contracts'
 import { formatSyncDate, monthLabel, schoolYearForDate } from '../lib/format'
 import { eventStart, formatEventDate, isEventWithinNextDays } from '../lib/unassignedEvents'
@@ -9,6 +9,7 @@ import { buildWorkerRecap } from '../lib/workerRecap'
 import { approveTimeMonthChange, getDeclinedResourceEvents, getCoefficientCalendars, getEmployeeSummaries, getMonthlyTimeValidations, getUnassignedEvents, repairResourceEvent, runIncrementalSync } from '../services/api'
 import type { DeclinedResourceEvent, EmployeeSummary, MonthlyTimeValidation, SyncState, UnassignedEvent, UsedCalendarCoefficient } from '../types'
 import { useAuth } from '../context/AuthContext'
+import { getGovernmentPublicHolidaysForSchoolSeason } from '../services/publicHolidays'
 
 const currentSchoolYear = schoolYearForDate(new Date())
 
@@ -20,6 +21,9 @@ function signedHours(hours: number) {
 export function DashboardPage() {
   const { user } = useAuth()
   const [schoolYear, setSchoolYear] = useState(currentSchoolYear)
+  const [holidayState, setHolidayState] = useState<{ schoolYear: number; holidays: FrenchPublicHoliday[] }>(() => ({
+    schoolYear: currentSchoolYear, holidays: getFrenchPublicHolidaysForSchoolSeason({ startYear: currentSchoolYear }),
+  }))
   const [employees, setEmployees] = useState<EmployeeSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -50,7 +54,9 @@ export function DashboardPage() {
     void getDeclinedResourceEvents().then(setDeclinedEvents).catch(() => setDeclinedEvents([]))
   }, [user?.role])
 
-  const workers = useMemo(() => employees.map((employee) => buildWorkerRecap(employee, schoolYear)), [employees, schoolYear])
+  const publicHolidays = useMemo(() => holidayState.schoolYear === schoolYear
+    ? holidayState.holidays : getFrenchPublicHolidaysForSchoolSeason({ startYear: schoolYear }), [holidayState, schoolYear])
+  const workers = useMemo(() => employees.map((employee) => buildWorkerRecap(employee, schoolYear, publicHolidays)), [employees, schoolYear, publicHolidays])
   const calendarsWithoutType = usedCalendars.filter((calendar) => calendar.hourCategory == null)
   const calendarsWithoutCoefficient = usedCalendars.filter((calendar) => calendar.coefficient == null)
   const urgentUnassignedEvents = unassignedEvents.filter((event) => isEventWithinNextDays(event, new Date(), 7)).sort((a, b) => eventStart(a).getTime() - eventStart(b).getTime())
@@ -71,6 +77,15 @@ export function DashboardPage() {
     } catch {
       setSync((state) => ({ ...state, status: 'error', message: mode === 'automatic' ? 'La synchronisation automatique a échoué. Les dernières données disponibles restent affichées.' : 'La synchronisation a échoué. Vérifiez la connexion Google.' }))
     }
+  }, [schoolYear])
+
+  useEffect(() => {
+    let active = true
+    setHolidayState({ schoolYear, holidays: getFrenchPublicHolidaysForSchoolSeason({ startYear: schoolYear }) })
+    void getGovernmentPublicHolidaysForSchoolSeason({ startYear: schoolYear })
+      .then((holidays) => { if (active) setHolidayState({ schoolYear, holidays }) })
+      .catch(() => { /* Use the same metropolitan fallback as the tracking page. */ })
+    return () => { active = false }
   }, [schoolYear])
 
   useEffect(() => {

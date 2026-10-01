@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DashboardPage } from './DashboardPage'
 import { buildWorkerRecap } from '../lib/workerRecap'
+import { calculateAnnualSummary, calculateCdiPublicHolidayHours, formatHoursMinutes, getFrenchPublicHolidaysForSchoolSeason } from '../lib/annualSummary'
 import type { ContractType, EmployeeSummary, MonthlyHours } from '../types'
 
 const getEmployeeSummaries = vi.fn()
@@ -13,6 +14,11 @@ const getMonthlyTimeValidations = vi.fn()
 const approveTimeMonthChange = vi.fn()
 const getDeclinedResourceEvents = vi.fn()
 const repairResourceEvent = vi.fn()
+const getGovernmentPublicHolidaysForSchoolSeason = vi.fn()
+
+vi.mock('../services/publicHolidays', () => ({
+  getGovernmentPublicHolidaysForSchoolSeason: (...args: unknown[]) => getGovernmentPublicHolidaysForSchoolSeason(...args),
+}))
 
 function employee(contractType: ContractType, annualContractHours: number, hours: Partial<MonthlyHours> = {}): EmployeeSummary {
   return {
@@ -48,16 +54,49 @@ describe('DashboardPage', () => {
     runIncrementalSync.mockResolvedValue({ status: 'success', lastSyncedAt: '2026-09-01T08:00:00Z', message: 'Données Google actualisées.' })
     approveTimeMonthChange.mockImplementation(async (employeeId: string, schoolYear: number, month: number) => ({ employeeId, schoolYear, month, status: 'validated', validatedAt: '2026-08-31T10:00:00Z', changeDetectedAt: null, changeCount: 1, approvedAt: '2026-09-06T10:00:00Z' }))
     getDeclinedResourceEvents.mockResolvedValue([])
+    getGovernmentPublicHolidaysForSchoolSeason.mockResolvedValue([])
     repairResourceEvent.mockResolvedValue(undefined)
   })
 
   it('calculates actual hours with the existing contract-specific rules', () => {
-    const cdi = buildWorkerRecap(employee('CDI', 100, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 3 }), 2026)
+    const cdi = buildWorkerRecap(employee('CDI', 100, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 3 }), 2026, [])
     expect(cdi.actualHours).toBe(95)
-    expect(cdi.contractualHoursCredited).toBe(88)
-    expect(cdi.differenceHours).toBe(-12)
+    expect(cdi.contractualHoursCredited).toBe(85)
+    expect(cdi.differenceHours).toBe(-15)
     expect(buildWorkerRecap(employee('CDII', 100, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 3 }), 2026).actualHours).toBe(103)
     expect(buildWorkerRecap(employee('INDEP', 0, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 3 }), 2026).actualHours).toBe(108)
+  })
+
+  it('uses the same government holiday credit as annual CDI tracking rather than Google holiday events', () => {
+    const holidays = [{ name: 'Férié test', date: new Date('2026-09-01T00:00:00Z') }]
+    const cdi = employee('CDI', 100, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 99 })
+    const recap = buildWorkerRecap(cdi, 2026, holidays)
+    const holiday = calculateCdiPublicHolidayHours({ annualContractHours: 100, fullTimeAnnualHours: 1582,
+      realizedHoursExcludingHolidays: 85, weekdayHolidayCount: 1 })
+    const tracking = calculateAnnualSummary({ contractType: 'CDI', annualContractHours: 100,
+      calendarContractHours: 90, calendarAbsenceHours: 10, calendarReplacementHours: 5,
+      calendarPublicHolidayHours: holiday.totalHours, payslipHours: 0, payslipPaidLeaveHours: 0,
+      sickLeaveHours: 0, schoolSeason: { startYear: 2026 } })
+    expect(recap.contractualHoursCredited).toBeCloseTo(tracking.contractualRealizedHours)
+    expect(recap.publicHolidayHours).toBeCloseTo(holiday.totalHours)
+    expect(recap.actualHours).toBe(95)
+  })
+
+  it('does not use the previous season holiday response after switching seasons', async () => {
+    const cdi = employee('CDI', 100, { contractHours: 90, replacementHours: 5 })
+    getEmployeeSummaries.mockResolvedValue([cdi])
+    const previousSeasonHolidays = [{ name: 'Férié test', date: new Date('2026-09-01T00:00:00Z') }]
+    getGovernmentPublicHolidaysForSchoolSeason.mockResolvedValueOnce(previousSeasonHolidays)
+    getGovernmentPublicHolidaysForSchoolSeason.mockImplementationOnce(() => new Promise(() => {}))
+    render(<MemoryRouter><DashboardPage /></MemoryRouter>)
+    expect(await screen.findByText('Salarié CDI')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByLabelText('Détail des heures de Salarié CDI')).toHaveTextContent('Jours fériés 0:27 h'))
+    const season = screen.getByRole('combobox', { name: 'Saison' })
+    const nextYear = Number((season as HTMLSelectElement).value) + 1
+    fireEvent.change(season, { target: { value: String(nextYear) } })
+    const expected = buildWorkerRecap(cdi, nextYear, getFrenchPublicHolidaysForSchoolSeason({ startYear: nextYear }))
+    expect(await screen.findByLabelText('Détail des heures de Salarié CDI')).toHaveTextContent(`Imputées au contrat ${formatHoursMinutes(expected.contractualHoursCredited)} h`)
+    expect(getGovernmentPublicHolidaysForSchoolSeason).toHaveBeenCalledWith({ startYear: nextYear })
   })
 
   it('automatically synchronizes when an administrator opens the overview', async () => {
@@ -94,7 +133,7 @@ describe('DashboardPage', () => {
     expect(screen.getByLabelText(/au-dessus du contrat/)).toHaveClass('worker-difference--positive')
     expect(screen.getByLabelText(/en dessous du contrat/)).toHaveClass('worker-difference--negative')
     expect(screen.getByLabelText('Sans objectif contractuel')).toHaveClass('worker-difference--neutral')
-    expect(screen.getByLabelText('Détail des heures de Salarié CDI')).toHaveTextContent('Absence 2:00 hRemplacement 1:00 hJours fériés 1:00 h')
+    expect(screen.getByLabelText('Détail des heures de Salarié CDI')).toHaveTextContent('Absence 2:00 hRemplacement 1:00 hJours fériés 0:00 hImputées au contrat 109:00 h')
   })
 
   it('groups configuration and J-7 monitor gaps in the task board', async () => {

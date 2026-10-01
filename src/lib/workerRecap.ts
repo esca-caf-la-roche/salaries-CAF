@@ -1,4 +1,4 @@
-import { calculateAnnualSummary } from './annualSummary'
+import { calculateAnnualSummary, calculateCdiPublicHolidayHours, getFrenchPublicHolidaysForSchoolSeason, isWeekday, type FrenchPublicHoliday } from './annualSummary'
 import type { EmployeeSummary } from '../types'
 
 export interface WorkerRecap {
@@ -12,20 +12,29 @@ export interface WorkerRecap {
   publicHolidayHours: number
 }
 
-export function buildWorkerRecap(employee: EmployeeSummary, schoolYear: number): WorkerRecap {
+export function buildWorkerRecap(employee: EmployeeSummary, schoolYear: number, holidays: FrenchPublicHoliday[] = getFrenchPublicHolidaysForSchoolSeason({ startYear: schoolYear })): WorkerRecap {
   const totals = employee.monthlyHours.reduce((sum, month) => ({
     contract: sum.contract + month.contractHours,
     absence: sum.absence + month.absenceHours,
     replacement: sum.replacement + month.replacementHours,
     publicHoliday: sum.publicHoliday + month.publicHolidayHours,
   }), { contract: 0, absence: 0, replacement: 0, publicHoliday: 0 })
+  const publicHolidayHours = employee.contractType === 'CDI'
+    ? calculateCdiPublicHolidayHours({
+      annualContractHours: employee.annualContractHours,
+      fullTimeAnnualHours: employee.settings.fullTimeAnnualMinutes / 60,
+      realizedHoursExcludingHolidays: totals.contract + totals.replacement - totals.absence
+        + employee.payroll.reduce((sum, entry) => sum + entry.sickLeaveHundredthHours, 0) / 100,
+      weekdayHolidayCount: holidays.filter(({ date }) => isWeekday(date)).length,
+    }).totalHours
+    : totals.publicHoliday
   const summary = calculateAnnualSummary({
     contractType: employee.contractType,
     annualContractHours: employee.annualContractHours,
     calendarContractHours: totals.contract,
     calendarAbsenceHours: totals.absence,
     calendarReplacementHours: totals.replacement,
-    calendarPublicHolidayHours: totals.publicHoliday,
+    calendarPublicHolidayHours: publicHolidayHours,
     payslipHours: 0,
     payslipPaidLeaveHours: 0,
     sickLeaveHours: employee.contractType !== 'INDEP'
@@ -42,6 +51,6 @@ export function buildWorkerRecap(employee: EmployeeSummary, schoolYear: number):
     differenceHours: employee.contractType === 'INDEP' ? null : summary.contractualRealizedHours - employee.annualContractHours,
     absenceHours: totals.absence,
     replacementHours: totals.replacement,
-    publicHolidayHours: totals.publicHoliday,
+    publicHolidayHours,
   }
 }
