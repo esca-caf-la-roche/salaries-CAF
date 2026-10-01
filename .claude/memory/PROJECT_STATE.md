@@ -2,6 +2,7 @@
 
 - Project: La Cordée — suivi des heures CAF
 - Phase: production application, actively maintained
+- Current uncommitted work (2026-10-01): CDI hours display separates worked hours (contract-category events + replacements) from hours credited toward the annual contract (worked + holidays - absences + sick leave). Monthly tracking, annual recap and admin overview updated; 162 tests, lint and build pass locally. Not deployed; Jérôme's actual September data has not been reconciled.
 - Current branch: `main`, tracking `origin/main` (PR #12 merged 2026-10-01, CI green, Pages redeployed)
 - Current focus: PSA payroll-detail feature shipped (PR #9 merged 2026-09-29, format slimmed in PR #10, same-day merge in PR #11 — live on GitHub Pages). The Absences & remplacements page expands per monitor into two strictly separate slot groups (Absences / Remplacements) plus a "Copier le mois" button producing the monthly plain-text report for PSA.
 - Deployment: GitHub Pages through `.github/workflows/deploy-pages.yml` after lint, tests, and build.

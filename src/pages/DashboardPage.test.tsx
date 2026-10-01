@@ -52,7 +52,10 @@ describe('DashboardPage', () => {
   })
 
   it('calculates actual hours with the existing contract-specific rules', () => {
-    expect(buildWorkerRecap(employee('CDI', 100, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 3 }), 2026).actualHours).toBe(88)
+    const cdi = buildWorkerRecap(employee('CDI', 100, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 3 }), 2026)
+    expect(cdi.actualHours).toBe(95)
+    expect(cdi.contractualHoursCredited).toBe(88)
+    expect(cdi.differenceHours).toBe(-12)
     expect(buildWorkerRecap(employee('CDII', 100, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 3 }), 2026).actualHours).toBe(103)
     expect(buildWorkerRecap(employee('INDEP', 0, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 3 }), 2026).actualHours).toBe(108)
   })

@@ -136,16 +136,16 @@ export function DashboardPage() {
     <section className="team-overview" aria-labelledby="team-overview-title">
       <div className="team-overview__heading"><div><p className="eyebrow">Saison {schoolYear}–{schoolYear + 1}</p><h2 id="team-overview-title">Salariés et indépendants</h2></div><span><UsersRound aria-hidden="true" />{employees.length} personne{employees.length > 1 ? 's' : ''}</span></div>
       {loading ? <div className="skeleton-list" aria-label="Chargement du récapitulatif"><i /><i /><i /></div> : workers.length === 0 ? <p className="overview-empty">Aucune ressource active pour cette saison.</p> : <div className="worker-list">
-        {workers.map(({ employee, contractHours, actualHours, differenceHours, absenceHours, replacementHours, publicHolidayHours }) => {
+        {workers.map(({ employee, contractHours, actualHours, contractualHoursCredited, differenceHours, absenceHours, replacementHours, publicHolidayHours }) => {
           const differenceTone = differenceHours == null ? 'neutral' : differenceHours >= 0 ? 'positive' : 'negative'
           const differenceLabel = differenceHours == null ? 'Sans objectif contractuel' : differenceHours >= 0 ? `${signedHours(differenceHours)} au-dessus du contrat` : `${signedHours(differenceHours)} en dessous du contrat`
           return <article className="worker-row" key={employee.id}>
             <div className="worker-identity"><strong>{employee.name}</strong><span>{contractTypeLabel(employee.contractType)}</span></div>
             <div className="worker-value"><span>Contrat annuel</span><strong>{employee.contractType === 'INDEP' ? '—' : `${formatHoursMinutes(contractHours)} h`}</strong></div>
-            <div className="worker-value"><span>Heures réelles</span><strong>{formatHoursMinutes(actualHours)} h</strong></div>
+            <div className="worker-value"><span>Heures travaillées</span><strong>{formatHoursMinutes(actualHours)} h</strong></div>
             <div className="worker-value"><span>Répartition</span><strong>{employee.contractType === 'INDEP' ? '—' : `${employee.paidMonths} mois`}</strong></div>
             <div className={`worker-difference worker-difference--${differenceTone}`} aria-label={differenceLabel}><span>Écart au contrat</span><strong>{differenceHours == null ? 'Non applicable' : signedHours(differenceHours)}</strong><small>{differenceHours == null ? 'Temps réel' : differenceHours >= 0 ? 'Contrat atteint' : 'Reste à réaliser'}</small></div>
-            <div className="worker-details" aria-label={`Détail des heures de ${employee.name}`}><span>Absence <strong>{formatHoursMinutes(absenceHours)} h</strong></span><span>Remplacement <strong>{formatHoursMinutes(replacementHours)} h</strong></span><span>Jours fériés <strong>{formatHoursMinutes(publicHolidayHours)} h</strong></span></div>
+            <div className="worker-details" aria-label={`Détail des heures de ${employee.name}`}><span>Absence <strong>{formatHoursMinutes(absenceHours)} h</strong></span><span>Remplacement <strong>{formatHoursMinutes(replacementHours)} h</strong></span><span>Jours fériés <strong>{formatHoursMinutes(publicHolidayHours)} h</strong></span>{employee.contractType === 'CDI' && <span>Imputées au contrat <strong>{formatHoursMinutes(contractualHoursCredited)} h</strong></span>}</div>
           </article>
         })}
       </div>}

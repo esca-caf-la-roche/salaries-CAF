@@ -2,6 +2,9 @@
 
 ## Immediate
 
+- [ ] Reconcile Jérôme's September events and decimal-hour figures with the new CDI worked-hours and contract-credit displays; no production data was available locally.
+- [ ] Review and merge the uncommitted CDI hours fix through a PR before deployment; tests (162), lint and build passed locally on 2026-10-01.
+
 - [x] Test date-freeze shipped: PR #12 merged into `main` on 2026-10-01 (commit `9f614cc`), CI green, GitHub Pages redeployed. `src/test/setup.ts` pins "today" to 2026-09-30 (local components).
 - [x] Validate the new "Copier le mois" report against real data — tested by the user on 2026-10-01, OK (decimal format confirmed 2026-09-29).
 - [x] Feature scope decided (2026-10-01): **option A** — absent-person-only workflow. Unassigned ("À déterminer") sessions stay on the existing dashboard page; no direct assignment in the replacement wizard.

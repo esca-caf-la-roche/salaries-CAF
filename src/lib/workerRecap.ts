@@ -5,6 +5,7 @@ export interface WorkerRecap {
   employee: EmployeeSummary
   contractHours: number
   actualHours: number
+  contractualHoursCredited: number
   differenceHours: number | null
   absenceHours: number
   replacementHours: number
@@ -18,7 +19,7 @@ export function buildWorkerRecap(employee: EmployeeSummary, schoolYear: number):
     replacement: sum.replacement + month.replacementHours,
     publicHoliday: sum.publicHoliday + month.publicHolidayHours,
   }), { contract: 0, absence: 0, replacement: 0, publicHoliday: 0 })
-  const actualHours = calculateAnnualSummary({
+  const summary = calculateAnnualSummary({
     contractType: employee.contractType,
     annualContractHours: employee.annualContractHours,
     calendarContractHours: totals.contract,
@@ -32,12 +33,13 @@ export function buildWorkerRecap(employee: EmployeeSummary, schoolYear: number):
       : 0,
     schoolSeason: { startYear: schoolYear },
     fullTimeAnnualHours: employee.settings.fullTimeAnnualMinutes / 60,
-  }).contractualRealizedHours
+  })
   return {
     employee,
     contractHours: employee.annualContractHours,
-    actualHours,
-    differenceHours: employee.contractType === 'INDEP' ? null : actualHours - employee.annualContractHours,
+    actualHours: employee.contractType === 'CDI' ? summary.workedHours : summary.contractualRealizedHours,
+    contractualHoursCredited: summary.contractualRealizedHours,
+    differenceHours: employee.contractType === 'INDEP' ? null : summary.contractualRealizedHours - employee.annualContractHours,
     absenceHours: totals.absence,
     replacementHours: totals.replacement,
     publicHolidayHours: totals.publicHoliday,
