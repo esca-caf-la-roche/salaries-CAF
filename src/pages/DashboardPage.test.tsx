@@ -62,7 +62,7 @@ describe('DashboardPage', () => {
     const cdi = buildWorkerRecap(employee('CDI', 100, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 3 }), 2026, [])
     expect(cdi.actualHours).toBe(95)
     expect(cdi.differenceHours).toBe(0)
-    expect(buildWorkerRecap(employee('CDII', 100, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 3 }), 2026).actualHours).toBe(95)
+    expect(buildWorkerRecap(employee('CDII', 100, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 3 }), 2026).actualHours).toBe(98)
     expect(buildWorkerRecap(employee('INDEP', 0, { contractHours: 90, absenceHours: 10, replacementHours: 5, publicHolidayHours: 3 }), 2026).actualHours).toBe(108)
   })
 
@@ -76,7 +76,7 @@ describe('DashboardPage', () => {
       calendarContractHours: 90, calendarAbsenceHours: 10, calendarReplacementHours: 5,
       calendarPublicHolidayHours: holiday.totalHours, payslipHours: 0, payslipPaidLeaveHours: 0,
       sickLeaveHours: 0, schoolSeason: { startYear: 2026 } })
-    expect(recap.differenceHours).toBeCloseTo(tracking.hoursTowardsContract - tracking.adjustedContractHours)
+    expect(recap.differenceHours).toBeCloseTo(tracking.workedHours - tracking.adjustedContractHours)
     expect(recap.publicHolidayHours).toBeCloseTo(holiday.totalHours)
     expect(recap.actualHours).toBe(95)
   })

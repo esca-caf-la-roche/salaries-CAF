@@ -22,7 +22,6 @@ export interface AnnualSummaryInput {
 export interface AnnualSummary {
   workedHours: number
   adjustedContractHours: number
-  hoursTowardsContract: number
   contractualRealizedHours: number
   guaranteedBaseHours: number
   overtimeHours: number
@@ -198,7 +197,6 @@ export function calculateAnnualSummary(input: AnnualSummaryInput): AnnualSummary
     return {
       workedHours: realizedHours,
       adjustedContractHours: 0,
-      hoursTowardsContract: realizedHours,
       contractualRealizedHours: realizedHours,
       guaranteedBaseHours: realizedHours,
       overtimeHours: 0,
@@ -212,36 +210,43 @@ export function calculateAnnualSummary(input: AnnualSummaryInput): AnnualSummary
   }
 
   const isCdi = input.contractType === 'CDI'
-  const adjustsAnnualTarget = isCdi || input.contractType === 'CDII'
-  const ordinaryRealizedHours = input.calendarContractHours + input.calendarAbsenceHours + input.sickLeaveHours
+  const isCdii = input.contractType === 'CDII'
+  const adjustsAnnualTarget = isCdi || isCdii
+  const sickLeaveHours = input.sickLeaveHours
+  const ordinaryRealizedHours = input.calendarContractHours + input.calendarAbsenceHours + sickLeaveHours
   const contractualRealizedHours = isCdi
-    ? input.calendarContractHours + input.calendarPublicHolidayHours + input.calendarReplacementHours - input.calendarAbsenceHours + input.sickLeaveHours
+    ? input.calendarContractHours + input.calendarPublicHolidayHours + input.calendarReplacementHours - input.calendarAbsenceHours + sickLeaveHours
     : ordinaryRealizedHours + input.calendarPublicHolidayHours
+  // Sick leave counts as worked time. For a CDII, calendar holidays are also worked time;
+  // for a CDI they are added separately to the guaranteed base.
+  const workedHours = isCdi
+    ? input.calendarContractHours + input.calendarReplacementHours + sickLeaveHours
+    : isCdii
+      ? input.calendarContractHours + input.calendarReplacementHours + input.calendarPublicHolidayHours + sickLeaveHours
+      : contractualRealizedHours
   const adjustedContractHours = adjustsAnnualTarget
     ? Math.max(0, input.annualContractHours - input.calendarAbsenceHours + input.calendarReplacementHours)
     : input.annualContractHours
-  const hoursTowardsContract = adjustsAnnualTarget
-    ? input.calendarContractHours + input.calendarReplacementHours + input.calendarPublicHolidayHours + input.sickLeaveHours
-    : contractualRealizedHours
   const guaranteedBaseHours = isCdi
-    ? Math.max(adjustedContractHours, hoursTowardsContract - input.calendarPublicHolidayHours) + input.calendarPublicHolidayHours
-    : input.contractType === 'CDII'
-      ? Math.max(adjustedContractHours, hoursTowardsContract)
+    ? Math.max(adjustedContractHours, workedHours) + input.calendarPublicHolidayHours
+    : isCdii
+      ? Math.max(adjustedContractHours, workedHours)
       : Math.max(input.annualContractHours, ordinaryRealizedHours)
-  const overtimeHours = Math.max(0, hoursTowardsContract - adjustedContractHours)
+  const overtimeHours = adjustsAnnualTarget
+    ? Math.max(0, workedHours - adjustedContractHours)
+    : Math.max(0, contractualRealizedHours - input.annualContractHours)
   const paidLeaveDueHours = isCdi ? guaranteedBaseHours * 0.1 : 0
   const publicHolidayDueHours = isCdi ? input.calendarPublicHolidayHours : 0
   const totalDueHours = isCdi
     ? guaranteedBaseHours + paidLeaveDueHours
-    : input.contractType === 'CDII'
+    : isCdii
       ? guaranteedBaseHours
       : Math.max(guaranteedBaseHours, contractualRealizedHours) + input.calendarReplacementHours
-  const payslipTotalHours = input.payslipHours + input.payslipPaidLeaveHours
+  const payslipTotalHours = input.payslipHours + input.payslipPaidLeaveHours + sickLeaveHours
 
   return {
-    workedHours: adjustsAnnualTarget ? input.calendarContractHours + input.calendarReplacementHours : contractualRealizedHours,
+    workedHours,
     adjustedContractHours,
-    hoursTowardsContract,
     contractualRealizedHours,
     guaranteedBaseHours,
     overtimeHours,
@@ -249,7 +254,9 @@ export function calculateAnnualSummary(input: AnnualSummaryInput): AnnualSummary
     publicHolidayDueHours,
     totalDueHours,
     payslipTotalHours,
-    remainingToWorkHours: Math.max(0, adjustedContractHours - hoursTowardsContract),
+    remainingToWorkHours: adjustsAnnualTarget
+      ? Math.max(0, adjustedContractHours - workedHours)
+      : Math.max(0, input.annualContractHours - contractualRealizedHours),
     payBalanceHours: totalDueHours - payslipTotalHours,
   }
 }
