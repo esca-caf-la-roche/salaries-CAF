@@ -60,14 +60,14 @@ describe('calculateAnnualSummary', () => {
 
     expect(result).toMatchObject({
       contractualRealizedHours: 901 + 56 / 60,
-      guaranteedBaseHours: 925,
+      guaranteedBaseHours: 939,
       overtimeHours: 0,
-      paidLeaveDueHours: 92.5,
+      paidLeaveDueHours: 93.9,
       publicHolidayDueHours: 14,
-      totalDueHours: 1017.5,
+      totalDueHours: 1032.9,
       payslipTotalHours: 1020,
-      payBalanceHours: -2.5,
     })
+    expect(result.payBalanceHours).toBeCloseTo(12.9)
     expect(result.remainingToWorkHours).toBeCloseTo(23 + 4 / 60)
   })
 
@@ -103,12 +103,14 @@ describe('calculateAnnualSummary', () => {
       payslipHours: 0,
     })
 
-    expect(result.guaranteedBaseHours).toBe(115)
+    expect(result.guaranteedBaseHours).toBe(120)
     expect(result.workedHours).toBe(113)
     expect(result.contractualRealizedHours).toBe(115)
-    expect(result.overtimeHours).toBe(15)
-    expect(result.paidLeaveDueHours).toBe(11.5)
-    expect(result.totalDueHours).toBe(126.5)
+    expect(result.adjustedContractHours).toBe(98)
+    expect(result.hoursTowardsContract).toBe(120)
+    expect(result.overtimeHours).toBe(22)
+    expect(result.paidLeaveDueHours).toBe(12)
+    expect(result.totalDueHours).toBe(132)
     expect(result.remainingToWorkHours).toBe(0)
   })
 
@@ -119,7 +121,41 @@ describe('calculateAnnualSummary', () => {
     const withoutAbsence = calculateAnnualSummary({ ...input, calendarAbsenceHours: 0 })
     expect(withAbsence.workedHours).toBeCloseTo(77.125)
     expect(withoutAbsence.workedHours).toBeCloseTo(withAbsence.workedHours)
-    expect(withAbsence.remainingToWorkHours - withoutAbsence.remainingToWorkHours).toBeCloseTo(6.6)
+    expect(withoutAbsence.remainingToWorkHours - withAbsence.remainingToWorkHours).toBeCloseTo(6.6)
+  })
+
+  it('adds CDI replacement hours to both adjusted target and work performed', () => {
+    const result = calculateAnnualSummary({ ...baseInput, annualContractHours: 100,
+      calendarContractHours: 60, calendarAbsenceHours: 10, calendarReplacementHours: 5,
+      calendarPublicHolidayHours: 0, sickLeaveHours: 0 })
+    expect(result.adjustedContractHours).toBe(95)
+    expect(result.workedHours).toBe(65)
+    expect(result.hoursTowardsContract).toBe(65)
+    expect(result.remainingToWorkHours).toBe(30)
+  })
+
+  it('guarantees adjusted CDI hours, adds holidays once and calculates ten percent leave before comparing payslips', () => {
+    const result = calculateAnnualSummary({ ...baseInput, annualContractHours: 100,
+      calendarContractHours: 60, calendarAbsenceHours: 10, calendarReplacementHours: 5,
+      calendarPublicHolidayHours: 7, payslipHours: 90, payslipPaidLeaveHours: 3 })
+    expect(result.guaranteedBaseHours).toBe(102)
+    expect(result.paidLeaveDueHours).toBeCloseTo(10.2)
+    expect(result.totalDueHours).toBeCloseTo(112.2)
+    expect(result.payslipTotalHours).toBe(93)
+    expect(result.payBalanceHours).toBeCloseTo(19.2)
+    // The UI's bulletin-leave selection uses the same guaranteed base plus the recorded leave.
+    expect(result.guaranteedBaseHours + 3 - result.payslipTotalHours).toBe(12)
+  })
+
+  it('uses the same annual target and worked-hour rules for CDII when computing hours due', () => {
+    const result = calculateAnnualSummary({ ...baseInput, contractType: 'CDII', annualContractHours: 100,
+      calendarContractHours: 60, calendarAbsenceHours: 10, calendarReplacementHours: 5,
+      calendarPublicHolidayHours: 0, sickLeaveHours: 0 })
+    expect(result.adjustedContractHours).toBe(95)
+    expect(result.workedHours).toBe(65)
+    expect(result.remainingToWorkHours).toBe(30)
+    expect(result.contractualRealizedHours).toBe(70)
+    expect(result.totalDueHours).toBe(95)
   })
 
   it.each(['CDII', 'CDD'] as const)(
@@ -138,7 +174,7 @@ describe('calculateAnnualSummary', () => {
       })
 
       expect(result.contractualRealizedHours).toBe(225)
-      expect(result.guaranteedBaseHours).toBe(220)
+      expect(result.guaranteedBaseHours).toBe(contractType === 'CDII' ? 229 : 220)
       expect(result.overtimeHours).toBe(5)
       expect(result.paidLeaveDueHours).toBe(0)
       expect(result.publicHolidayDueHours).toBe(0)
@@ -147,6 +183,15 @@ describe('calculateAnnualSummary', () => {
       expect(result.payBalanceHours).toBe(-3)
     },
   )
+
+  it('reduces the CDII amount due when absences lower the adjusted target below the performed hours', () => {
+    const result = calculateAnnualSummary({ ...baseInput, contractType: 'CDII', annualContractHours: 100,
+      calendarContractHours: 90, calendarAbsenceHours: 30, calendarReplacementHours: 0,
+      calendarPublicHolidayHours: 0, sickLeaveHours: 0, payslipHours: 0, payslipPaidLeaveHours: 0 })
+    expect(result.adjustedContractHours).toBe(70)
+    expect(result.hoursTowardsContract).toBe(90)
+    expect(result.totalDueHours).toBe(90)
+  })
 
   it('guarantees the annual contract when realized hours are lower', () => {
     const result = calculateAnnualSummary({
@@ -160,10 +205,10 @@ describe('calculateAnnualSummary', () => {
     })
 
     expect(result.contractualRealizedHours).toBe(195)
-    expect(result.guaranteedBaseHours).toBe(220)
-    expect(result.totalDueHours).toBe(220)
+    expect(result.guaranteedBaseHours).toBe(210)
+    expect(result.totalDueHours).toBe(210)
     expect(result.remainingToWorkHours).toBe(25)
-    expect(result.payBalanceHours).toBe(0)
+    expect(result.payBalanceHours).toBe(-10)
   })
 
   it('rejects invalid hour totals and full-time references', () => {
