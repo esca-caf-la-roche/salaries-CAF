@@ -91,8 +91,36 @@ describe('TimeTrackingPage', () => {
 
     expect(await screen.findByText('Stage')).toBeInTheDocument()
     expect(screen.getByText('2:30')).toBeInTheDocument()
-    expect(screen.getByText('Heures du contrat')).toBeInTheDocument()
+    expect(screen.getAllByText('Heures du contrat')).not.toHaveLength(0)
     expect(getMonthlyEventHours).toHaveBeenCalledWith('employee-1', expect.any(Number), 9)
+  })
+
+  it('groups monthly events by hour category in the required order', async () => {
+    getEmployeeSummaries.mockResolvedValue([{
+      ...structuredClone(employee), contractType: 'CDII', settings: { ...employee.settings, contractType: 'CDII' },
+    }])
+    getMonthlyEventHours.mockResolvedValue([
+      { id: 'holiday-event', title: 'Férié calendrier', calendarName: 'Fériés', calendarColor: '#7986cb', startsAt: '2026-09-01T07:00:00Z', endsAt: '2026-09-01T09:00:00Z', rawHours: 2, weightedHours: 2, coefficient: 1, hourCategory: 'public_holiday', hasPreparation: false },
+      { id: 'replacement-event', title: 'Remplacement', calendarName: 'Remplacements', calendarColor: '#7986cb', startsAt: '2026-09-02T07:00:00Z', endsAt: '2026-09-02T09:00:00Z', rawHours: 2, weightedHours: 2, coefficient: 1, hourCategory: 'replacement', hasPreparation: false },
+      { id: 'absence-event', title: 'Absence', calendarName: 'Absences', calendarColor: '#7986cb', startsAt: '2026-09-03T07:00:00Z', endsAt: '2026-09-03T09:00:00Z', rawHours: 2, weightedHours: 2, coefficient: 1, hourCategory: 'absence', hasPreparation: false },
+      { id: 'contract-event', title: 'Contrat', calendarName: 'Contrat', calendarColor: '#7986cb', startsAt: '2026-09-04T07:00:00Z', endsAt: '2026-09-04T09:00:00Z', rawHours: 2, weightedHours: 2, coefficient: 1, hourCategory: 'contract', hasPreparation: false },
+    ])
+    render(<TimeTrackingPage />)
+
+    await waitFor(() => expect(screen.getAllByRole('rowheader')).toHaveLength(4))
+    const headings = [
+      'Heures du contrat', 'Heures d’absences', 'Heures de remplacements', 'Heures fériées',
+    ].map((label) => screen.getByRole('rowheader', { name: label }))
+    expect(headings.map((heading) => heading.textContent)).toEqual([
+      'Heures du contrat', 'Heures d’absences', 'Heures de remplacements', 'Heures fériées',
+    ])
+    expect(headings[0].compareDocumentPosition(headings[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(headings[1].compareDocumentPosition(headings[2]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(headings[2].compareDocumentPosition(headings[3]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(headings[0].closest('tbody')).toHaveTextContent('Contrat')
+    expect(headings[1].closest('tbody')).toHaveTextContent('Absence')
+    expect(headings[2].closest('tbody')).toHaveTextContent('Remplacement')
+    expect(headings[3].closest('tbody')).toHaveTextContent('Férié calendrier')
   })
 
   it('shows and saves independent actual hours without preparation or annual contract', async () => {

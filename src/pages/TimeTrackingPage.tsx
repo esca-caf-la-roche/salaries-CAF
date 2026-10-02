@@ -37,6 +37,15 @@ const categoryLabels = {
   public_holiday: 'Jour férié',
 }
 
+const categoryGroupOrder = ['contract', 'absence', 'replacement', 'public_holiday'] as const
+
+const categoryGroupLabels = {
+  contract: 'Heures du contrat',
+  absence: 'Heures d’absences',
+  replacement: 'Heures de remplacements',
+  public_holiday: 'Heures fériées',
+}
+
 const validationLabels = {
   not_due: 'Pas encore validable', to_validate: 'À valider', employee_validated: 'Validé par le salarié',
   changes_pending: 'Modification à approuver', admin_approved: 'Approuvé par l’administration',
@@ -409,6 +418,11 @@ export function TimeTrackingPage() {
   }
   const canManualSync = canEdit || (user?.role === 'employee' && employee?.contractType === 'CDI')
   const visibleHistory = validationHistory.filter((event) => event.employeeId === employee?.id)
+  const eventGroups = categoryGroupOrder.map((category) => ({
+    category,
+    events: visibleEvents.filter((event) => event.hourCategory === category),
+    holidays: category === 'public_holiday' ? selectedMonthHolidays : [],
+  })).filter((group) => group.events.length > 0 || group.holidays.length > 0)
 
   return (
     <div className="page tracking-page">
@@ -477,15 +491,18 @@ export function TimeTrackingPage() {
           <div className="table-scroll"><table><colgroup>{isIndependent
             ? <><col className="monthly-column--calendar" /><col className="monthly-column--title" /><col className="monthly-column--date" /><col className="monthly-column--time" span={2} /><col className="monthly-column--duration" /><col className="monthly-column--status" /></>
             : <><col className="monthly-column--calendar" /><col className="monthly-column--title" /><col className="monthly-column--date" /><col className="monthly-column--time" span={2} /><col className="monthly-column--duration" /><col className="monthly-column--coefficient" /><col className="monthly-column--category" /><col className="monthly-column--status" /></>
-          }</colgroup><thead><tr><th>Calendrier</th><th>Objet</th><th>Date</th><th>Début</th><th>Fin</th><th>Durée</th>{!isIndependent && <><th>Coefficient</th><th>Rubrique</th></>}<th>Prise en compte</th></tr></thead><tbody>
-            {visibleEvents.map((event) => <tr key={event.id}><td data-label="Calendrier"><span className="calendar-cell"><i style={{ background: event.calendarColor ?? '#91b7bd' }} />{event.calendarName}</span></td><td data-label="Objet"><strong>{event.title}</strong></td><td data-label="Date">{eventDate(event.startsAt)}</td><td data-label="Début">{eventTime(event.startsAt)}</td><td data-label="Fin">{eventTime(event.endsAt)}</td><td data-label="Durée">{formatHoursMinutes(event.weightedHours)}</td>{!isIndependent && <><td data-label="Coefficient"><span className="coefficient">× {event.coefficient.toLocaleString('fr-FR')}</span></td><td data-label="Rubrique">{categoryLabels[event.hourCategory]}</td></>}<td data-label="Prise en compte"><span className="holiday-status">Calendrier</span></td></tr>)}
-            {selectedMonthHolidays.map((holiday) => {
-              const counted = isWeekday(holiday.date)
-              return <tr className="holiday-row" key={`holiday-${holiday.date.toISOString()}`}><td data-label="Calendrier"><span className="calendar-cell"><i />API du gouvernement</span></td><td data-label="Objet"><strong>{holiday.name}</strong></td><td data-label="Date">{holidayDate(holiday.date)}</td><td data-label="Début">—</td><td data-label="Fin">—</td><td data-label="Durée">{formatHoursMinutes(counted ? (cdiHolidayCalculation?.hoursPerHoliday ?? 0) : 0)}</td><td data-label="Coefficient"><span className="coefficient">× {(cdiHolidayCalculation?.coefficient ?? 0).toLocaleString('fr-FR', { maximumFractionDigits: 4 })}</span></td><td data-label="Rubrique">Jour férié</td><td data-label="Prise en compte"><span className={`holiday-status holiday-status--${counted ? 'counted' : 'excluded'}`}>{counted ? 'Compté · lundi à vendredi' : 'Non compté · week-end'}</span></td></tr>
-            })}
-            {!eventsLoading && visibleEvents.length === 0 && selectedMonthHolidays.length === 0 && <tr><td colSpan={isIndependent ? 7 : 9} className="table-empty">Aucun événement configuré pour ce mois.</td></tr>}
-            {eventsLoading && <tr><td colSpan={isIndependent ? 7 : 9} className="table-empty">Chargement du détail…</td></tr>}
-          </tbody></table></div>
+          }</colgroup><thead><tr><th>Calendrier</th><th>Objet</th><th>Date</th><th>Début</th><th>Fin</th><th>Durée</th>{!isIndependent && <><th>Coefficient</th><th>Rubrique</th></>}<th>Prise en compte</th></tr></thead>
+            {eventGroups.map((group) => <tbody key={group.category}>
+              <tr className="ledger-category-row"><th colSpan={isIndependent ? 7 : 9} scope="rowgroup">{categoryGroupLabels[group.category]}</th></tr>
+              {group.events.map((event) => <tr key={event.id}><td data-label="Calendrier"><span className="calendar-cell"><i style={{ background: event.calendarColor ?? '#91b7bd' }} />{event.calendarName}</span></td><td data-label="Objet"><strong>{event.title}</strong></td><td data-label="Date">{eventDate(event.startsAt)}</td><td data-label="Début">{eventTime(event.startsAt)}</td><td data-label="Fin">{eventTime(event.endsAt)}</td><td data-label="Durée">{formatHoursMinutes(event.weightedHours)}</td>{!isIndependent && <><td data-label="Coefficient"><span className="coefficient">× {event.coefficient.toLocaleString('fr-FR')}</span></td><td data-label="Rubrique">{categoryLabels[event.hourCategory]}</td></>}<td data-label="Prise en compte"><span className="holiday-status">Calendrier</span></td></tr>)}
+              {group.holidays.map((holiday) => {
+                const counted = isWeekday(holiday.date)
+                return <tr className="holiday-row" key={`holiday-${holiday.date.toISOString()}`}><td data-label="Calendrier"><span className="calendar-cell"><i />API du gouvernement</span></td><td data-label="Objet"><strong>{holiday.name}</strong></td><td data-label="Date">{holidayDate(holiday.date)}</td><td data-label="Début">—</td><td data-label="Fin">—</td><td data-label="Durée">{formatHoursMinutes(counted ? (cdiHolidayCalculation?.hoursPerHoliday ?? 0) : 0)}</td><td data-label="Coefficient"><span className="coefficient">× {(cdiHolidayCalculation?.coefficient ?? 0).toLocaleString('fr-FR', { maximumFractionDigits: 4 })}</span></td><td data-label="Rubrique">Jour férié</td><td data-label="Prise en compte"><span className={`holiday-status holiday-status--${counted ? 'counted' : 'excluded'}`}>{counted ? 'Compté · lundi à vendredi' : 'Non compté · week-end'}</span></td></tr>
+              })}
+            </tbody>)}
+            {!eventsLoading && visibleEvents.length === 0 && selectedMonthHolidays.length === 0 && <tbody><tr><td colSpan={isIndependent ? 7 : 9} className="table-empty">Aucun événement configuré pour ce mois.</td></tr></tbody>}
+            {eventsLoading && <tbody><tr><td colSpan={isIndependent ? 7 : 9} className="table-empty">Chargement du détail…</td></tr></tbody>}
+          </table></div>
         </section>
       </>}
 
