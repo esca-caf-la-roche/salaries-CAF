@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { BadgeCheck, CalendarDays, ChevronDown, CircleAlert, ClipboardCheck, RefreshCw, Save, Sigma } from 'lucide-react'
 import { HoursChart } from '../components/HoursChart'
 import {
@@ -97,7 +98,7 @@ function holidayDate(date: Date) {
 
 export function TimeTrackingPage() {
   const { user } = useAuth()
-  const navigationQuery = window.location.search
+  const { search: navigationQuery, key: navigationKey } = useLocation()
   const searchParams = useMemo(() => new URLSearchParams(navigationQuery), [navigationQuery])
   const canEdit = user?.role === 'admin'
   const [schoolYear, setSchoolYear] = useState(currentSchoolYear)
@@ -136,6 +137,7 @@ export function TimeTrackingPage() {
       })
       .catch(() => { if (request === employeesRequest.current) setError('Le suivi des heures n’a pas pu être chargé.') })
       .finally(() => { if (request === employeesRequest.current) setLoading(false) })
+    return () => { employeesRequest.current = request + 1 }
   }, [schoolYear])
 
   useEffect(() => {
@@ -145,8 +147,8 @@ export function TimeTrackingPage() {
     if (Number.isInteger(season) && season >= 2000 && season <= 2100) setSchoolYear(season)
     if (Number.isInteger(month) && month >= 1 && month <= 12) setSelectedMonth(month)
     if (employeeId && user?.role === 'admin') setSelectedEmployeeId(employeeId)
-    if (Number.isInteger(month)) setView('monthly')
-  }, [searchParams, user?.role])
+    if (Number.isInteger(month) && month >= 1 && month <= 12) setView('monthly')
+  }, [searchParams, navigationKey, user?.role])
 
   useEffect(() => {
     void getMonthlyTimeValidations().then(setValidations).catch(() => setValidations([]))
@@ -222,13 +224,18 @@ export function TimeTrackingPage() {
   }, [employee])
 
   useEffect(() => {
-    if (!employee || view !== 'monthly') return
+    let active = true
     setEvents([])
+    if (!employee || view !== 'monthly') {
+      setEventsLoading(false)
+      return
+    }
     setEventsLoading(true)
     void getMonthlyEventHours(employee.id, schoolYear, selectedMonth)
-      .then(setEvents)
-      .catch(() => setEvents([]))
-      .finally(() => setEventsLoading(false))
+      .then((items) => { if (active) setEvents(items) })
+      .catch(() => { if (active) setEvents([]) })
+      .finally(() => { if (active) setEventsLoading(false) })
+    return () => { active = false }
   }, [employee, schoolYear, selectedMonth, view])
 
   const calendarTotals = useMemo(() => calendarMonths.reduce((sum, month) => ({
@@ -514,7 +521,7 @@ export function TimeTrackingPage() {
           {user?.role === 'employee' && !selectedValidation && <button className="button button--primary" type="button" onClick={() => void validateSelectedMonth()} disabled={validating}>
             <BadgeCheck aria-hidden="true" />{validating ? 'Validation…' : `Valider ${monthLabel(selectedMonth)}`}
           </button>}
-          {user?.role === 'admin' && selectedValidation && !selectedValidation.approvedAt && <button className="button button--primary" type="button" onClick={() => void approveSelectedMonth()} disabled={validating}>
+          {user?.role === 'admin' && selectedValidation && (selectedValidation.status === 'changes_pending' || !selectedValidation.approvedAt) && <button className="button button--primary" type="button" onClick={() => void approveSelectedMonth()} disabled={validating}>
             <BadgeCheck aria-hidden="true" />{validating ? 'Approbation…' : `Approuver ${monthLabel(selectedMonth)}`}
           </button>}
         </section>}

@@ -141,7 +141,8 @@ export function DashboardPage() {
         {pendingValidationChanges.map((validation) => {
           const employee = employees.find((item) => item.id === validation.employeeId)
           const key = `${validation.employeeId}-${validation.schoolYear}-${validation.month}`
-          return <article className="task-item task-item--urgent" key={key}><CircleAlert aria-hidden="true" /><div><strong>Modification d’heures à approuver</strong><span>{employee?.name ?? 'Salarié'} · {monthLabel(validation.month)} {validation.month >= 9 ? validation.schoolYear : validation.schoolYear + 1}</span></div><button className="button button--secondary" type="button" onClick={() => void approveValidation(validation)} disabled={approvingValidation === key}>{approvingValidation === key ? 'Approbation…' : 'Approuver'}</button></article>
+          const target = `/suivi-heures?${new URLSearchParams({ employee: validation.employeeId, season: String(validation.schoolYear), month: String(validation.month) })}`
+          return <article className="task-item task-item--urgent" key={key}><CircleAlert aria-hidden="true" /><div><strong>Modification d’heures à approuver</strong><span>{employee?.name ?? 'Salarié'} · {monthLabel(validation.month)} {validation.month >= 9 ? validation.schoolYear : validation.schoolYear + 1}</span></div><span className="task-item__actions"><Link className="button button--secondary" to={target}>Ouvrir le mois</Link><button className="button button--secondary" type="button" onClick={() => void approveValidation(validation)} disabled={approvingValidation === key}>{approvingValidation === key ? 'Approbation…' : 'Approuver'}</button></span></article>
         })}
         {pendingAdminValidations.map((validation) => {
           const employee = employees.find((item) => item.id === validation.employeeId)

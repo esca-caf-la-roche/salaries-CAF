@@ -185,6 +185,7 @@ describe('DashboardPage', () => {
     render(<MemoryRouter><DashboardPage /></MemoryRouter>)
 
     const tasks = await screen.findByRole('region', { name: 'Tâches et alertes' })
+    expect(within(tasks).getByRole('link', { name: 'Ouvrir le mois' })).toHaveAttribute('href', '/suivi-heures?employee=employee-CDI&season=2025&month=8')
     fireEvent.click(within(tasks).getByRole('button', { name: 'Approuver' }))
     await waitFor(() => expect(approveTimeMonthChange).toHaveBeenCalledWith('employee-CDI', 2025, 8))
     await waitFor(() => expect(tasks).toHaveTextContent('Aucune tâche urgente pour le moment'))
