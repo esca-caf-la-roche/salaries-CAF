@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { BadgeCheck, CalendarDays, ChevronDown, CircleAlert, ClipboardCheck, RefreshCw, Save, Sigma } from 'lucide-react'
 import { HoursChart } from '../components/HoursChart'
 import {
@@ -14,7 +15,7 @@ import { formatSyncDate, monthLabel, schoolMonths, schoolYearForDate } from '../
 import { contractTypeLabel } from '../lib/contracts'
 import { calculateRetainedHours, calculateWorkedHours } from '../lib/hourTotals'
 import { completedMonthsForSchoolYear, previousSchoolMonth } from '../lib/monthValidation'
-import { getEmployeeSummaries, getMonthlyEventHours, getMonthlyTimeValidations, getValidationHistory, runIncrementalSync, saveAnnualTracking, validateTimeMonth } from '../services/api'
+import { approveTimeMonthChange, getEmployeeSummaries, getMonthlyEventHours, getMonthlyTimeValidations, getValidationHistory, runIncrementalSync, saveAnnualTracking, validateTimeMonth } from '../services/api'
 import { getGovernmentPublicHolidaysForSchoolSeason } from '../services/publicHolidays'
 import type { EmployeeSummary, MonthlyEventHour, MonthlyHours, MonthlyPayrollEntry, MonthlyTimeValidation, SchoolYearSettings, SyncState, ValidationHistoryEvent } from '../types'
 import { useAuth } from '../context/AuthContext'
@@ -97,6 +98,8 @@ function holidayDate(date: Date) {
 
 export function TimeTrackingPage() {
   const { user } = useAuth()
+  const { search: navigationQuery, key: navigationKey } = useLocation()
+  const searchParams = useMemo(() => new URLSearchParams(navigationQuery), [navigationQuery])
   const canEdit = user?.role === 'admin'
   const [schoolYear, setSchoolYear] = useState(currentSchoolYear)
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('')
@@ -120,18 +123,32 @@ export function TimeTrackingPage() {
   const [validating, setValidating] = useState(false)
   const [validationHistory, setValidationHistory] = useState<ValidationHistoryEvent[]>([])
   const automaticSyncStarted = useRef(false)
+  const employeesRequest = useRef(0)
 
   useEffect(() => {
+    const request = ++employeesRequest.current
     setLoading(true)
     setError('')
     void getEmployeeSummaries(schoolYear)
       .then((items) => {
+        if (request !== employeesRequest.current) return
         setEmployees(items)
         setSelectedEmployeeId((current) => items.some((item) => item.id === current) ? current : (items[0]?.id ?? ''))
       })
-      .catch(() => setError('Le suivi des heures n’a pas pu être chargé.'))
-      .finally(() => setLoading(false))
+      .catch(() => { if (request === employeesRequest.current) setError('Le suivi des heures n’a pas pu être chargé.') })
+      .finally(() => { if (request === employeesRequest.current) setLoading(false) })
+    return () => { employeesRequest.current = request + 1 }
   }, [schoolYear])
+
+  useEffect(() => {
+    const season = Number(searchParams.get('season'))
+    const month = Number(searchParams.get('month'))
+    const employeeId = searchParams.get('employee')
+    if (Number.isInteger(season) && season >= 2000 && season <= 2100) setSchoolYear(season)
+    if (Number.isInteger(month) && month >= 1 && month <= 12) setSelectedMonth(month)
+    if (employeeId && user?.role === 'admin') setSelectedEmployeeId(employeeId)
+    if (Number.isInteger(month) && month >= 1 && month <= 12) setView('monthly')
+  }, [searchParams, navigationKey, user?.role])
 
   useEffect(() => {
     void getMonthlyTimeValidations().then(setValidations).catch(() => setValidations([]))
@@ -207,13 +224,18 @@ export function TimeTrackingPage() {
   }, [employee])
 
   useEffect(() => {
-    if (!employee || view !== 'monthly') return
+    let active = true
     setEvents([])
+    if (!employee || view !== 'monthly') {
+      setEventsLoading(false)
+      return
+    }
     setEventsLoading(true)
     void getMonthlyEventHours(employee.id, schoolYear, selectedMonth)
-      .then(setEvents)
-      .catch(() => setEvents([]))
-      .finally(() => setEventsLoading(false))
+      .then((items) => { if (active) setEvents(items) })
+      .catch(() => { if (active) setEvents([]) })
+      .finally(() => { if (active) setEventsLoading(false) })
+    return () => { active = false }
   }, [employee, schoolYear, selectedMonth, view])
 
   const calendarTotals = useMemo(() => calendarMonths.reduce((sum, month) => ({
@@ -387,6 +409,25 @@ export function TimeTrackingPage() {
     }
   }
 
+  const approveSelectedMonth = async () => {
+    if (!employee) return
+    setValidating(true)
+    setValidationMessage('')
+    try {
+      const validation = await approveTimeMonthChange(employee.id, schoolYear, selectedMonth)
+      setValidations((items) => [...items.filter((item) => !(
+        item.employeeId === validation.employeeId && item.schoolYear === validation.schoolYear && item.month === validation.month
+      )), validation])
+      const history = await getValidationHistory(employee.id, schoolYear).catch(() => validationHistory)
+      setValidationHistory(history)
+      setValidationMessage(`${monthLabel(selectedMonth)} a été approuvé.`)
+    } catch {
+      setValidationMessage('L’approbation du mois a échoué. Rechargez la page puis réessayez.')
+    } finally {
+      setValidating(false)
+    }
+  }
+
   const openPreviousMonthTask = () => {
     setSchoolYear(previousMonth.schoolYear)
     setSelectedMonth(previousMonth.month)
@@ -468,15 +509,20 @@ export function TimeTrackingPage() {
         {employee.contractType === 'CDI' && completedMonths.includes(selectedMonth) && <section className={`panel month-validation-card month-validation-card--${validationToneFor(selectedMonth)}`} aria-label="Validation du mois">
           <div>
             <p className="eyebrow">Contrôle mensuel</p>
-            <h2>{selectedValidation?.status === 'changes_pending' ? 'Modification à faire approuver' : selectedValidation?.approvedAt ? 'Mois approuvé par l’administration' : selectedValidation ? 'Mois validé par le salarié' : 'Validation à faire'}</h2>
+              <h2>{selectedValidation?.status === 'changes_pending' ? 'Modification à faire approuver' : selectedValidation?.approvedAt ? 'Mois approuvé par l’administration' : selectedValidation ? 'Mois validé à contrôler' : 'Validation à faire'}</h2>
             <p>{selectedValidation?.status === 'changes_pending'
               ? 'Les données Google ont changé depuis votre validation. L’administration doit approuver le nouvel état.'
-              : selectedValidation
-                ? `Validé le ${new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeStyle: 'short' }).format(new Date(selectedValidation.validatedAt))}. Toute modification ultérieure sera signalée.`
+                : selectedValidation?.approvedAt
+                  ? `Approuvé le ${new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeStyle: 'short' }).format(new Date(selectedValidation.approvedAt))}.`
+                : selectedValidation
+                  ? `Validé le ${new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeStyle: 'short' }).format(new Date(selectedValidation.validatedAt))}. Toute modification ultérieure sera signalée.`
                 : 'Vérifiez le détail ci-dessous avant d’attester que ce mois est complet.'}</p>
           </div>
           {user?.role === 'employee' && !selectedValidation && <button className="button button--primary" type="button" onClick={() => void validateSelectedMonth()} disabled={validating}>
             <BadgeCheck aria-hidden="true" />{validating ? 'Validation…' : `Valider ${monthLabel(selectedMonth)}`}
+          </button>}
+          {user?.role === 'admin' && selectedValidation && (selectedValidation.status === 'changes_pending' || !selectedValidation.approvedAt) && <button className="button button--primary" type="button" onClick={() => void approveSelectedMonth()} disabled={validating}>
+            <BadgeCheck aria-hidden="true" />{validating ? 'Approbation…' : `Approuver ${monthLabel(selectedMonth)}`}
           </button>}
         </section>}
         <section className="metric-grid tracking-metrics" aria-label="Totaux du mois">

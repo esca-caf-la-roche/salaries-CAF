@@ -41,6 +41,7 @@ export function Layout() {
   const { user, signOut, isDemo } = useAuth()
   const location = useLocation()
   const [moreOpen, setMoreOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const isAdmin = user?.role === 'admin'
   const primaryMobile = isAdmin ? adminPrimaryMobile : employeePrimaryMobile
   const moreActive = isAdmin && adminSecondaryMobile.some((item) => item.to === location.pathname)
@@ -52,6 +53,14 @@ export function Layout() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [moreOpen])
+  useEffect(() => {
+    if (!window.matchMedia) return
+    const media = window.matchMedia('(max-width: 900px)')
+    const update = () => setIsMobile(media.matches)
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
 
   return (
     <div className="app-shell">
@@ -71,7 +80,7 @@ export function Layout() {
           {user?.role === 'admin' && <NavLink to="/configuration"><Settings aria-hidden="true" /> <span>Configuration</span></NavLink>}
         </nav>
         <div className="sidebar__foot">
-          {user && <NotificationCenter role={user.role} />}
+          {user && !isMobile && <NotificationCenter role={user.role} />}
           <div className="user-chip">
             <span className="user-chip__avatar">{user?.displayName.charAt(0)}</span>
             <span><strong>{user?.displayName}</strong><small>{user?.role === 'admin' ? 'Administrateur' : 'Salarié'}</small></span>
@@ -87,7 +96,7 @@ export function Layout() {
             <span>Démonstration</span> Les chiffres affichés sont fictifs. Configurez Supabase pour utiliser les données réelles.
           </div>
         )}
-        <header className="mobile-header"><Logo compact /><span>La Cordée</span></header>
+        <header className="mobile-header"><Logo compact /><span>La Cordée</span>{user && isMobile && <NotificationCenter role={user.role} />}</header>
         <main id="main-content"><Outlet /></main>
         <nav className="mobile-nav" aria-label="Navigation mobile">
           {primaryMobile.map((item) => <MobileNavLink key={item.to} item={item} />)}

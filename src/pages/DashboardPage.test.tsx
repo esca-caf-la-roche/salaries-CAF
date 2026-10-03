@@ -185,9 +185,20 @@ describe('DashboardPage', () => {
     render(<MemoryRouter><DashboardPage /></MemoryRouter>)
 
     const tasks = await screen.findByRole('region', { name: 'Tâches et alertes' })
+    expect(within(tasks).getByRole('link', { name: 'Ouvrir le mois' })).toHaveAttribute('href', '/suivi-heures?employee=employee-CDI&season=2025&month=8')
     fireEvent.click(within(tasks).getByRole('button', { name: 'Approuver' }))
     await waitFor(() => expect(approveTimeMonthChange).toHaveBeenCalledWith('employee-CDI', 2025, 8))
     await waitFor(() => expect(tasks).toHaveTextContent('Aucune tâche urgente pour le moment'))
+  })
+
+  it('links an employee-validated month directly to its tracking view', async () => {
+    getEmployeeSummaries.mockResolvedValue([employee('CDI', 100)])
+    getMonthlyTimeValidations.mockResolvedValue([{ employeeId: 'employee-CDI', schoolYear: 2025, month: 8, status: 'validated', validatedAt: '2026-08-31T10:00:00Z', changeDetectedAt: null, changeCount: 0, approvedAt: null }])
+    render(<MemoryRouter><DashboardPage /></MemoryRouter>)
+
+    const tasks = await screen.findByRole('region', { name: 'Tâches et alertes' })
+    expect(tasks).toHaveTextContent('Mois validé à contrôler')
+    expect(within(tasks).getByRole('link', { name: 'Ouvrir le mois' })).toHaveAttribute('href', '/suivi-heures?employee=employee-CDI&season=2025&month=8')
   })
 
   it('refreshes the overview and every task source after Google synchronization', async () => {

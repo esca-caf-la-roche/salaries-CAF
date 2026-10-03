@@ -1,13 +1,17 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render as testingRender, screen, waitFor } from '@testing-library/react'
+import { HashRouter, Link } from 'react-router-dom'
+import type { ReactElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EmployeeSummary } from '../types'
 import { TimeTrackingPage } from './TimeTrackingPage'
 
 const getEmployeeSummaries = vi.fn()
+const render = (element: ReactElement) => testingRender(<HashRouter>{element}</HashRouter>)
 const getMonthlyEventHours = vi.fn()
 const getMonthlyTimeValidations = vi.fn()
 const getValidationHistory = vi.fn()
 const validateTimeMonth = vi.fn()
+const approveTimeMonthChange = vi.fn()
 const saveAnnualTracking = vi.fn()
 const runIncrementalSync = vi.fn()
 const getGovernmentPublicHolidaysForSchoolSeason = vi.fn()
@@ -18,6 +22,7 @@ vi.mock('../services/api', () => ({
   getMonthlyTimeValidations: (...args: unknown[]) => getMonthlyTimeValidations(...args),
   getValidationHistory: (...args: unknown[]) => getValidationHistory(...args),
   validateTimeMonth: (...args: unknown[]) => validateTimeMonth(...args),
+  approveTimeMonthChange: (...args: unknown[]) => approveTimeMonthChange(...args),
   saveAnnualTracking: (...args: unknown[]) => saveAnnualTracking(...args),
   runIncrementalSync: (...args: unknown[]) => runIncrementalSync(...args),
 }))
@@ -65,6 +70,7 @@ describe('TimeTrackingPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    window.history.replaceState({}, '', '/')
     getEmployeeSummaries.mockResolvedValue([structuredClone(employee)])
     getMonthlyEventHours.mockResolvedValue([{
       id: 'event-1', title: 'Stage', calendarName: 'Heures avec prépa', calendarColor: '#7986cb',
@@ -82,6 +88,10 @@ describe('TimeTrackingPage', () => {
     validateTimeMonth.mockImplementation(async (employeeId: string, schoolYear: number, month: number) => ({
       employeeId, schoolYear, month, status: 'validated', validatedAt: '2026-09-06T10:00:00Z',
       changeDetectedAt: null, changeCount: 0, approvedAt: null,
+    }))
+    approveTimeMonthChange.mockImplementation(async (employeeId: string, schoolYear: number, month: number) => ({
+      employeeId, schoolYear, month, status: 'validated', validatedAt: '2026-08-31T10:00:00Z',
+      changeDetectedAt: null, changeCount: 0, approvedAt: '2026-09-06T10:00:00Z',
     }))
     currentUser = { id: 'admin', role: 'admin', displayName: 'Admin', email: 'admin@example.fr' }
   })
@@ -209,6 +219,127 @@ describe('TimeTrackingPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Voir la modification' }))
     expect(await screen.findByText('Modification à faire approuver')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Valider Aoû' })).not.toBeInTheDocument()
+  })
+
+  it('lets an administrator approve the selected employee-validated month', async () => {
+    getMonthlyTimeValidations.mockResolvedValue([{
+      employeeId: 'employee-1', schoolYear: 2025, month: 8, status: 'validated',
+      validatedAt: '2026-08-31T10:00:00Z', changeDetectedAt: null, changeCount: 0, approvedAt: null,
+    }])
+    render(<TimeTrackingPage />)
+
+    const season = await screen.findByRole('combobox', { name: 'Saison' })
+    fireEvent.change(season, { target: { value: '2025' } })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Mois' }), { target: { value: '8' } })
+    fireEvent.click(await screen.findByRole('button', { name: 'Approuver Aoû' }))
+
+    await waitFor(() => expect(approveTimeMonthChange).toHaveBeenCalledWith('employee-1', 2025, 8))
+    expect(await screen.findByText('Aoû a été approuvé.', { exact: false })).toBeInTheDocument()
+  })
+
+  it('opens the employee, season and month specified in a direct validation link', async () => {
+    window.history.replaceState({}, '', '/#/suivi-heures?employee=employee-1&season=2025&month=8')
+    render(<TimeTrackingPage />)
+
+    expect(await screen.findByRole('option', { name: 'Jérôme Test · CDI' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Salarié' })).toHaveValue('employee-1')
+    expect(screen.getByRole('combobox', { name: 'Saison' })).toHaveValue('2025')
+    expect(screen.getByRole('combobox', { name: 'Mois' })).toHaveValue('8')
+  })
+
+  it('selects a non-first employee after loading a hash link and exposes pending approval', async () => {
+    const target = { ...structuredClone(employee), id: 'employee-2', name: 'Autre salarié' }
+    getEmployeeSummaries.mockImplementation(async () => {
+      await Promise.resolve()
+      return [structuredClone(employee), target]
+    })
+    getMonthlyTimeValidations.mockResolvedValue([{
+      employeeId: target.id, schoolYear: 2025, month: 8, status: 'changes_pending',
+      validatedAt: '2026-08-31T10:00:00Z', changeDetectedAt: '2026-09-06T09:00:00Z',
+      changeCount: 1, approvedAt: '2026-08-31T12:00:00Z',
+    }])
+    window.history.replaceState({}, '', '/#/suivi-heures?employee=employee-2&season=2025&month=8')
+    render(<TimeTrackingPage />)
+
+    const approve = await screen.findByRole('button', { name: 'Approuver Aoû' })
+    expect(screen.getByRole('combobox', { name: 'Salarié' })).toHaveValue('employee-2')
+    expect(screen.getByRole('combobox', { name: 'Saison' })).toHaveValue('2025')
+    expect(screen.getByRole('combobox', { name: 'Mois' })).toHaveValue('8')
+    fireEvent.click(approve)
+    await waitFor(() => expect(approveTimeMonthChange).toHaveBeenCalledWith('employee-2', 2025, 8))
+  })
+
+  it('consumes new query parameters on same-route router navigation', async () => {
+    getEmployeeSummaries.mockResolvedValue([
+      structuredClone(employee), { ...structuredClone(employee), id: 'employee-2', name: 'Autre salarié' },
+    ])
+    window.history.replaceState({}, '', '/#/suivi-heures')
+    render(<><Link to="/suivi-heures?employee=employee-2&season=2025&month=8">Notification</Link><TimeTrackingPage /></>)
+    await screen.findByRole('option', { name: 'Jérôme Test · CDI' })
+    fireEvent.click(screen.getByRole('tab', { name: 'Synthèse annuelle' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Notification' }))
+
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Salarié' })).toHaveValue('employee-2'))
+    expect(screen.getByRole('combobox', { name: 'Saison' })).toHaveValue('2025')
+    expect(screen.getByRole('combobox', { name: 'Mois' })).toHaveValue('8')
+    expect(screen.getByRole('tab', { name: 'Détail mensuel' })).toHaveAttribute('aria-selected', 'true')
+    await waitFor(() => expect(getMonthlyEventHours).toHaveBeenCalledWith('employee-2', 2025, 8))
+  })
+
+  it('reapplies an identical notification link after manual filter and view changes', async () => {
+    getEmployeeSummaries.mockResolvedValue([
+      structuredClone(employee), { ...structuredClone(employee), id: 'employee-2', name: 'Autre salarié' },
+    ])
+    const target = '/suivi-heures?employee=employee-2&season=2025&month=8'
+    window.history.replaceState({}, '', `/#${target}`)
+    render(<><Link to={target}>Notification</Link><TimeTrackingPage /></>)
+    await screen.findByRole('option', { name: 'Autre salarié · CDI' })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Salarié' }), { target: { value: 'employee-1' } })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Mois' }), { target: { value: '7' } })
+    fireEvent.click(screen.getByRole('tab', { name: 'Synthèse annuelle' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Notification' }))
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Salarié' })).toHaveValue('employee-2'))
+    expect(screen.getByRole('combobox', { name: 'Mois' })).toHaveValue('8')
+    expect(screen.getByRole('tab', { name: 'Détail mensuel' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('preserves a manually selected employee when changing season after a notification', async () => {
+    getEmployeeSummaries.mockResolvedValue([
+      structuredClone(employee), { ...structuredClone(employee), id: 'employee-2', name: 'Autre salarié' },
+    ])
+    window.history.replaceState({}, '', '/#/suivi-heures?employee=employee-2&season=2025&month=8')
+    render(<TimeTrackingPage />)
+    await screen.findByRole('option', { name: 'Autre salarié · CDI' })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Salarié' }), { target: { value: 'employee-1' } })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Saison' }), { target: { value: '2026' } })
+    await waitFor(() => expect(getEmployeeSummaries).toHaveBeenCalledWith(2026))
+    await screen.findByText('Stage')
+    expect(screen.getByRole('combobox', { name: 'Salarié' })).toHaveValue('employee-1')
+  })
+
+  it('ignores out-of-order ledger responses from the previous employee, season and month', async () => {
+    type Ledger = Awaited<ReturnType<typeof import('../services/api').getMonthlyEventHours>>
+    const pending: { employeeId: string; season: number; month: number; resolve: (items: Ledger) => void }[] = []
+    getMonthlyEventHours.mockImplementation((employeeId: string, season: number, month: number) => new Promise<Ledger>((resolve) => {
+      pending.push({ employeeId, season, month, resolve })
+    }))
+    getEmployeeSummaries.mockResolvedValue([
+      structuredClone(employee), { ...structuredClone(employee), id: 'employee-2', name: 'Autre salarié' },
+    ])
+    window.history.replaceState({}, '', '/#/suivi-heures?employee=employee-1&season=2026&month=9')
+    render(<><Link to="/suivi-heures?employee=employee-2&season=2025&month=8">Notification</Link><TimeTrackingPage /></>)
+    await waitFor(() => expect(pending.length).toBeGreaterThan(0))
+    fireEvent.click(screen.getByRole('link', { name: 'Notification' }))
+    await waitFor(() => expect(pending.some((request) => request.employeeId === 'employee-2' && request.season === 2025 && request.month === 8)).toBe(true))
+    const event = (title: string): Ledger => [{
+      id: title, title, calendarName: 'Contrat', calendarColor: '#7986cb', startsAt: '2026-08-03T07:00:00Z', endsAt: '2026-08-03T09:00:00Z',
+      rawHours: 2, weightedHours: 2, coefficient: 1, hourCategory: 'contract', hasPreparation: false,
+    }]
+    await act(async () => { pending[pending.length - 1].resolve(event('Ledger cible')) })
+    expect(await screen.findByText('Ledger cible')).toBeInTheDocument()
+    await act(async () => { pending.slice(0, -1).forEach((request) => request.resolve(event('Ledger obsolète'))) })
+    expect(screen.getByText('Ledger cible')).toBeInTheDocument()
+    expect(screen.queryByText('Ledger obsolète')).not.toBeInTheDocument()
   })
 
   it('switches to the annual sheet, calculates the contract remainder and saves payslips', async () => {

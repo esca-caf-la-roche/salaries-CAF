@@ -20,7 +20,7 @@ export function NotificationCenter({ role }: { role: 'admin' | 'employee' }) {
         const alreadyValidated = validations.some((validation) => validation.employeeId === employee?.id && validation.schoolYear === due.schoolYear && validation.month === due.month)
         if (employee?.contractType === 'CDI' && !alreadyValidated) items.unshift({
           id: `task-${employee.id}-${due.schoolYear}-${due.month}`, title: 'Validation mensuelle à faire',
-          body: 'Contrôlez et validez les heures du mois terminé.', actionUrl: '/', createdAt: new Date().toISOString(), readAt: null,
+          body: 'Contrôlez et validez les heures du mois terminé.', actionUrl: `/suivi-heures?season=${due.schoolYear}&month=${due.month}`, createdAt: new Date().toISOString(), readAt: null,
         })
       }
       if (active) setNotifications(items)
