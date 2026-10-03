@@ -61,8 +61,9 @@ export function DashboardPage() {
   const calendarsWithoutCoefficient = usedCalendars.filter((calendar) => calendar.coefficient == null)
   const urgentUnassignedEvents = unassignedEvents.filter((event) => isEventWithinNextDays(event, new Date(), 7)).sort((a, b) => eventStart(a).getTime() - eventStart(b).getTime())
   const pendingValidationChanges = validations.filter((validation) => validation.status === 'changes_pending')
+  const pendingAdminValidations = validations.filter((validation) => validation.status === 'validated' && !validation.approvedAt)
   const configurationTasks = new Set([...calendarsWithoutType.map((calendar) => calendar.googleCalendarId), ...calendarsWithoutCoefficient.map((calendar) => calendar.googleCalendarId)]).size
-  const taskCount = pendingValidationChanges.length + urgentUnassignedEvents.length + configurationTasks + declinedEvents.length
+  const taskCount = pendingAdminValidations.length + pendingValidationChanges.length + urgentUnassignedEvents.length + configurationTasks + declinedEvents.length
 
   const synchronize = useCallback(async (mode: 'automatic' | 'manual' = 'manual') => {
     setSync((state) => ({ ...state, status: 'syncing', message: mode === 'automatic' ? 'Synchronisation automatique en cours…' : state.message }))
@@ -141,6 +142,12 @@ export function DashboardPage() {
           const employee = employees.find((item) => item.id === validation.employeeId)
           const key = `${validation.employeeId}-${validation.schoolYear}-${validation.month}`
           return <article className="task-item task-item--urgent" key={key}><CircleAlert aria-hidden="true" /><div><strong>Modification d’heures à approuver</strong><span>{employee?.name ?? 'Salarié'} · {monthLabel(validation.month)} {validation.month >= 9 ? validation.schoolYear : validation.schoolYear + 1}</span></div><button className="button button--secondary" type="button" onClick={() => void approveValidation(validation)} disabled={approvingValidation === key}>{approvingValidation === key ? 'Approbation…' : 'Approuver'}</button></article>
+        })}
+        {pendingAdminValidations.map((validation) => {
+          const employee = employees.find((item) => item.id === validation.employeeId)
+          const year = validation.month >= 9 ? validation.schoolYear : validation.schoolYear + 1
+          const target = `/suivi-heures?employee=${validation.employeeId}&season=${validation.schoolYear}&month=${validation.month}`
+          return <article className="task-item task-item--urgent" key={`review-${validation.employeeId}-${validation.schoolYear}-${validation.month}`}><CircleAlert aria-hidden="true" /><div><strong>Mois validé à contrôler</strong><span>{employee?.name ?? 'Salarié'} · {monthLabel(validation.month)} {year}</span></div><Link className="button button--secondary" to={target}>Ouvrir le mois</Link></article>
         })}
         {urgentUnassignedEvents.map((event) => <article className="task-item task-item--urgent" key={event.id}><CircleAlert aria-hidden="true" /><div><strong>Moniteur à déterminer</strong><span>{event.title} · {formatEventDate(event)}</span></div><Link className="button button--secondary" to="/a-determiner">Attribuer</Link></article>)}
         {declinedEvents.map((declined) => <article className="task-item task-item--warning" key={declined.eventId}><CircleAlert aria-hidden="true" /><div><strong>Ressource indisponible</strong><span>{declined.resourceName} · {declined.title} · {formatEventDate(declined)}</span></div><span className="task-item__actions"><a className="button button--secondary" href={declined.htmlLink} target="_blank" rel="noreferrer" aria-label={`Ouvrir ${declined.title} dans Google Calendar`}>Voir</a><button className="button button--primary" type="button" onClick={() => void repairResource(declined)} disabled={repairingEvent === declined.eventId}>{repairingEvent === declined.eventId ? 'Correction…' : 'Corriger'}</button></span></article>)}

@@ -670,7 +670,7 @@ tbody tr:last-child td { border-bottom: 0; }
 
 @media (max-width: 900px) {
   .login-page { grid-template-columns: 1fr; }.login-story { min-height: 45vh; }.login-story > small { display: none; }.login-panel { padding: 50px 24px; }
-  .app-shell { display: block; }.sidebar { display: none; }.mobile-header { display: flex; align-items: center; gap: 10px; padding: 12px 20px; color: var(--chalk); background: var(--pine); font-family: Unbounded, sans-serif; font-size: .82rem; }.mobile-header .brand__mark { width: 32px; height: 32px; }
+  .app-shell { display: block; }.sidebar { display: none; }.mobile-header { display: flex; align-items: center; gap: 10px; padding: 12px 20px; color: var(--chalk); background: var(--pine); font-family: Unbounded, sans-serif; font-size: .82rem; }.mobile-header .brand__mark { width: 32px; height: 32px; }.mobile-header .notification-center { margin-left: auto; color: var(--ink); }.mobile-header .notification-center > summary { width: 34px; height: 34px; border-color: rgba(255,255,255,.3); background: var(--chalk); }.mobile-header .notification-center > section { top: 42px; right: 0; bottom: auto; left: auto; }
   .mobile-nav { position: fixed; z-index: 20; inset: auto 0 0; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 6px 12px max(6px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: rgba(255,254,250,.96); backdrop-filter: blur(10px); }
   .mobile-nav a { display: grid; justify-items: center; gap: 2px; padding: 5px; color: var(--muted); text-decoration: none; font-size: .63rem; }.mobile-nav a.active { color: var(--pine); }.mobile-nav svg { width: 19px; }
   .mobile-nav__more { display: grid; }

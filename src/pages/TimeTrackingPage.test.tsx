@@ -8,6 +8,7 @@ const getMonthlyEventHours = vi.fn()
 const getMonthlyTimeValidations = vi.fn()
 const getValidationHistory = vi.fn()
 const validateTimeMonth = vi.fn()
+const approveTimeMonthChange = vi.fn()
 const saveAnnualTracking = vi.fn()
 const runIncrementalSync = vi.fn()
 const getGovernmentPublicHolidaysForSchoolSeason = vi.fn()
@@ -18,6 +19,7 @@ vi.mock('../services/api', () => ({
   getMonthlyTimeValidations: (...args: unknown[]) => getMonthlyTimeValidations(...args),
   getValidationHistory: (...args: unknown[]) => getValidationHistory(...args),
   validateTimeMonth: (...args: unknown[]) => validateTimeMonth(...args),
+  approveTimeMonthChange: (...args: unknown[]) => approveTimeMonthChange(...args),
   saveAnnualTracking: (...args: unknown[]) => saveAnnualTracking(...args),
   runIncrementalSync: (...args: unknown[]) => runIncrementalSync(...args),
 }))
@@ -65,6 +67,7 @@ describe('TimeTrackingPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    window.history.replaceState({}, '', '/')
     getEmployeeSummaries.mockResolvedValue([structuredClone(employee)])
     getMonthlyEventHours.mockResolvedValue([{
       id: 'event-1', title: 'Stage', calendarName: 'Heures avec prépa', calendarColor: '#7986cb',
@@ -82,6 +85,10 @@ describe('TimeTrackingPage', () => {
     validateTimeMonth.mockImplementation(async (employeeId: string, schoolYear: number, month: number) => ({
       employeeId, schoolYear, month, status: 'validated', validatedAt: '2026-09-06T10:00:00Z',
       changeDetectedAt: null, changeCount: 0, approvedAt: null,
+    }))
+    approveTimeMonthChange.mockImplementation(async (employeeId: string, schoolYear: number, month: number) => ({
+      employeeId, schoolYear, month, status: 'validated', validatedAt: '2026-08-31T10:00:00Z',
+      changeDetectedAt: null, changeCount: 0, approvedAt: '2026-09-06T10:00:00Z',
     }))
     currentUser = { id: 'admin', role: 'admin', displayName: 'Admin', email: 'admin@example.fr' }
   })
@@ -209,6 +216,32 @@ describe('TimeTrackingPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Voir la modification' }))
     expect(await screen.findByText('Modification à faire approuver')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Valider Aoû' })).not.toBeInTheDocument()
+  })
+
+  it('lets an administrator approve the selected employee-validated month', async () => {
+    getMonthlyTimeValidations.mockResolvedValue([{
+      employeeId: 'employee-1', schoolYear: 2025, month: 8, status: 'validated',
+      validatedAt: '2026-08-31T10:00:00Z', changeDetectedAt: null, changeCount: 0, approvedAt: null,
+    }])
+    render(<TimeTrackingPage />)
+
+    const season = await screen.findByRole('combobox', { name: 'Saison' })
+    fireEvent.change(season, { target: { value: '2025' } })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Mois' }), { target: { value: '8' } })
+    fireEvent.click(await screen.findByRole('button', { name: 'Approuver Aoû' }))
+
+    await waitFor(() => expect(approveTimeMonthChange).toHaveBeenCalledWith('employee-1', 2025, 8))
+    expect(await screen.findByText('Aoû a été approuvé.', { exact: false })).toBeInTheDocument()
+  })
+
+  it('opens the employee, season and month specified in a direct validation link', async () => {
+    window.history.replaceState({}, '', '/suivi-heures?employee=employee-1&season=2025&month=8')
+    render(<TimeTrackingPage />)
+
+    expect(await screen.findByRole('option', { name: 'Jérôme Test · CDI' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Salarié' })).toHaveValue('employee-1')
+    expect(screen.getByRole('combobox', { name: 'Saison' })).toHaveValue('2025')
+    expect(screen.getByRole('combobox', { name: 'Mois' })).toHaveValue('8')
   })
 
   it('switches to the annual sheet, calculates the contract remainder and saves payslips', async () => {
