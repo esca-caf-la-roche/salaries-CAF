@@ -28,3 +28,7 @@ verify_jwt = true
 
 [functions.validation-alert-email]
 verify_jwt = true
+
+# Authenticated in the handler with a dedicated Vault/Edge secret, not a user JWT.
+[functions.google-calendar-scheduled-sync]
+verify_jwt = false

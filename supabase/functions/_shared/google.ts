@@ -43,7 +43,7 @@ export async function exchangeCode(code: string) {
   return payload as { access_token: string; refresh_token?: string; expires_in?: number; token_type?: string; scope?: string };
 }
 
-export async function getAccessToken(admin: SupabaseClient, connectionId: string): Promise<string> {
+export async function getAccessToken(admin: SupabaseClient, connectionId: string, signal?: AbortSignal): Promise<string> {
   const { data, error } = await admin.rpc("internal_get_google_credentials", { p_connection_id: connectionId });
   if (error || !data?.[0]) throw new HttpError(409, "Connexion Google absente");
   const credentials = data[0] as { access_token: string; refresh_token: string | null; expires_at: string | null; token_type: string };
@@ -52,6 +52,7 @@ export async function getAccessToken(admin: SupabaseClient, connectionId: string
 
   const config = oauthConfig();
   const response = await fetch("https://oauth2.googleapis.com/token", {
+    signal,
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -87,22 +88,35 @@ function retryDelay(response: Response, attempt: number): number {
   return exponential + Math.floor(Math.random() * Math.max(100, exponential * 0.25));
 }
 
-export async function googleFetch(url: URL, accessToken: string): Promise<Response> {
+async function retryWait(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
+  await new Promise<void>((resolve, reject) => {
+    const cleanup = () => signal?.removeEventListener("abort", abort);
+    const timer = setTimeout(() => { cleanup(); resolve(); }, milliseconds);
+    const abort = () => { clearTimeout(timer); cleanup(); reject(signal?.reason); };
+    signal?.addEventListener("abort", abort, { once: true });
+  });
+}
+
+export async function googleFetch(url: URL, accessToken: string, signal?: AbortSignal): Promise<Response> {
   const retryable = new Set([429, 500, 502, 503, 504]);
   let lastResponse: Response | undefined;
   for (let attempt = 0; attempt < 5; attempt += 1) {
+    signal?.throwIfAborted();
     try {
       const response = await fetch(url, {
+        signal,
         headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
       });
       lastResponse = response;
       if (!retryable.has(response.status) || attempt === 4) return response;
       await response.body?.cancel();
-      await new Promise((resolve) => setTimeout(resolve, retryDelay(response, attempt)));
+      await retryWait(retryDelay(response, attempt), signal);
     } catch (error) {
+      signal?.throwIfAborted();
       if (attempt === 4) throw error;
       const exponential = Math.min(500 * 2 ** attempt, 8_000);
-      await new Promise((resolve) => setTimeout(resolve, exponential + Math.floor(Math.random() * 250)));
+      await retryWait(exponential + Math.floor(Math.random() * 250), signal);
     }
   }
   if (lastResponse) return lastResponse;
