@@ -126,6 +126,21 @@ describe('ReplacementManagementPage', () => {
     expect(await screen.findByText('resourceCalendarId ne correspond pas à une ressource active')).toBeInTheDocument()
   })
 
+  it('allows retrying availability after a transient error', async () => {
+    getAvailableReplacementResources.mockRejectedValueOnce(new Error('Erreur temporaire'))
+    render(<ReplacementManagementPage />)
+    fireEvent.change(await screen.findByLabelText('Ressource concernée'), { target: { value: resource.googleCalendarId } })
+    fireEvent.click(screen.getByRole('button', { name: /Choisir les événements/ }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Cours du mardi/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Attribuer 1 événement/ }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Erreur temporaire')
+    expect(screen.getByRole('checkbox', { name: /Cours du mardi/ })).toBeChecked()
+    const retry = screen.getByRole('button', { name: /Attribuer 1 événement/ })
+    expect(retry).toBeEnabled()
+    fireEvent.click(retry)
+    expect(await screen.findByRole('combobox', { name: /Remplaçant pour Cours du mardi/ })).toBeInTheDocument()
+  })
+
   it('warns when Google was updated but the local refresh failed', async () => {
     processReplacements.mockResolvedValue({ message: '1 remplacement(s) enregistré(s).', syncWarning: 'Les données du site n’ont pas pu être actualisées.', hasFailures: false })
     render(<ReplacementManagementPage />)

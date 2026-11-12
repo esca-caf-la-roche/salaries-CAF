@@ -2,6 +2,7 @@ import type { ReplacementEvent } from '../types'
 
 const fullDate = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
 const time = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' })
+const dateTime = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 const weekdays = ['Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.', 'Dim.']
 
 export function ReplacementCalendar({ month, events, selectedIds, onToggle }: {
@@ -21,12 +22,13 @@ export function ReplacementCalendar({ month, events, selectedIds, onToggle }: {
         const day = index - offset + 1
         if (day < 1 || day > count) return <div className="replacement-calendar__outside" aria-hidden="true" key={index} />
         const date = new Date(month.getFullYear(), month.getMonth(), day)
-        const dayEvents = events.filter((event) => new Date(event.startsAt).toDateString() === date.toDateString()).sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt))
+        const nextDay = new Date(month.getFullYear(), month.getMonth(), day + 1)
+        const dayEvents = events.filter((event) => Date.parse(event.startsAt) < nextDay.getTime() && Date.parse(event.endsAt) > date.getTime()).sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt))
         return <section className={`replacement-calendar__day${dayEvents.length ? ' has-events' : ''}`} aria-label={fullDate.format(date)} key={index}>
           <time className="replacement-calendar__date" dateTime={`${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`} aria-current={date.toDateString() === today ? 'date' : undefined}><span className="replacement-calendar__mobile-date">{fullDate.format(date)}</span><span className="replacement-calendar__number">{day}</span></time>
           {dayEvents.map((event) => <label className={`replacement-calendar__event${selectedIds.includes(event.id) ? ' is-selected' : ''}`} key={event.id}>
             <input type="checkbox" checked={selectedIds.includes(event.id)} onChange={() => onToggle(event)} />
-            <span><time dateTime={event.startsAt}>{time.format(new Date(event.startsAt))} – {time.format(new Date(event.endsAt))}</time><strong>{event.title}</strong></span>
+            <span><time dateTime={event.startsAt}>{(new Date(event.startsAt).toDateString() === new Date(event.endsAt).toDateString() ? time : dateTime).format(new Date(event.startsAt))} – {(new Date(event.startsAt).toDateString() === new Date(event.endsAt).toDateString() ? time : dateTime).format(new Date(event.endsAt))}</time><strong>{event.title}</strong></span>
           </label>)}
         </section>
       })}
