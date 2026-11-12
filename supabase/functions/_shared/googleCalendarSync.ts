@@ -886,7 +886,6 @@ async function processReplacements(admin: SupabaseClient, body: Record<string, u
   if (body.assignments.length > 50) throw new HttpError(400, "Trop de remplacements en une seule fois");
   const results: Record<string, unknown>[] = [];
   let failed = 0;
-  const bookingWarnings: string[] = [];
   // One shared advisory budget, not N delays multiplied by up to 50 assignments.
   const bookingDeadline = Date.now() + 12_000;
   for (const assignment of body.assignments) {
@@ -898,7 +897,6 @@ async function processReplacements(admin: SupabaseClient, body: Record<string, u
         absenceAttendee,
         replacementAttendee: item.replacementResourceId,
       }, bookingDeadline);
-      if ("bookingWarning" in outcome && outcome.bookingWarning) bookingWarnings.push(outcome.bookingWarning);
       results.push({ eventId: item.eventId, mode: outcome.mode, ok: true });
     } catch (error) {
       failed++;
@@ -929,7 +927,6 @@ async function processReplacements(admin: SupabaseClient, body: Record<string, u
   } catch {
     syncWarning = "Les données du site n’ont pas pu être actualisées. Vérifiez Google avant de réessayer.";
   }
-  syncWarning = [...bookingWarnings, ...(syncWarning ? [syncWarning] : [])].join("\n") || null;
   return {
     results,
     failed,
