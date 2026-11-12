@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DashboardPage } from './DashboardPage'
@@ -177,6 +177,69 @@ describe('DashboardPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Actualiser Google' }))
     expect(await screen.findByText('Ressource indisponible')).toBeInTheDocument()
     expect(getDeclinedResourceEvents).toHaveBeenCalledTimes(3)
+  })
+
+  it('dismisses a resolved Google alert automatically on return without repairing the event', async () => {
+    getDeclinedResourceEvents.mockResolvedValue([{ eventId: 'resolved', calendarId: 'room', resourceName: 'Salle', title: 'Cours', startsAt: new Date().toISOString(), endsAt: new Date(Date.now() + 3600000).toISOString(), allDay: false, htmlLink: 'https://calendar.google.com' }])
+    const { unmount } = render(<MemoryRouter><DashboardPage /></MemoryRouter>)
+    await waitFor(() => expect(getDeclinedResourceEvents).toHaveBeenCalledTimes(2))
+    expect(await screen.findByText('Ressource indisponible')).toBeInTheDocument()
+    getDeclinedResourceEvents.mockRejectedValueOnce(new Error('offline'))
+    fireEvent.focus(window)
+    await waitFor(() => expect(getDeclinedResourceEvents).toHaveBeenCalledTimes(3))
+    expect(screen.getByText('Ressource indisponible')).toBeInTheDocument()
+    getDeclinedResourceEvents.mockResolvedValue([])
+    fireEvent.focus(window)
+    await waitFor(() => expect(screen.queryByText('Ressource indisponible')).not.toBeInTheDocument())
+    expect(repairResourceEvent).not.toHaveBeenCalled()
+    unmount()
+    fireEvent.focus(window)
+    expect(getDeclinedResourceEvents).toHaveBeenCalledTimes(4)
+  })
+
+  it('ignores an older initial response after a newer verification resolved the alert', async () => {
+    let finish: ((events: unknown[]) => void) | undefined
+    getDeclinedResourceEvents.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    getDeclinedResourceEvents.mockResolvedValue([])
+    render(<MemoryRouter><DashboardPage /></MemoryRouter>)
+    await waitFor(() => expect(getDeclinedResourceEvents).toHaveBeenCalledTimes(2))
+    await act(async () => { finish?.([{ eventId: 'stale', resourceName: 'Salle', title: 'Cours', startsAt: new Date().toISOString(), endsAt: new Date().toISOString() }]) })
+    expect(screen.queryByText('Ressource indisponible')).not.toBeInTheDocument()
+  })
+
+  it('does not restore an alert from an in-flight read after repair', async () => {
+    const alert = { eventId: 'stale', calendarId: 'room', resourceName: 'Salle', title: 'Cours', startsAt: new Date().toISOString(), endsAt: new Date().toISOString(), allDay: false, htmlLink: 'https://calendar.google.com' }
+    getDeclinedResourceEvents.mockResolvedValue([alert])
+    render(<MemoryRouter><DashboardPage /></MemoryRouter>)
+    await waitFor(() => expect(getDeclinedResourceEvents).toHaveBeenCalledTimes(2))
+    expect(await screen.findByText('Ressource indisponible')).toBeInTheDocument()
+    let finish: ((events: unknown[]) => void) | undefined
+    getDeclinedResourceEvents.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    fireEvent.focus(window)
+    fireEvent.click(screen.getByRole('button', { name: 'Corriger' }))
+    await waitFor(() => expect(screen.queryByText('Ressource indisponible')).not.toBeInTheDocument())
+    await act(async () => { finish?.([alert]) })
+    expect(screen.queryByText('Ressource indisponible')).not.toBeInTheDocument()
+  })
+
+  it('checks periodically only while visible and removes its timer on unmount', async () => {
+    const interval = vi.spyOn(window, 'setInterval')
+    const clear = vi.spyOn(window, 'clearInterval')
+    const { unmount } = render(<MemoryRouter><DashboardPage /></MemoryRouter>)
+    await waitFor(() => expect(getDeclinedResourceEvents).toHaveBeenCalledTimes(2))
+    expect(interval).toHaveBeenCalledWith(expect.any(Function), 60_000)
+    const timerIndex = interval.mock.calls.findIndex((call) => call[1] === 60_000)
+    const tick = interval.mock.calls[timerIndex][0] as () => void
+    await act(async () => { tick() })
+    expect(getDeclinedResourceEvents).toHaveBeenCalledTimes(3)
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    await act(async () => { tick() })
+    expect(getDeclinedResourceEvents).toHaveBeenCalledTimes(3)
+    unmount()
+    expect(clear).toHaveBeenCalledWith(interval.mock.results[timerIndex].value)
+    visibility.mockRestore()
+    clear.mockRestore()
+    interval.mockRestore()
   })
 
   it('approves a change notification and removes it from tasks', async () => {
