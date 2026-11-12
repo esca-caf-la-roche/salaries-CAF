@@ -34,6 +34,18 @@ Google ne donne pas de délai garanti de propagation dans les pages consultées 
 
 ## Synchronisation quotidienne
 
+### Alertes de ressource indisponible
+
+La vue d'ensemble revérifie les refus enregistrés directement auprès de Google, même si la synchronisation automatique complète est ignorée car trop récente. La copie de l'organisateur est privilégiée pour détecter le retrait/réajout d'une ressource. Une acceptation confirmée, un événement annulé ou un retrait explicite de la liste complète des invités supprime l'alerte affichée, sans écrire dans Google ni modifier les heures en base. La colonne `calendar_events.resource_decline_resolved_revision` mémorise l'empreinte SHA-256 du snapshot `raw` résolu : les lectures suivantes ne réintroduisent pas ce refus périmé, y compris après rechargement. Un snapshot modifié par la synchronisation doit être revérifié. Les erreurs Google, réponses incomplètes et invitations encore en attente conservent l'alerte par prudence.
+
+La vérification s'effectue au chargement, au retour sur l'onglet et toutes les 60 secondes lorsque la vue d'ensemble est visible. Un échec ne masque pas les alertes déjà affichées. Déployer le frontend et les deux fonctions de synchronisation après modification du moteur partagé.
+
+Les lectures Google ont une échéance commune de 8 secondes (renouvellement OAuth inclus), un timeout individuel de 2 secondes et un plafond de 20 lectures sans retry. Une fenêtre tournante par minute évite de toujours vérifier les mêmes refus en cas de grand nombre d'alertes. Les candidats non vérifiés restent affichés par prudence. Les accès base de données sont hors budget réseau Google.
+
+Déploiement : appliquer d'abord `20261112150000_resource_decline_reconciliation.sql`, puis déployer les deux fonctions et le frontend. Sur le projet existant à historique divergent, appliquer uniquement ce fichier avec `supabase db query --linked -f ...`, jamais un `db push` global. Aucune modification des RLS ni migration de données métier.
+
+La mise à jour de l'empreinte avance aussi `updated_at` via le trigger existant, mais ne déclenche pas de changement de validation mensuelle. Le test transactionnel `supabase/tests/database/resource_decline_reconciliation.sql` vérifie la conservation de l'empreinte par un upsert partiel, des heures et du mois validé ; toutes ses fixtures sont annulées par `rollback`.
+
 Supabase Cron appelle `google-calendar-scheduled-sync` à **04:17 UTC chaque jour** (06:17 en été, 05:17 en hiver à Paris), avec une seconde tentative à **04:37 UTC** pour les ressources encore anciennes. Une requête indépendante par ressource évite qu'un calendrier lent bloque les autres. La fonction réutilise la synchronisation incrémentale, les verrous par calendrier et les journaux `sync_runs` existants. Elle ne découvre pas de nouvelles ressources et ne force pas de resynchronisation complète. Les échecs et verrous occupés retournent HTTP 502, sans détails sensibles. Le corps contient exclusivement le `calendarId` UUID à synchroniser.
 
 Déploiement, dans cet ordre :

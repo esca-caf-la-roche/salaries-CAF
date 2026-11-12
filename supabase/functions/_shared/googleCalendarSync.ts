@@ -3,6 +3,7 @@ import { independentSeasonBounds, clipIndependentEvent } from "./independentEven
 import { detectContractType } from "./contracts.ts";
 import { getAccessToken, googleFetch } from "./google.ts";
 import { wasSyncedRecently } from "./syncPolicy.ts";
+import { cachedRefusalRevision, verifyCachedRefusals } from "./declinedResource.ts";
 import { requireActiveUser } from "./supabase.ts";
 import { createReplacementBooking, type BookingEvent } from "./replacementBooking.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.112.4";
@@ -947,7 +948,7 @@ async function declinedResourceEvents(admin: SupabaseClient) {
   const nowIso = new Date().toISOString();
   const today = nowIso.slice(0, 10);
   const { data: rows, error } = await admin.from("calendar_events")
-    .select("google_event_id,summary,starts_at,ends_at,start_date,all_day,raw,calendars!inner(google_calendar_id,name)")
+    .select("id,google_event_id,summary,starts_at,ends_at,start_date,all_day,raw,resource_decline_resolved_revision,calendars!inner(google_calendar_id,name)")
     .eq("calendars.connection_id", connection.id)
     .eq("calendars.is_resource", true)
     .eq("calendars.enabled", true)
@@ -956,7 +957,7 @@ async function declinedResourceEvents(admin: SupabaseClient) {
     .order("starts_at", { ascending: true })
     .limit(400);
   if (error) throw error;
-  const events: Record<string, unknown>[] = [];
+  const events: Array<{ rowId: string; revision: string; eventId: string; calendarId: string; organizer?: string; [key: string]: unknown }> = [];
   for (const row of rows ?? []) {
     const record = row as Record<string, unknown>;
     const calendar = record.calendars as { google_calendar_id: string; name: string };
@@ -965,7 +966,12 @@ async function declinedResourceEvents(admin: SupabaseClient) {
     const declined = attendees.some((attendee) => normalizeEmail(attendee?.email) === normalizeEmail(calendar.google_calendar_id)
       && attendee.responseStatus === "declined");
     if (!declined) continue;
+    const revision = await cachedRefusalRevision(record.raw);
+    if (record.resource_decline_resolved_revision === revision) continue;
     events.push({
+      rowId: String(record.id),
+      revision,
+      organizer: (record.raw as GoogleEvent | null)?.organizer?.email,
       eventId: String(record.google_event_id),
       calendarId: calendar.google_calendar_id,
       resourceName: calendar.name,
@@ -977,9 +983,21 @@ async function declinedResourceEvents(admin: SupabaseClient) {
         ? raw.htmlLink
         : `https://calendar.google.com/calendar/u/0/r/eventedit/${encodeURIComponent(String(record.google_event_id))}`,
     });
-    if (events.length >= 100) break;
   }
-  return { events };
+  const verified = await verifyCachedRefusals(events, (signal) => getAccessToken(admin, connection.id, signal), fetch, Date.now, async (event) => {
+    // Persist only the verified snapshot's fingerprint. If sync changes raw
+    // concurrently, that new revision will not be suppressed on the next read.
+    const { error } = await admin.from("calendar_events")
+      .update({ resource_decline_resolved_revision: event.revision }).eq("id", event.rowId);
+    return !error;
+  });
+  return { events: verified.slice(0, 100).map((event) => {
+    const publicEvent: Record<string, unknown> = { ...event };
+    delete publicEvent.organizer;
+    delete publicEvent.rowId;
+    delete publicEvent.revision;
+    return publicEvent;
+  }) };
 }
 
 async function repairResourceEvent(admin: SupabaseClient, body: Record<string, unknown>) {

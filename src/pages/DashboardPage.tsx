@@ -36,6 +36,25 @@ export function DashboardPage() {
   const [approvingValidation, setApprovingValidation] = useState('')
   const [validationError, setValidationError] = useState('')
   const automaticSyncStarted = useRef(false)
+  const declinedRequest = useRef(0)
+  const declinedActive = useRef(true)
+  const invalidateDeclinedEvents = useCallback(() => { declinedRequest.current++ }, [])
+  const refreshDeclinedEvents = useCallback(async () => {
+    if (!declinedActive.current) return
+    const request = ++declinedRequest.current
+    try {
+      const events = await getDeclinedResourceEvents()
+      if (declinedActive.current && request === declinedRequest.current) setDeclinedEvents(events)
+    } catch { /* Preserve current alerts if verification fails. */ }
+  }, [])
+
+  useEffect(() => {
+    declinedActive.current = true
+    return () => {
+      declinedActive.current = false
+      invalidateDeclinedEvents()
+    }
+  }, [invalidateDeclinedEvents])
 
   useEffect(() => {
     setLoading(true)
@@ -51,8 +70,31 @@ export function DashboardPage() {
     void getCoefficientCalendars().then(setUsedCalendars).catch(() => setUsedCalendars([]))
     void getUnassignedEvents().then(setUnassignedEvents).catch(() => setUnassignedEvents([]))
     void getMonthlyTimeValidations().then(setValidations).catch(() => setValidations([]))
-    void getDeclinedResourceEvents().then(setDeclinedEvents).catch(() => setDeclinedEvents([]))
-  }, [user?.role])
+    void refreshDeclinedEvents()
+  }, [refreshDeclinedEvents, user?.role])
+
+  useEffect(() => {
+    if (user?.role !== 'admin') return
+    let pending = false
+    const refresh = async () => {
+      if (document.visibilityState === 'hidden' || pending) return
+      pending = true
+      try {
+        await refreshDeclinedEvents()
+      } catch { /* Keep alerts when Google cannot be checked. */ }
+      finally { pending = false }
+    }
+    const onReturn = () => { void refresh() }
+    window.addEventListener('focus', onReturn)
+    document.addEventListener('visibilitychange', onReturn)
+    const timer = window.setInterval(onReturn, 60_000)
+    return () => {
+      invalidateDeclinedEvents()
+      window.clearInterval(timer)
+      window.removeEventListener('focus', onReturn)
+      document.removeEventListener('visibilitychange', onReturn)
+    }
+  }, [invalidateDeclinedEvents, refreshDeclinedEvents, user?.role])
 
   const publicHolidays = useMemo(() => holidayState.schoolYear === schoolYear
     ? holidayState.holidays : getFrenchPublicHolidaysForSchoolSeason({ startYear: schoolYear }), [holidayState, schoolYear])
@@ -74,11 +116,11 @@ export function DashboardPage() {
       try { setUsedCalendars(await getCoefficientCalendars()) } catch { /* Keep the previous tasks. */ }
       try { setUnassignedEvents(await getUnassignedEvents()) } catch { /* Keep the previous tasks. */ }
       try { setValidations(await getMonthlyTimeValidations()) } catch { /* Keep the previous tasks. */ }
-      try { setDeclinedEvents(await getDeclinedResourceEvents()) } catch { /* Keep the previous tasks. */ }
+      await refreshDeclinedEvents()
     } catch {
       setSync((state) => ({ ...state, status: 'error', message: mode === 'automatic' ? 'La synchronisation automatique a échoué. Les dernières données disponibles restent affichées.' : 'La synchronisation a échoué. Vérifiez la connexion Google.' }))
     }
-  }, [schoolYear])
+  }, [refreshDeclinedEvents, schoolYear])
 
   useEffect(() => {
     let active = true
@@ -96,10 +138,12 @@ export function DashboardPage() {
   }, [synchronize, user?.role])
 
   const repairResource = async (declined: DeclinedResourceEvent) => {
+    declinedRequest.current++
     setRepairingEvent(declined.eventId)
     setValidationError('')
     try {
       await repairResourceEvent(declined.calendarId, declined.eventId)
+      declinedRequest.current++
       setDeclinedEvents((items) => items.filter((item) => item.eventId !== declined.eventId))
     } catch (repairError) {
       setValidationError(repairError instanceof Error ? repairError.message : 'La correction de la ressource a échoué.')
