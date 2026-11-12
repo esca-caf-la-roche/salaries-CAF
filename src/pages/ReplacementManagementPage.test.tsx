@@ -54,10 +54,12 @@ vi.mock('../services/api', () => ({
 }))
 
 describe('ReplacementManagementPage', () => {
-  afterEach(cleanup)
+  afterEach(() => { cleanup(); vi.useRealTimers() })
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-01T12:00:00+02:00'))
     getResources.mockResolvedValue([structuredClone(resource), structuredClone(unassigned)])
     getReplacementEvents.mockResolvedValue([structuredClone(replacementEvent)])
     getAvailableReplacementResources.mockResolvedValue(structuredClone(available))
@@ -86,6 +88,24 @@ describe('ReplacementManagementPage', () => {
     expect(getReplacementEvents).toHaveBeenCalledWith(resource.googleCalendarId, expect.any(Number), expect.any(Number))
   })
 
+  it('keeps selections across months and can clear them', async () => {
+    getReplacementEvents.mockImplementation((_resource: string, _year: number, month: number) => Promise.resolve(month === 10 ? [replacementEvent] : [{ ...replacementEvent, id: 'evt-2', title: 'Cours de novembre', startsAt: '2026-11-03T09:00:00+01:00', endsAt: '2026-11-03T11:00:00+01:00' }]))
+    render(<ReplacementManagementPage />)
+    fireEvent.change(await screen.findByLabelText('Ressource concernée'), { target: { value: resource.googleCalendarId } })
+    fireEvent.click(screen.getByRole('button', { name: /Choisir les événements/ }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Cours du mardi/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Mois suivant' }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Cours de novembre/ }))
+    expect(screen.getByRole('button', { name: /Attribuer 2 événements/ })).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: /Attribuer 2 événements/ }))
+    expect(await screen.findByRole('combobox', { name: /Remplaçant pour Cours du mardi/ })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: /Remplaçant pour Cours de novembre/ })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Retour/ }))
+    await screen.findByRole('checkbox', { name: /Cours de novembre/ })
+    fireEvent.click(screen.getByRole('button', { name: 'Tout désélectionner' }))
+    expect(screen.getByRole('button', { name: /Attribuer/ })).toBeDisabled()
+  })
+
   it('requests month events with a 1-based month for the selected resource', async () => {
     render(<ReplacementManagementPage />)
     fireEvent.change(await screen.findByLabelText('Ressource concernée'), { target: { value: resource.googleCalendarId } })
@@ -104,6 +124,21 @@ describe('ReplacementManagementPage', () => {
     fireEvent.change(await screen.findByLabelText('Ressource concernée'), { target: { value: resource.googleCalendarId } })
     fireEvent.click(screen.getByRole('button', { name: /Choisir les événements/ }))
     expect(await screen.findByText('resourceCalendarId ne correspond pas à une ressource active')).toBeInTheDocument()
+  })
+
+  it('allows retrying availability after a transient error', async () => {
+    getAvailableReplacementResources.mockRejectedValueOnce(new Error('Erreur temporaire'))
+    render(<ReplacementManagementPage />)
+    fireEvent.change(await screen.findByLabelText('Ressource concernée'), { target: { value: resource.googleCalendarId } })
+    fireEvent.click(screen.getByRole('button', { name: /Choisir les événements/ }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Cours du mardi/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Attribuer 1 événement/ }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Erreur temporaire')
+    expect(screen.getByRole('checkbox', { name: /Cours du mardi/ })).toBeChecked()
+    const retry = screen.getByRole('button', { name: /Attribuer 1 événement/ })
+    expect(retry).toBeEnabled()
+    fireEvent.click(retry)
+    expect(await screen.findByRole('combobox', { name: /Remplaçant pour Cours du mardi/ })).toBeInTheDocument()
   })
 
   it('warns when Google was updated but the local refresh failed', async () => {
