@@ -363,7 +363,38 @@ tbody tr:last-child td { border-bottom: 0; }
 .replacement-field { display: grid; gap: 8px; }.replacement-field > span { display: grid; gap: 3px; font-size: .76rem; font-weight: 700; }.replacement-field small { color: var(--muted); font-weight: 400; }.replacement-field select { width: 100%; min-height: 44px; padding: 10px 12px; color: var(--ink); border: 1px solid var(--line); border-radius: 7px; background: white; }.replacement-field select:focus { outline: 3px solid var(--glacier); outline-offset: 2px; }
 .replacement-help { max-width: 70ch; margin: 20px 0 0; padding: 15px; color: var(--muted); border-left: 3px solid var(--rope); background: #f6f7f3; font-size: .72rem; line-height: 1.6; }
 .replacement-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 26px; }.replacement-actions--split { justify-content: space-between; }.replacement-month-nav { display: flex; gap: 6px; }.replacement-month-nav button { display: grid; place-items: center; width: 40px; height: 40px; color: var(--pine); border: 1px solid var(--line); border-radius: 7px; background: white; }.replacement-month-nav svg { width: 18px; }
-.replacement-event-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }.replacement-event-list label { display: flex; align-items: center; gap: 13px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 8px; background: white; cursor: pointer; }.replacement-event-list input { width: 18px; height: 18px; accent-color: var(--pine); }.replacement-event-list span { display: grid; gap: 4px; }.replacement-event-list strong { font-size: .76rem; }.replacement-event-list time { color: var(--muted); font: 400 .62rem "DM Mono", monospace; text-transform: capitalize; }
+.replacement-calendar__toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 18px; font-size: .76rem; }
+.replacement-calendar__toolbar p { flex: 1; margin: 0; min-width: 180px; color: var(--muted); line-height: 1.6; }
+.replacement-calendar__toolbar > span { color: var(--pine); font-weight: 700; }
+.replacement-calendar { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.replacement-calendar__weekdays, .replacement-calendar__days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.replacement-calendar__weekdays { background: #f4f7f5; border-bottom: 1px solid var(--line); }
+.replacement-calendar__weekdays span { padding: 12px 8px; text-align: center; font-size: .72rem; font-weight: 700; color: var(--pine); }
+.replacement-calendar__day, .replacement-calendar__outside { min-width: 0; min-height: 120px; padding: 7px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.replacement-calendar__days > :nth-child(7n) { border-right: 0; }
+.replacement-calendar__outside { background: #f4f7f5; }
+.replacement-calendar__date { display: block; margin-bottom: 8px; color: var(--muted); font-size: .75rem; font-variant-numeric: tabular-nums; }
+.replacement-calendar__date[aria-current] { color: var(--pine); font-weight: 800; text-decoration: underline; text-underline-offset: 4px; }
+.replacement-calendar__mobile-date { display: none; }
+.replacement-calendar__event { display: flex; align-items: flex-start; gap: 6px; padding: 8px 6px; margin-bottom: 6px; border: 1px solid var(--line); border-radius: 5px; background: #f4f7f5; cursor: pointer; }
+.replacement-calendar__event:hover { border-color: var(--pine); }
+.replacement-calendar__event.is-selected { color: white; border-color: var(--pine); background: var(--pine); }
+.replacement-calendar__event:focus-within { outline: 3px solid var(--glacier); outline-offset: 2px; }
+.replacement-calendar__event input { flex-shrink: 0; width: 16px; height: 16px; margin: 1px 0 0; accent-color: var(--pine); }
+.replacement-calendar__event > span { display: grid; min-width: 0; gap: 5px; }
+.replacement-calendar__event time { font-size: .65rem; font-variant-numeric: tabular-nums; }
+.replacement-calendar__event strong { font-size: .72rem; line-height: 1.4; overflow-wrap: anywhere; }
+.replacement-month-nav button:focus-visible { outline: 3px solid var(--glacier); outline-offset: 2px; }
+@media (max-width: 800px) {
+  .replacement-calendar__weekdays, .replacement-calendar__outside, .replacement-calendar__day:not(.has-events) { display: none; }
+  .replacement-calendar__days { display: block; }
+  .replacement-calendar__day { min-height: 0; padding: 14px; border-right: 0; }
+  .replacement-calendar__mobile-date { display: inline; text-transform: capitalize; }
+  .replacement-calendar__number { display: none; }
+  .replacement-calendar__event { padding: 12px; gap: 10px; }
+  .replacement-calendar__event strong { font-size: .8rem; }
+  .replacement-calendar__event time { font-size: .74rem; }
+}
 .replacement-assignment-list { display: grid; gap: 16px; }.replacement-assignment-list .replacement-field { padding-bottom: 16px; border-bottom: 1px solid var(--line); }
 @media (max-width: 620px) { .replacement-steps span { display: none; }.replacement-workflow__heading { align-items: flex-start; }.replacement-actions--split { align-items: stretch; flex-direction: column-reverse; }.replacement-actions .button { width: 100%; } }
 @media (max-width: 620px) { .payroll-panel__heading { align-items: stretch; }.payroll-period { grid-template-columns: 1fr 1fr; width: 100%; }.payroll-worker { grid-template-columns: 1fr; gap: 10px; padding: 16px 18px; }.payroll-footer { align-items: stretch; flex-direction: column; }.payroll-footer .button { width: 100%; } }
