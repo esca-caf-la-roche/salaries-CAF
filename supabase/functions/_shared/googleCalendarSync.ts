@@ -4,6 +4,7 @@ import { detectContractType } from "./contracts.ts";
 import { getAccessToken, googleFetch } from "./google.ts";
 import { wasSyncedRecently } from "./syncPolicy.ts";
 import { requireActiveUser } from "./supabase.ts";
+import { createReplacementBooking, type BookingEvent } from "./replacementBooking.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.112.4";
 
 type GoogleCalendar = {
@@ -734,13 +735,15 @@ async function googleJson(
   url: URL,
   method: "GET" | "POST" | "PATCH" = "GET",
   body?: unknown,
+  signal?: AbortSignal,
 ): Promise<Record<string, unknown>> {
-  const response = method === "GET"
+  const response = method === "GET" && !signal
     ? await googleFetch(url, token)
     : await fetch(url, {
       method,
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal,
     });
   const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
   if (!response.ok) {
@@ -817,6 +820,7 @@ async function processReplacement(
   connectionId: string,
   resources: ReplacementResource[],
   body: Record<string, unknown>,
+  bookingDeadline: number,
 ) {
   const eventId = requiredString(body.eventId, "eventId", 1024).replace(/@google\.com$/i, "");
   const sourceResourceCalendarId = assertKnownResource(resources, body.sourceResourceCalendarId, "sourceResourceCalendarId");
@@ -843,6 +847,7 @@ async function processReplacement(
   const originalResource = removed[0]?.displayName || removed[0]?.email || sourceResourceCalendarId;
   const originalSummary = fullEvent.summary ?? "Sans titre";
   const retained = attendees.filter((attendee) => !(attendee.resource || RESOURCE_ID_PATTERN.test(attendee.email ?? "")));
+  organizerUrl.searchParams.set("sendUpdates", "all");
   await googleJson(token, organizerUrl, "PATCH", { attendees: retained, location: "" });
   const times = eventTimes(fullEvent);
   const absenceUrl = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(ABSENCE_CALENDAR_GOOGLE_ID)}/events`);
@@ -851,13 +856,23 @@ async function processReplacement(
     ...times, attendees: [{ email: absenceAttendee }],
   });
   const replacementUrl = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(REPLACEMENT_CALENDAR_GOOGLE_ID)}/events`);
+  replacementUrl.searchParams.set("sendUpdates", "all");
   let description = `Remplacements : ${originalSummary} (${originalResource})`;
   if (fullEvent.description) description += `\n\nDescription d'origine :\n${fullEvent.description}`;
   try {
-    const replacement = await googleJson(token, replacementUrl, "POST", {
-      summary: "Remplacement", description, ...times, attendees: [{ email: replacementAttendee }],
+    const booking = await createReplacementBooking({
+      resourceId: replacementAttendee,
+      timeMin: fullEvent.start?.dateTime,
+      timeMax: fullEvent.end?.dateTime,
+      deadline: bookingDeadline,
+      request: (url, method, payload, signal) => googleJson(token, url, method, payload, signal),
+      eventUrl: (id) => new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(REPLACEMENT_CALENDAR_GOOGLE_ID)}/events/${encodeURIComponent(id)}`),
+      create: async () => await googleJson(token, replacementUrl, "POST", {
+        summary: "Remplacement", description, ...times,
+        attendees: [{ email: replacementAttendee, resource: true, responseStatus: "needsAction" }],
+      }) as BookingEvent,
     });
-    return { mode: "standard", updatedEventId: eventId, absenceEventId: absence.id, replacementEventId: replacement.id };
+    return { mode: "standard", updatedEventId: eventId, absenceEventId: absence.id, replacementEventId: booking.event.id, bookingWarning: booking.bookingWarning };
   } catch {
     throw new HttpError(502, `L’absence a été créée (${String(absence.id ?? "ID inconnu")}), mais la création du remplacement a échoué. Vérifiez Google Calendar avant de réessayer.`);
   }
@@ -871,6 +886,9 @@ async function processReplacements(admin: SupabaseClient, body: Record<string, u
   if (body.assignments.length > 50) throw new HttpError(400, "Trop de remplacements en une seule fois");
   const results: Record<string, unknown>[] = [];
   let failed = 0;
+  const bookingWarnings: string[] = [];
+  // One shared advisory budget, not N delays multiplied by up to 50 assignments.
+  const bookingDeadline = Date.now() + 12_000;
   for (const assignment of body.assignments) {
     const item = (assignment ?? {}) as Record<string, unknown>;
     try {
@@ -879,7 +897,8 @@ async function processReplacements(admin: SupabaseClient, body: Record<string, u
         sourceResourceCalendarId: absenceAttendee,
         absenceAttendee,
         replacementAttendee: item.replacementResourceId,
-      });
+      }, bookingDeadline);
+      if ("bookingWarning" in outcome && outcome.bookingWarning) bookingWarnings.push(outcome.bookingWarning);
       results.push({ eventId: item.eventId, mode: outcome.mode, ok: true });
     } catch (error) {
       failed++;
@@ -910,6 +929,7 @@ async function processReplacements(admin: SupabaseClient, body: Record<string, u
   } catch {
     syncWarning = "Les données du site n’ont pas pu être actualisées. Vérifiez Google avant de réessayer.";
   }
+  syncWarning = [...bookingWarnings, ...(syncWarning ? [syncWarning] : [])].join("\n") || null;
   return {
     results,
     failed,

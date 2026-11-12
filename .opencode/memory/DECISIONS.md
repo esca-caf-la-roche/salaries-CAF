@@ -8,3 +8,4 @@
 | Dedicated cron secret in Vault and Edge secrets | Scheduler cannot invoke other admin actions; no service-role credential in job text. | 2026-10-14 |
 | Dispatch one calendar per request, retry stale resources at 04:37 UTC | Isolates slow providers, retries after ten-minute locks expire, aborts scheduled Google fetch/backoff at 80 seconds. Database calls remain outside that budget. | 2026-10-14 |
 | Migration creates the cron inactive | Validate real Vault/pg_net/Edge/Google path before explicit activation; reapplication intentionally disables it. | 2026-10-14 |
+| Keep replacement resources attached even when declined | Overview safeguard detects declined attendees. Automatic detach/re-add could strand a resource-less event on API failure; use advisory freeBusy waits and response polling, never forced acceptance. | 2026-11-12 |
