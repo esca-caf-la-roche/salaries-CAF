@@ -71,7 +71,7 @@ describe('replacement workflow Google request order', () => {
     expect(result.syncWarning).not.toContain('acceptation Google non confirmée')
   })
 
-  it('keeps a declined resource on the replacement and returns a nonfatal safeguard warning', async () => {
+  it('keeps a declined resource without adding a duplicate acceptance warning', async () => {
     let invitations = 0
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input))
@@ -89,7 +89,7 @@ describe('replacement workflow Google request order', () => {
     expect(invitations).toBe(1)
     expect(result.failed).toBe(0)
     expect(result.results[0].ok).toBe(true)
-    expect(result.syncWarning).toContain('notifications de la vue d’ensemble')
+    expect(result.syncWarning).toBe('Les données du site n’ont pas pu être actualisées. Vérifiez Google avant de réessayer.')
   })
 
   it('never creates absence or replacement when original resource removal fails', async () => {
